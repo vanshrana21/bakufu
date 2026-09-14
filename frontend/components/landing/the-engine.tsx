@@ -1,106 +1,66 @@
-import { ChapterLabel } from "./shared";
+import localFont from "next/font/local";
+import { EngineVisual } from "./engine-visual";
+import { TerrainAtmosphere } from "./terrain-atmosphere";
 import s from "./story.module.css";
-const sources = [
-  ["01", "SENTINEL-2", "STAC imagery"],
-  ["02", "TERRAIN / DEM", "Elevation & structure"],
-  ["03", "IMD RAINFALL", "Temporal context"],
-  ["04", "MOIL / BSE", "Production filings"],
-];
-const models = [
-  ["PU-XGBOOST v6", "Prospectivity / positive-unlabeled"],
-  ["PROPHET", "Company-wide production"],
-  ["XGBOOST", "Shortfall classification"],
-  ["AUTOENCODER", "Unlabelled spatial representations"],
-];
+import e from "./engine.module.css";
+
+const engineSans = localFont({
+  src: "./fonts/public-sans-latin-variable.woff2",
+  weight: "400 700",
+  display: "swap",
+  variable: "--font-engine",
+});
+
 export function TheEngine() {
   return (
     <section
-      className={s.chapter + " " + s.engine}
-      data-pin="engine"
+      id="engine"
+      className={`${s.chapter} ${e.section} ${engineSans.variable}`}
       aria-labelledby="engine-heading"
     >
-      <ChapterLabel number="03">
-        THE ENGINE / FROM INPUT TO EVIDENCE
-      </ChapterLabel>
-      <div className={s.sectionIntro}>
-        <h2 id="engine-heading" className={s.display}>
-          NO MAGIC.
-          <br />
-          METHOD.
+      <TerrainAtmosphere variant="waste" />
+      <span className={`${s.chapterIndex} ${e.index}`} aria-hidden="true">03</span>
+      <header className={e.label}>
+        <span>03 / FIELD NOTES</span>
+        <span>HOW IT WORKS / 機</span>
+      </header>
+      <div className={e.intro}>
+        <h2 id="engine-heading" className={e.title}>
+          WE SHOW <span>OUR WORK.</span>
         </h2>
-        <p>
-          Different signals. Different jobs.
-          <br />
-          One inspectable chain of evidence.
+        <p className={e.aside}>
+          Four things go in. One answer comes out.
+          <span>Nothing is hidden in between.</span>
         </p>
       </div>
-      <div className={s.pipeline}>
-        <div className={s.pipelineColumn}>
-          {sources.map(([n, title, sub]) => (
-            <div className={s.pipelineNode} data-node key={title}>
-              <span>{n}</span>
-              <div>
-                <strong>{title}</strong>
-                <p>{sub}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-        <svg
-          className={s.pipelineLines}
-          viewBox="0 0 180 300"
-          preserveAspectRatio="none"
-          aria-hidden="true"
-        >
-          <path
-            data-draw
-            d="M0 30H40V150H90M0 110H40M0 190H40V150M0 270H40V190M90 150h45V30h45M135 150v-40h45M135 150v40h45M135 190v80h45"
-            fill="none"
-            stroke="var(--glow)"
-            strokeWidth="2"
-          />
-          <circle cx="90" cy="150" r="9" fill="var(--glow)" />
-        </svg>
-        <div className={s.featureLattice} data-node>
-          <span>FEATURE LATTICES</span>
-          <div aria-hidden="true">
-            {Array.from({ length: 25 }, (_, i) => (
-              <i key={i} />
-            ))}
+      <div className={e.body}>
+        <div className={e.text}>
+          <div className={e.stanza}>
+            <p>We look at photos from space.</p>
+            <p>We look at the shape of the land.</p>
+            <p>We look at rain and old mine records.</p>
+            <p>Then we tell you what we found — and why.</p>
           </div>
-          <p>
-            Spatial + temporal
-            <br />
-            separate pipelines
-          </p>
+          <div className={e.moment}>
+            <span>OUR TEST SCORE</span>
+            <strong data-counter="0.9034">0.9034</strong>
+            <p className={e.gloss}>
+              Out of 1.0 — tested on places it had never seen before. Sausar
+              gondite geology only.
+            </p>
+          </div>
         </div>
-        <div className={s.pipelineColumn}>
-          {models.map(([title, sub]) => (
-            <div className={s.modelNode} data-node key={title}>
-              <strong>{title}</strong>
-              <p>{sub}</p>
-            </div>
-          ))}
-        </div>
+        <figure className={e.visual}>
+          <div className={e.stage}>
+            <EngineVisual />
+            <span className={e.sticker}>
+              NO BLACK BOX
+              <strong>EVERY STEP SHOWN.</strong>
+            </span>
+          </div>
+          <figcaption>How the parts connect · Orchestration, not a shared training table.</figcaption>
+        </figure>
       </div>
-      <div className={s.engineEvidence}>
-        <div>
-          <span>REPORTED SPATIAL VALIDATION</span>
-          <strong>
-            LOBO AUC <b data-counter="0.9034">0.9034</b>
-          </strong>
-        </div>
-        <p>
-          Held-out geographic blocks. Positive-unlabeled learning.
-          <br />
-          Sausar gondite geology only. Not a nationwide guarantee.
-        </p>
-      </div>
-      <p className={s.footnote}>
-        Architecture diagram: imagery + DEM → spatial features; rainfall +
-        production filings → temporal features. Arrows show orchestration, not a
-        shared training table.
-      </p>
     </section>
   );
 }

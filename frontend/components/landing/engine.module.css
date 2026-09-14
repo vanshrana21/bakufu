@@ -1,0 +1,206 @@
+/* Chapter 03 only: the mineral-white type, steel light and copper value
+ * accents of chapters 01 and 02, scoped to this section. */
+.section.section {
+  isolation: isolate;
+  --engine-ink: #E4E9E8;
+  --engine-steel: #57717B;
+  padding: 32px clamp(22px, 4.2vw, 84px) 40px;
+  color: var(--engine-ink);
+  background: var(--ground);
+  font-family: var(--font-engine), sans-serif;
+}
+/* Ghost numeral, cropped at the right edge behind the intro. */
+.section > .index.index {
+  top: 64px;
+  right: -2vw;
+  font-size: clamp(180px, 24vw, 420px);
+  opacity: 0.06;
+  color: var(--engine-ink);
+}
+.label {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid color-mix(in srgb, var(--paper) 18%, transparent);
+  font: 500 10px/1.7 var(--font-mono);
+  letter-spacing: 0.08em;
+  color: color-mix(in srgb, var(--paper) 75%, var(--engine-ink));
+}
+.intro {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 32px;
+  padding-top: clamp(28px, 4vh, 44px);
+}
+.title {
+  margin: 0;
+  font: 400 clamp(36px, 4.4vw, 84px)/1.06 "Archivo Black", sans-serif;
+  letter-spacing: -0.025em;
+}
+.title span { display: block; color: var(--paper); }
+/* Scoped under .section to outrank the story's generic paragraph size. */
+.section .aside {
+  margin: 0;
+  padding-bottom: 8px;
+  text-align: right;
+  font: 500 clamp(16px, 1.25vw, 21px)/1.5 var(--font-engine), sans-serif;
+  letter-spacing: -0.01em;
+  color: color-mix(in srgb, var(--engine-ink) 83%, var(--engine-steel));
+}
+.aside span { display: block; color: var(--engine-ink); }
+.body {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.64fr) minmax(0, 1.6fr);
+  align-items: stretch;
+  gap: clamp(28px, 3.4vw, 64px);
+  padding-top: clamp(24px, 3.4vh, 40px);
+}
+.text {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 36px;
+  min-width: 0;
+}
+.stanza { border-top: 1px solid color-mix(in srgb, var(--paper) 18%, transparent); }
+.section .stanza p {
+  margin: 0;
+  padding-block: 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--paper) 18%, transparent);
+  font: 400 clamp(17px, 1.3vw, 22px)/1.45 var(--font-engine), sans-serif;
+  color: color-mix(in srgb, var(--engine-ink) 80%, var(--engine-steel));
+  text-wrap: pretty;
+}
+.section .stanza p:last-child { color: var(--paper); font-weight: 500; }
+.moment > span {
+  display: block;
+  font: 500 10px/1.6 var(--font-mono);
+  letter-spacing: 0.08em;
+  color: color-mix(in srgb, var(--paper) 75%, var(--engine-ink));
+}
+.moment strong {
+  display: block;
+  margin-top: 8px;
+  font: 400 clamp(56px, 5.8vw, 104px)/1 "Archivo Black", sans-serif;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  color: var(--paper);
+}
+.section .gloss {
+  margin: 14px 0 0;
+  max-width: 38ch;
+  font: 400 12px/1.7 var(--font-engine), sans-serif;
+  color: color-mix(in srgb, var(--engine-ink) 62%, var(--engine-steel));
+}
+
+/* The diagram and its sticker. */
+.visual { position: relative; min-width: 0; margin: 0; }
+.stage { position: relative; }
+.bench { display: block; width: 100%; height: auto; overflow: visible; }
+.visual figcaption {
+  margin-top: 8px;
+  text-align: center;
+  font: 400 9px/1.7 var(--font-mono);
+  letter-spacing: 0.04em;
+  color: color-mix(in srgb, var(--engine-ink) 70%, var(--engine-steel));
+}
+.sticker {
+  position: absolute;
+  left: 44%;
+  top: 66%;
+  width: clamp(180px, 15.5vw, 224px);
+  padding: 20px 22px 22px;
+  background: var(--ore);
+  color: var(--paper);
+  transform: rotate(-3deg);
+  box-shadow: 9px 10px 0 var(--ink);
+  font: 500 10px/1.5 var(--font-mono);
+  letter-spacing: 0.06em;
+  pointer-events: none;
+}
+.sticker strong {
+  display: block;
+  margin-top: 10px;
+  font: 400 clamp(21px, 1.8vw, 27px)/1.06 "Archivo Black", sans-serif;
+  letter-spacing: -0.025em;
+}
+
+/* Inside the diagram. Text stays small; the parts carry the story. */
+.bench text { font-family: var(--font-mono), monospace; }
+.groupLabel { font-size: 10px; letter-spacing: 1.2px; fill: var(--engine-ink); }
+.leader { fill: none; stroke: var(--engine-ink); stroke-opacity: 0.45; stroke-width: 1; }
+.leaderDot { fill: var(--engine-ink); }
+.edge { fill: none; stroke: var(--engine-ink); stroke-opacity: 0.32; stroke-width: 1; }
+.hit { fill: transparent; }
+.shadow, .beams { pointer-events: none; }
+.inputName {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  fill: var(--engine-ink);
+  transition: fill 200ms ease-out;
+}
+.inputSub { font-size: 10px; fill: color-mix(in srgb, var(--engine-ink) 68%, var(--engine-steel)); }
+.glyph {
+  fill: none;
+  stroke: var(--engine-ink);
+  stroke-opacity: 0.78;
+  stroke-width: 1.3;
+  stroke-linecap: round;
+  transition: stroke 200ms ease-out, stroke-opacity 200ms ease-out;
+}
+.glyph .glyphFill { fill: var(--engine-ink); fill-opacity: 0.2; stroke: none; }
+.glyph .glyphDot { fill: var(--paper); stroke: none; }
+.glyph .glyphMargin { stroke: var(--glow); }
+.tile { stroke: var(--engine-ink); stroke-opacity: 0.14; stroke-width: 0.8; transition: fill-opacity 200ms ease-out; }
+.beam {
+  fill: none;
+  stroke: var(--paper);
+  stroke-opacity: 0.62;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  transition: stroke 200ms ease-out, stroke-opacity 200ms ease-out, stroke-width 200ms ease-out;
+}
+.beamEnd { fill: var(--paper); transition: fill 200ms ease-out; }
+.face { stroke: var(--engine-ink); stroke-opacity: 0.18; stroke-width: 1; transition: stroke 200ms ease-out, stroke-opacity 200ms ease-out; }
+.modelName { font-size: 12px; font-weight: 700; letter-spacing: 0.5px; fill: var(--engine-ink); }
+.modelQuestion {
+  font-size: 10.5px;
+  fill: color-mix(in srgb, var(--engine-ink) 72%, var(--engine-steel));
+  transition: fill 200ms ease-out;
+}
+.part[data-on="true"] .glyph { stroke: var(--glow); stroke-opacity: 1; }
+.part[data-on="true"] .inputName { fill: var(--paper); }
+.part[data-on="true"] .face { stroke: var(--glow); stroke-opacity: 1; stroke-width: 1.5; }
+.part[data-on="true"] .modelQuestion { fill: var(--paper); }
+.beam[data-on="true"] { stroke: var(--glow); stroke-opacity: 1; stroke-width: 3.2; }
+.beamEnd[data-on="true"] { fill: var(--glow); }
+
+@media (max-width: 1100px) {
+  .body { grid-template-columns: 1fr; }
+  .text { display: grid; grid-template-columns: 1fr 1fr; align-items: end; gap: 32px; }
+  .visual { justify-self: center; width: min(100%, 960px); }
+}
+@media (max-width: 700px) {
+  .section.section { padding-block: 28px; }
+  .section > .index.index { top: 40px; font-size: 44vw; }
+  .label { font-size: 9px; gap: 12px; }
+  .intro { flex-direction: column; align-items: flex-start; gap: 18px; }
+  .title { font-size: clamp(30px, 8vw, 52px); }
+  .section .aside { text-align: left; }
+  .text { grid-template-columns: 1fr; }
+  /* The bench keeps a readable size and scrolls sideways inside its own frame. */
+  .stage {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    margin-inline: calc(clamp(22px, 4.2vw, 84px) * -1);
+    padding-inline: clamp(22px, 4.2vw, 84px);
+  }
+  .bench { width: 760px; max-width: none; }
+  .sticker { left: calc(clamp(22px, 4.2vw, 84px) + 330px); top: 430px; width: 180px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .inputName, .glyph, .tile, .beam, .beamEnd, .face, .modelQuestion { transition: none; }
+}
