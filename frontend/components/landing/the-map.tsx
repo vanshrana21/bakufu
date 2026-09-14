@@ -1,6 +1,7 @@
 import { ChapterLabel } from "./shared";
 import { CellField } from "./cell-field";
 import s from "./story.module.css";
+import m from "./map.module.css";
 export function TheMap() {
   return (
     <section
@@ -9,78 +10,71 @@ export function TheMap() {
       aria-labelledby="map-heading"
     >
       <ChapterLabel number="04">
-        MVP 01 / THE PROSPECTIVITY EXPLORER
+        MVP 01 / THE MAP THAT POINTS
       </ChapterLabel>
       <div className={s.sectionIntro}>
         <h2 id="map-heading" className={s.display}>
-          SCREEN
+          EVERY BLOCK
           <br />
-          THE BELT.
+          GETS CHECKED.
         </h2>
         <p>
-          Not every bright pixel
+          A hot spot is not a yes.
           <br />
-          deserves a green light.
+          It is a place to look closer.
         </p>
       </div>
       <div className={s.mapLayout}>
         <figure className={s.cellFigure}>
           <CellField />
-          <figcaption>
-            32 × 32 ILLUSTRATIVE CELLS / NOT A GEOGRAPHIC MAP
-          </figcaption>
+          <figcaption>32 × 32 example blocks · Not a real map</figcaption>
           <div className={s.cellLegend}>
             <span>
               <i />
-              Score ramp
+              Darker = higher score
             </span>
             <span>
               <i className={s.hatchedKey} />
-              Excluded
+              Removed by rules
             </span>
             <span>
               <i className={s.nullKey} />
-              No prediction
+              {"We don't guess here"}
             </span>
-            <span>◇ Waste candidate</span>
+            <span>◇ Waste site</span>
           </div>
         </figure>
-        <aside className={s.mapInspector}>
+        <aside className={`${s.mapInspector} ${m.inspector}`}>
           <span className={s.mono}>SELECTED EXAMPLE / GR–01</span>
-          <h3>
-            A score is
-            <br />a starting point.
-          </h3>
+          <h3>A score only tells you where to look.</h3>
           <div className={s.miniScores}>
             <span>
-              RAW<strong>0.84</strong>
+              FIRST SCORE<strong>0.84</strong>
             </span>
             <span>
-              SCREENED<strong>0.00</strong>
+              AFTER RULES<strong className={m.struck}>0.00</strong>
             </span>
           </div>
           <p>
-            Excluded by the occurrence-buffer rule. The original model score
-            remains inspectable.
+            This site scored high. A protection rule removed it anyway. The old
+            score stays on the page so you can check our work.
           </p>
-          <h4>WHY THIS SIGNAL?</h4>
+          <h4>WHY DID IT SCORE HIGH?</h4>
           <div className={s.shapBars}>
             <span>
-              Texture representation
+              What the surface looks like
               <i style={{ width: "87%" }} />
             </span>
             <span>
-              Terrain features
+              The shape of the land
               <i style={{ width: "59%" }} />
             </span>
             <span>
-              Spectral features
+              What the satellite colours show
               <i style={{ width: "35%" }} />
             </span>
           </div>
-          <small>
-            Illustrative attribution layout, not measured SHAP values.
-          </small>
+          <small>Example bars, not measured values.</small>
         </aside>
       </div>
       <div className={s.scopeStatement}>
@@ -91,8 +85,7 @@ export function TheMap() {
           <em>NOT ZERO. NO PREDICTION.</em>
         </h3>
         <p>
-          Outside validated scope (Sausar Belt). Unknown geology is not a
-          negative result.
+          {"These places are outside our study area. 'We don't know' is not the same as 'nothing is there.'"}
         </p>
       </div>
     </section>
