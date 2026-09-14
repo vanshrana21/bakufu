@@ -1,41 +1,23 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
-/node_modules
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
-
-# testing
-/coverage
-
-# next.js
-/.next/
-/out/
-
-# production
-/build
-
-# misc
+# OS and editors
 .DS_Store
-*.pem
+.vscode/
+.idea/
+.claude/
 
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
+# Secrets: only the example files are committed
+.env
+.env.*
+!.env.example
 
-# env files (can opt-in for committing if needed)
-.env*
-
-# vercel
-.vercel
-
-# typescript
+# Frontend dependencies, builds and tool output
+node_modules/
+.next/
 *.tsbuildinfo
-next-env.d.ts
+frontend/output/
+frontend/.playwright-cli/
+frontend/test-results/
+frontend/playwright-report/
+
+# Backend environments and caches (backend/.gitignore covers models and data)
+.venv/
+__pycache__/

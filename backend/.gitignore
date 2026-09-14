@@ -1,0 +1,50 @@
+# Data - too large for git
+data/raw/
+data/processed/
+data/external/
+*.zip
+*.geojson
+*.shp
+*.shx
+*.dbf
+*.prj
+*.tif
+*.tiff
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+env/
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# ML artefacts
+mlruns/
+/models/
+*.pt
+*.pth
+*.pkl
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Env
+.env
+.env.local
+
+# API response caches: regenerated on demand, keyed on model version.
+data/cache/
+
+# Test and log noise
+.pytest_cache/
+*.log

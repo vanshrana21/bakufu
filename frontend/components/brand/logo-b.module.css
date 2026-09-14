@@ -1,0 +1,9 @@
+.mark { display: block; flex-shrink: 0; color: inherit; overflow: visible; }
+/* Context colours come from --mark-ink / --mark-core (globals.css): paper + glow
+ * on dark grounds, char + ore on paper. The fallbacks are the dark pairing. */
+.core { fill: var(--mark-core, #D39858); }
+.scan { stroke: var(--mark-core, #D39858); }
+.lockup { display: inline-flex; align-items: center; gap: 10px; color: var(--mark-ink, #EACEAA); white-space: nowrap; }
+.name { font: 700 16px/1 var(--font-mono, monospace); letter-spacing: 0.16em; }
+.japanese { font-size: 10px; line-height: 1; letter-spacing: 0.12em; color: var(--mark-core, #D39858); }
+.sealObject { display: block; width: min(100%, 470px); height: auto; margin: 0 auto; }

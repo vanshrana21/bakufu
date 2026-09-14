@@ -1,0 +1,140 @@
+/* Chapter 01 only: the hero's type and mineral/copper palette, in normal flow. */
+.section.section {
+  isolation: isolate;
+  --waste-ink: #E4E9E8;
+  --waste-steel: #57717B;
+  padding: 36px clamp(22px, 4.2vw, 84px) 36px;
+  color: var(--waste-ink);
+  background: var(--ground);
+  font-family: var(--font-waste), sans-serif;
+}
+.label {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid color-mix(in srgb, var(--paper) 18%, transparent);
+  font: 500 10px/1.7 var(--font-mono);
+  letter-spacing: 0.08em;
+  color: color-mix(in srgb, var(--paper) 75%, var(--waste-ink));
+}
+.title {
+  margin: 0;
+  font: 400 clamp(38px, 4.4vw, 84px)/1.06 "Archivo Black", sans-serif;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+.title > span { display: block; color: var(--paper); }
+.body {
+  display: grid;
+  grid-template-columns: 1fr 1.1fr;
+  align-items: center;
+  gap: clamp(28px, 3vw, 60px);
+  min-height: min(850px, calc(100svh - 180px));
+  padding-block: 32px;
+}
+.content { min-width: 0; }
+.art {
+  position: relative;
+  width: min(100%, 70svh);
+  justify-self: center;
+  margin: 0;
+  padding: 0 0 54px;
+}
+.art > svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.art figcaption {
+  margin: 4px 0 0 7%;
+  font: 400 9px/1.6 var(--font-mono);
+  letter-spacing: 0.04em;
+  color: color-mix(in srgb, var(--waste-ink) 70%, var(--waste-steel));
+}
+.card {
+  position: absolute;
+  right: 8px;
+  bottom: 38px;
+  width: 224px;
+  padding: 23px 24px 26px;
+  background: var(--ore);
+  color: var(--paper);
+  transform: rotate(-2deg);
+  font: 500 10px/1.5 var(--font-mono);
+  letter-spacing: 0.06em;
+}
+.card strong {
+  display: block;
+  margin-top: 12px;
+  font: 400 27px/1.06 "Archivo Black", sans-serif;
+  letter-spacing: -0.025em;
+}
+.copy { max-width: 500px; margin-top: clamp(32px, 4vh, 48px); }
+.copy .lead {
+  margin: 0;
+  font: 500 clamp(22px, 1.6vw, 28px)/1.4 var(--font-waste), sans-serif;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+.copy .explanation {
+  margin: 22px 0 0;
+  max-width: 29ch;
+  font: 400 clamp(19px, 1.5vw, 25px)/1.5 var(--font-waste), sans-serif;
+  color: color-mix(in srgb, var(--waste-ink) 78%, var(--waste-steel));
+  text-wrap: pretty;
+}
+.copy .conclusion {
+  margin: 28px 0 0;
+  font: 500 clamp(20px, 1.6vw, 26px)/1.4 var(--font-waste), sans-serif;
+  color: var(--paper);
+  letter-spacing: -0.015em;
+  text-wrap: pretty;
+}
+.footnote {
+  display: block;
+  margin-top: 36px;
+  padding-top: 18px;
+  border-top: 1px solid color-mix(in srgb, var(--paper) 18%, transparent);
+  max-width: 49ch;
+  font: 400 12px/1.7 var(--font-waste), sans-serif;
+  color: color-mix(in srgb, var(--waste-ink) 68%, var(--waste-steel));
+}
+.facts {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 22px 36px;
+  border-top: 1px solid color-mix(in srgb, var(--paper) 18%, transparent);
+  padding-top: 24px;
+  font: 400 10px/1.7 var(--font-mono);
+  letter-spacing: 0.04em;
+  color: color-mix(in srgb, var(--waste-ink) 74%, var(--waste-steel));
+}
+.facts strong {
+  margin-right: 10px;
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--paper);
+}
+@media (max-width: 1000px) {
+  .body { grid-template-columns: 1fr; min-height: 0; gap: 22px; }
+  .title { font-size: clamp(36px, 6.5vw, 64px); }
+  .copy { max-width: 600px; }
+  .art { width: min(100%, 630px); }
+}
+@media (max-width: 700px) {
+  .section.section { padding-block: 28px; }
+  .label { font-size: 9px; }
+  .title { font-size: clamp(29px, 7.8vw, 52px); }
+  .title > span { display: block; }
+  .body { grid-template-columns: 1fr; gap: 30px; padding-bottom: 36px; }
+  .art { width: min(100%, 430px); padding-bottom: 118px; }
+  .card { width: 180px; padding: 18px; bottom: 42px; }
+  .card strong { font-size: 23px; }
+  .copy { max-width: 100%; }
+  .art figcaption { position: absolute; bottom: 0; left: 0; margin: 0; }
+  .footnote { margin-top: 26px; }
+  .facts { gap: 16px; }
+}

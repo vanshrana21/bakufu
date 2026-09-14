@@ -1,0 +1,45 @@
+import type { Config } from "tailwindcss";
+
+export default {
+  content: [
+    "./pages/**/*.{js,ts,jsx,tsx,mdx}",
+    "./components/**/*.{js,ts,jsx,tsx,mdx}",
+    "./app/**/*.{js,ts,jsx,tsx,mdx}",
+    "./app/(workspace)/**/*.{js,ts,jsx,tsx,mdx}",
+  ],
+  theme: {
+    extend: {
+      colors: {
+        background: "var(--background)", foreground: "var(--foreground)",
+        muted: "var(--muted)", "muted-foreground": "var(--muted-foreground)",
+        border: "var(--border)", primary: "var(--primary)",
+        "primary-foreground": "var(--primary-foreground)",
+        card: "var(--card)", "card-foreground": "var(--card-foreground)",
+        popover: "var(--popover)", "popover-foreground": "var(--popover-foreground)",
+        secondary: "var(--secondary)", "secondary-foreground": "var(--secondary-foreground)",
+        accent: "var(--accent)", "accent-foreground": "var(--accent-foreground)",
+        destructive: "var(--destructive)", "destructive-foreground": "var(--destructive-foreground)",
+        input: "var(--input)", ring: "var(--ring)",
+        surface: "var(--surface)", sidebar: "var(--sidebar)",
+        oxide: "var(--oxide)", "oxide-soft": "var(--oxide-soft)",
+        success: "var(--success)", "success-soft": "var(--success-soft)",
+        warning: "var(--warning)", "warning-soft": "var(--warning-soft)",
+        critical: "var(--critical)", "critical-soft": "var(--critical-soft)",
+        info: "var(--info)", "info-soft": "var(--info-soft)", metadata: "var(--metadata)",
+        "primary-hover": "var(--primary-hover)", "primary-active": "var(--primary-active)",
+        "primary-ink": "var(--primary-ink)", "primary-soft": "var(--primary-soft)",
+        "surface-raised": "var(--surface-raised)", "border-strong": "var(--border-strong)",
+        "row-hover": "var(--row-hover)", "row-selected": "var(--row-selected)",
+        canvas: "var(--canvas)", "canvas-ink": "var(--canvas-ink)", "canvas-muted": "var(--canvas-muted)",
+      },
+      fontFamily: { sans: ["var(--font-sans)"], mono: ["var(--font-mono)"] },
+      fontSize: { metadata: ["0.75rem", "1.125rem"], body: ["0.875rem", "1.375rem"], section: ["1rem", "1.5rem"], heading: ["1.5rem", "2rem"] },
+      spacing: { gutter: "var(--space-6)", section: "var(--space-8)", rail: "224px", inspector: "368px" },
+      borderRadius: { sm: "var(--radius-sm)", md: "var(--radius)", lg: "var(--radius-lg)", xl: "var(--radius-xl)" },
+      boxShadow: { popover: "var(--shadow-popover)" },
+      transitionDuration: { DEFAULT: "180ms" },
+      transitionTimingFunction: { DEFAULT: "var(--ease-out)" },
+    },
+  },
+  plugins: [],
+} satisfies Config;
