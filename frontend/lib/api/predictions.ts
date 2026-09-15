@@ -2,7 +2,7 @@ import type { MaskMode, PredictionResponse } from "@/lib/contracts";
 import { PredictionResponseSchema } from "@/lib/contracts";
 import { DEMO_SITES, buildPredictionFixture, type SiteFixture } from "@/fixtures/predictions";
 import type { WirePredictPoint } from "./wire";
-import { ApiRequestError, LIVE_MODE, apiPost } from "./client";
+import { ApiRequestError, ContractMismatchError, LIVE_MODE, PREDICT_POINT_TIMEOUT_MS, apiPost } from "./client";
 
 export interface PredictionClient {
   predict(siteId: string, mask: MaskMode, signal: AbortSignal): Promise<PredictionResponse>;
@@ -99,6 +99,11 @@ function composeLive(site: SiteFixture, wire: WirePredictPoint, mask: MaskMode):
     });
   }
 
+  // Mask results are derived from the backend's decision, so they are only
+  // truthful for the mask the backend actually applied.
+  if (wire.mask_applied !== mask) {
+    throw new ContractMismatchError("/predict/point", `requested mask "${mask}" but the backend applied "${wire.mask_applied}"`);
+  }
   const maskResults = maskResultsFrom(wire, mask);
   const excluded = maskResults.some((result) => result.outcome === "excluded");
   return PredictionResponseSchema.parse({
@@ -145,10 +150,12 @@ export const predictionClient: PredictionClient = {
     }
 
     try {
+      // `mask` is a QUERY parameter on the backend; PredictPointIn carries only
+      // lat/lon, so a mask in the body is silently dropped and "none" applied.
       const wire = await apiPost<WirePredictPoint>(
         "/predict/point",
-        { lat: site.location.latitude, lon: site.location.longitude, mask },
-        { signal },
+        { lat: site.location.latitude, lon: site.location.longitude },
+        { signal, query: { mask }, timeoutMs: PREDICT_POINT_TIMEOUT_MS },
       );
       return composeLive(site, wire, mask);
     } catch (error) {

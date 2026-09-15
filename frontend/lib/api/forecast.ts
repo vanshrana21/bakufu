@@ -54,9 +54,9 @@ export function adaptForecast(wire: WireForecast, lastObservedMonth: string): Fo
   const rows = wire.series ?? (horizon === 1
     ? [{
         month: wire.target_period,
-        predicted_tonnes: wire.predicted_tonnes,
-        lower_ci: wire.predicted_lower_ci,
-        upper_ci: wire.predicted_upper_ci,
+        p10: wire.predicted_lower_ci,
+        p50: wire.predicted_tonnes,
+        p90: wire.predicted_upper_ci,
       }]
     : null);
 
@@ -99,9 +99,9 @@ export function adaptForecast(wire: WireForecast, lastObservedMonth: string): Fo
     },
     points: rows.map((row) => ({
       month: row.month,
-      point_estimate: row.predicted_tonnes,
-      lower_bound: row.lower_ci,
-      upper_bound: row.upper_ci,
+      point_estimate: row.p50,
+      lower_bound: row.p10,
+      upper_bound: row.p90,
     })),
   });
 }

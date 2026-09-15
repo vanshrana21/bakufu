@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { whenPreloaderDone } from "@/components/intro/preloader";
+import { SCREEN_LINE_LENGTH } from "@/components/landing/screening-visual";
 
 /** Only the first three illustrations move. Copy and real data never animate here. */
 export function CinematicMotion() {
@@ -44,12 +45,16 @@ export function CinematicMotion() {
           });
           timeline.fromTo(ghost.querySelectorAll("[data-screen-candidate]"),
             { y: -26, opacity: 0.35 }, { y: 0, opacity: 1, stagger: 0.04, duration: 0.3 }, 0);
-          timeline.fromTo(ghost.querySelectorAll("[data-screen-inbound]"),
-            { strokeDasharray: 1, strokeDashoffset: 1 }, { strokeDashoffset: 0, stagger: 0.025, duration: 0.35 }, 0.15);
+          const inbound = gsap.utils.toArray<SVGPathElement>(ghost.querySelectorAll("[data-screen-inbound]"));
+          const outbound = gsap.utils.toArray<SVGPathElement>(ghost.querySelectorAll("[data-screen-outbound]"));
+          // Hide every line up front; a staggered fromTo only primes its first target.
+          gsap.set([...inbound, ...outbound], { strokeDasharray: SCREEN_LINE_LENGTH, strokeDashoffset: SCREEN_LINE_LENGTH });
+          timeline.fromTo(inbound,
+            { strokeDashoffset: SCREEN_LINE_LENGTH }, { strokeDashoffset: 0, ease: "none", stagger: 0.025, duration: 0.35 }, 0.15);
           timeline.fromTo(ghost.querySelectorAll("[data-screen-result]"),
             { opacity: 0.2 }, { opacity: 1, stagger: 0.04, duration: 0.25 }, 0.45);
-          timeline.fromTo(ghost.querySelectorAll("[data-screen-outbound]"),
-            { strokeDasharray: 1, strokeDashoffset: 1 }, { strokeDashoffset: 0, stagger: 0.06, duration: 0.4 }, 0.7);
+          timeline.fromTo(outbound,
+            { strokeDashoffset: SCREEN_LINE_LENGTH }, { strokeDashoffset: 0, ease: "none", stagger: 0.06, duration: 0.4 }, 0.7);
           timeline.fromTo(ghost.querySelectorAll("[data-screen-retained]"),
             { y: -18, opacity: 0.15 }, { y: 0, opacity: 1, stagger: 0.06, duration: 0.3 }, 1);
         }

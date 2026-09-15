@@ -21,7 +21,11 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BakufuLockup } from "@/components/brand/logo-b";
+import { LIVE_MODE } from "@/lib/api/client";
 import styles from "./app-shell.module.css";
+
+/** Routes whose figures come from the FastAPI backend in live mode. */
+const LIVE_ROUTES = new Set(["/operations", "/production", "/actions", "/explorer"]);
 
 const navigationGroups = [
   {
@@ -76,6 +80,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   const activeItem = activeGroup?.items.find((item) =>
     isActive(pathname, item.href),
   );
+  // Only these routes read the backend; every other module is a demonstration
+  // snapshot. Without an API configured, every route renders fixtures.
+  const showDemoBadge =
+    !LIVE_MODE || !activeItem || !LIVE_ROUTES.has(activeItem.href);
 
   useEffect(() => {
     setMenuOpen(false);
@@ -118,9 +126,11 @@ export function AppShell({ children }: { children: ReactNode }) {
           <strong>{activeItem?.label}</strong>
         </div>
         <div className={styles.status}>
-          <span>
-            <FlaskConical size={12} aria-hidden="true" /> Demo data
-          </span>
+          {showDemoBadge && (
+            <span>
+              <FlaskConical size={12} aria-hidden="true" /> Demo data
+            </span>
+          )}
           <small>MOIL-oriented prototype</small>
         </div>
         <Button

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from contextlib import asynccontextmanager
 
@@ -41,15 +42,19 @@ async def lifespan(app: FastAPI):
 
     from src.api.routers.shortfall import clear_shortfall_cache
 
+    from src.api.routers.reference import clear_heatmap_memory
+
     clear_forecast_cache()
     clear_shortfall_cache()
+    clear_heatmap_memory()
     app.state.artifacts = load_all()
     loaded = [name for name, a in app.state.artifacts.artifacts.items() if a.ok]
     failed = app.state.artifacts.degraded
     logger.info("startup: %d artifacts loaded%s", len(loaded),
                 f", {len(failed)} failed: {', '.join(failed)}" if failed else "")
-    _start_heatmap_warming()
+    stop_warming = _start_heatmap_warming()
     yield
+    stop_warming.set()
     app.state.artifacts = None
 
 
@@ -104,18 +109,21 @@ async def log_requests(request: Request, call_next):
     return response
 
 
-def _start_heatmap_warming() -> None:
-    """Warm the demo viewports on a background thread.
+def _start_heatmap_warming() -> threading.Event:
+    """Warm the forecast, the point model and the demo viewports on a thread.
 
     A cold heatmap is ~38s per viewport, so warming three of them inline would
     block startup for roughly two minutes and make the API look hung. The
     thread is a daemon: warming is an optimisation, and it must never hold the
-    process open or delay readiness.
+    process open or delay readiness. It then re-warms the viewports every
+    MEMORY_TTL_SECONDS so they stay in memory; setting the returned event stops
+    it at shutdown.
     """
-    import threading
+    stop = threading.Event()
 
     def warm() -> None:
-        from src.api.routers.reference import compute_heatmap
+        from src.api.routers.reference import MEMORY_TTL_SECONDS, compute_heatmap
+        from src.data.masks.registry import VALID_MASKS
 
         # Forecasts first: four horizons at ~1s each, and they are the
         # endpoint the dashboard hits on load. Prophet's MCMC posterior makes
@@ -144,17 +152,37 @@ def _start_heatmap_warming() -> None:
         except Exception as exc:  # noqa: BLE001 - warming must never break startup
             logger.warning("forecast warm failed: %s", exc)
 
-        for viewport in settings.HEATMAP_WARM_VIEWPORTS:
-            name = viewport["name"]
-            bbox = viewport["bbox"]
-            try:
+        # The first /predict/point otherwise pays the torch and shap imports,
+        # the autoencoder, the XGBoost bundle and the SHAP explainer: 26s
+        # measured. Scored at the centre of the first warm viewport, which lies
+        # inside the imagery footprint, and never written to the database.
+        try:
+            from src.models.prospectivity.predict import predict_point
+
+            min_lon, min_lat, max_lon, max_lat = settings.HEATMAP_WARM_VIEWPORTS[0]["bbox"]
+            started = time.perf_counter()
+            predict_point((min_lat + max_lat) / 2, (min_lon + max_lon) / 2)
+            logger.info("point model warm in %.1fs", time.perf_counter() - started)
+        except Exception as exc:  # noqa: BLE001 - warming must never break startup
+            logger.warning("point model warm failed: %s", exc)
+
+        # Every mask, not just "none": the Explorer opens on mask=both, and a
+        # masked surface is derived from the unmasked grid in well under a second.
+        while not stop.is_set():
+            for viewport in settings.HEATMAP_WARM_VIEWPORTS:
+                name = viewport["name"]
+                bbox = viewport["bbox"]
                 started = time.perf_counter()
-                compute_heatmap(*bbox, grid_size=int(viewport["grid_size"]), mask="none")
+                for mask in VALID_MASKS:
+                    try:
+                        compute_heatmap(*bbox, grid_size=int(viewport["grid_size"]), mask=mask)
+                    except Exception as exc:  # noqa: BLE001 - warming must never break startup
+                        logger.warning("heatmap warm %s mask=%s failed: %s", name, mask, exc)
                 logger.info("heatmap warm %s in %.1fs", name, time.perf_counter() - started)
-            except Exception as exc:  # noqa: BLE001 - warming must never break startup
-                logger.warning("heatmap warm %s failed: %s", name, exc)
+            stop.wait(MEMORY_TTL_SECONDS)
 
     threading.Thread(target=warm, name="heatmap-warm", daemon=True).start()
+    return stop
 
 
 @app.get("/", response_model=HealthOut, tags=["health"], summary="Health check")

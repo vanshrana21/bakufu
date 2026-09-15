@@ -279,9 +279,17 @@ Prophet forecast of MH+MP production.
     "skill_vs_naive_pp": -1.26,
     "ci80_coverage": 64.0,
     "n_origins": 25
-  }
+  },
+  "series": [
+    {"month": "2026-06", "month_label": "Jun 2026", "p10": 176543.21, "p50": 201283.82, "p90": 227110.23}
+  ]
 }
 ```
+
+`series` has one row per month of the horizon, from the first forecast month
+to `target_period`, all from the same `predict()` call. `p10`/`p90` are the
+bounds of the 80% interval; `p50` is Prophet's point estimate. The last row
+equals the top-level `predicted_*` fields, which stay for older clients.
 
 `components` keys vary with the fitted model; the shipped vanilla variant has
 **no rainfall or capex component**, so the frontend must iterate whatever keys

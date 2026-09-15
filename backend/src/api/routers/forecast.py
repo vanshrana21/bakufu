@@ -82,6 +82,21 @@ def get_forecast(request: Request, horizon: int = Query(1, description=f"Months 
         raise PredictionFailed(f"prophet prediction failed: {exc}") from exc
 
     row = forecast.iloc[-1]
+    # One row per month of the horizon, straight from the same predict() call:
+    # the months between issue and target are model output, never interpolated.
+    # The bundle's interval_width is 0.80, so yhat_lower/yhat_upper are the 10th
+    # and 90th percentiles of the predictive samples. p50 is Prophet's point
+    # estimate (yhat), the value `predicted_tonnes` has always carried.
+    series = [
+        {
+            "month": pd.Period(month.ds, freq="M").strftime("%Y-%m"),
+            "month_label": pd.Period(month.ds, freq="M").strftime("%b %Y"),
+            "p10": float(month.yhat_lower),
+            "p50": float(month.yhat),
+            "p90": float(month.yhat_upper),
+        }
+        for month in forecast.iloc[-horizon:].itertuples()
+    ]
     # Whatever components this fitted model actually has - a vanilla bundle has
     # no rainfall or capex term, so the frontend iterates rather than indexing.
     components = {
@@ -124,6 +139,7 @@ def get_forecast(request: Request, horizon: int = Query(1, description=f"Months 
             "mcmc_samples": 300,
         },
         "accuracy_at_horizon": accuracy,
+        "series": series,
     }
     _FORECAST_CACHE[horizon] = payload
     return payload

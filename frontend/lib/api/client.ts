@@ -18,6 +18,9 @@ export const LIVE_MODE: boolean = API_BASE_URL.length > 0;
  * backend documents 5s warm / 45s cold for that route alone. */
 export const DEFAULT_TIMEOUT_MS = 15_000;
 export const HEATMAP_TIMEOUT_MS = 60_000;
+/** The first `/predict/point` after an API start imports torch/shap and loads
+ * the model lazily: measured 26s, against ~0.1s once warm. */
+export const PREDICT_POINT_TIMEOUT_MS = 45_000;
 
 /** A request that reached the server and came back non-2xx, or never arrived. */
 export class ApiRequestError extends Error {

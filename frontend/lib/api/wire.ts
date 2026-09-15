@@ -32,14 +32,15 @@ export interface WireForecastAccuracy {
   ci80_coverage: number; rmse?: number; n_origins: number;
 }
 /** NOTE: the `series[]` entries do NOT reuse the flat response's field names.
- * Verified against a running backend: they are `month` / `lower_ci` /
- * `upper_ci`, whereas the top level uses `target_period` /
- * `predicted_lower_ci` / `predicted_upper_ci`. */
+ * They are `month` / `p10` / `p50` / `p90`, whereas the top level uses
+ * `target_period` / `predicted_lower_ci` / `predicted_tonnes` /
+ * `predicted_upper_ci`. The last entry equals the top-level values. */
 export interface WireForecastPoint {
   month: string;                     // "2026-06"
-  predicted_tonnes: number;
-  lower_ci: number;
-  upper_ci: number;
+  month_label: string;               // "Jun 2026"
+  p10: number;                       // lower bound of the 80% interval
+  p50: number;                       // point estimate
+  p90: number;                       // upper bound of the 80% interval
 }
 export interface WireForecast {
   forecast_date: string;             // "2026-09-09" — bare date, not ISO

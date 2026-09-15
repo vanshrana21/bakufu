@@ -346,7 +346,7 @@ def test_forecast_shape_matches_contract(client: TestClient) -> None:
     assert set(body) == {
         "forecast_date", "target_period", "horizon_months", "predicted_tonnes",
         "predicted_lower_ci", "predicted_upper_ci", "ci_level", "components",
-        "model", "accuracy_at_horizon",
+        "model", "accuracy_at_horizon", "series",
     }
     assert set(body["model"]) == {
         "version", "variant", "regressors", "trained_through",
@@ -398,6 +398,27 @@ def test_forecast_target_period_advances_with_horizon(client: TestClient) -> Non
     assert one["target_period"] == "2026-06"
     assert twelve["target_period"] == "2027-05"
     assert one["ci_level"] == 0.80
+
+
+@pytest.mark.parametrize("horizon", [1, 3, 6, 12])
+def test_forecast_series_has_one_row_per_month(client: TestClient, horizon: int) -> None:
+    """Consecutive months from the first forecast month to target_period."""
+    import pandas as pd
+
+    body = client.get(f"/forecast?horizon={horizon}").json()
+    series = body["series"]
+    assert len(series) == horizon
+    months = [row["month"] for row in series]
+    expected = pd.period_range(start="2026-06", periods=horizon, freq="M").strftime("%Y-%m")
+    assert months == list(expected)
+    assert months[-1] == body["target_period"]
+    for row in series:
+        assert set(row) == {"month", "month_label", "p10", "p50", "p90"}
+        assert row["p10"] < row["p50"] < row["p90"]
+    last = series[-1]
+    assert last["p50"] == body["predicted_tonnes"]
+    assert last["p10"] == body["predicted_lower_ci"]
+    assert last["p90"] == body["predicted_upper_ci"]
 
 
 def test_forecast_interval_brackets_the_point_estimate(client: TestClient) -> None:
