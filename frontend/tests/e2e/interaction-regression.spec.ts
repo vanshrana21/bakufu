@@ -45,18 +45,19 @@ test("Search, evidence and masks preserve their independent truth states", async
 });
 
 test("Review register links preserve selected evidence and never create approvals", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/operations");
   const register = page.getByRole("region", { name: "Review register" });
+  await register.getByRole("button", { name: "Proposed 4", exact: true }).click();
+  await expect(register.getByRole("row")).toHaveCount(5);
+  await expect(register.getByRole("button", { name: "Proposed 4", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await register.getByRole("button", { name: "Reviewed 0", exact: true }).click();
+  await expect(register.getByRole("row")).toHaveCount(0);
+  await expect(register.getByText("No reviewed actions. The demonstration does not fabricate approvals.")).toBeVisible();
+  await register.getByRole("button", { name: "All 4", exact: true }).click();
   await register.getByRole("link", { name: "Review slag heap B material suitability" }).click();
   await expect(page).toHaveURL(/\/actions\?review=demo-action-04$/);
   await expect(page.getByRole("heading", { name: "Review slag heap B material suitability", exact: true })).toBeVisible();
   await expect(page.getByRole("rowheader", { name: "raw screening score", exact: true })).toBeVisible();
-  await register.getByRole("button", { name: "Proposed (4)", exact: true }).click();
-  await expect(register.getByRole("row")).toHaveCount(5);
-  await expect(register.getByRole("button", { name: "Proposed (4)", exact: true })).toHaveAttribute("aria-pressed", "true");
-  await register.getByRole("button", { name: "Reviewed (0)", exact: true }).click();
-  await expect(register.getByRole("row")).toHaveCount(1);
-  await expect(register.getByText("No reviewed actions. The demonstration does not fabricate approvals.")).toBeVisible();
   await page.goto("/actions?review=nonexistent-review");
   await expect(page.getByText("That review ID was not found.", { exact: false })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Review procurement lead times", exact: true })).toBeVisible();
@@ -64,7 +65,7 @@ test("Review register links preserve selected evidence and never create approval
 });
 
 test("Print includes closed evidence tables and restores the reading state", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/operations");
   const disclosure = page.locator("main details").filter({ has: page.getByText("View production values and bounds", { exact: true }) });
   await expect(disclosure).not.toHaveAttribute("open");
   await page.evaluate(() => {
@@ -90,13 +91,13 @@ test("Every workspace view remains navigable at a narrow viewport", async ({ pag
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/");
+  await page.goto("/operations");
   const navigation = page.getByRole("navigation", { name: "Main navigation" });
   const routes = [
     { label: "Prospectivity", path: "/explorer" },
     { label: "Production & Risk", path: "/production" },
     { label: "Corrective Actions", path: "/actions" },
-    { label: "Command Center", path: "/" },
+    { label: "Command Center", path: "/operations" },
     { label: "Assets & Inventory", path: "/assets" },
     { label: "Geologist Feedback", path: "/feedback" },
     { label: "Data Pipeline", path: "/pipeline" },

@@ -1,0 +1,411 @@
+/* Prospectivity explorer: survey panels, map surface, legend, inspector. */
+.explorer-page-heading h1 {
+  font-family: var(--font-sans);
+  font-size: clamp(28px, 2.2vw, 32px);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  text-transform: none;
+  color: var(--foreground);
+}
+/* Map workbench: persistent geography, inspectable evidence. */
+.survey-page {
+  padding: 26px 28px;
+  max-width: 2000px;
+  margin: auto;
+}
+.explorer-page-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+.explorer-page-heading p {
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+.explorer-page-heading .app-kicker {
+  margin: 0 0 10px;
+  font-size: 11px;
+}
+.explorer-mode-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  padding: 9px 12px;
+  background: var(--surface);
+}
+.explorer-mode-label svg {
+  color: var(--oxide);
+}
+.survey-grid {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr) 350px;
+  gap: 0;
+  align-items: stretch;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.survey-grid > .paper-panel {
+  border: 0;
+}
+.survey-left {
+  max-height: 740px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  border-right: 1px solid var(--border) !important;
+}
+.survey-intro {
+  padding: 18px 18px 0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.survey-intro .section-label {
+  font-size: 12px;
+  color: var(--muted-foreground);
+  margin-bottom: 14px;
+}
+.survey-intro fieldset {
+  border-radius: 0;
+  padding: 12px 0;
+  border-inline: 0;
+  border-bottom: 0;
+  background: transparent;
+  gap: 12px;
+}
+.survey-intro fieldset > span {
+  width: 100%;
+  font-size: 11px;
+}
+.survey-intro fieldset label {
+  font-size: 11px;
+}
+.ghost-control {
+  padding: 12px !important;
+  border: 1px solid var(--border-strong) !important;
+  border-radius: 3px !important;
+}
+.ghost-control label {
+  font-size: 12px;
+}
+.ghost-control p {
+  font-size: 10px;
+}
+.ghost-control svg {
+  width: 15px;
+}
+.survey-left .inspector {
+  border: 0;
+  overflow: visible;
+  background: transparent;
+}
+.inspector {
+  min-height: 0;
+  background: var(--surface);
+}
+.survey-left .inspector > div:first-child {
+  height: 45px;
+  padding: 0 18px;
+}
+.survey-left .inspector > div:nth-child(2) {
+  padding: 16px 18px;
+}
+.survey-left .inspector h2 {
+  font-size: 23px;
+}
+.survey-left .inspector .my-6 {
+  margin-block: 19px;
+}
+.survey-left .inspector .text-\[34px\] {
+  font-size: 32px;
+}
+.survey-left .inspector .text-sm {
+  font-size: 12px;
+  line-height: 1.7;
+}
+.survey-left .inspector [role="tablist"] {
+  width: 100%;
+  padding: 2px;
+}
+.survey-left .inspector [role="tab"] {
+  font-size: 11px;
+  padding-inline: 8px;
+  flex: 1;
+}
+.survey-left .inspector .note {
+  font-size: 11px;
+  padding: 10px;
+}
+.survey-map-column {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 740px;
+}
+.survey-map-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.survey-map-toolbar form {
+  border-color: var(--border);
+}
+.map-surface {
+  position: relative;
+  flex: 1;
+  min-height: 360px;
+  background: var(--canvas);
+  isolation: isolate;
+}
+.survey-location-list {
+  padding: 12px 14px 8px;
+  border-top: 1px solid var(--border);
+}
+.survey-outlook {
+  padding: 22px 18px;
+  max-height: 740px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  border-left: 1px solid var(--border) !important;
+}
+.survey-outlook .section-label {
+  font-size: 11px;
+  margin-bottom: 15px;
+}
+.survey-outlook .chart-figure {
+  height: 190px;
+}
+.survey-outlook [aria-label="Chart legend"] {
+  gap: 8px 12px;
+  font-size: 10px;
+  margin-bottom: 7px;
+}
+.survey-outlook .section-heading {
+  font-size: 16px;
+}
+.survey-outlook .evidence-table {
+  min-width: 360px;
+  font-size: 11px;
+}
+.survey-outlook > h2 {
+  font-size: 21px;
+  letter-spacing: -0.025em;
+}
+.map-site-label {
+  display: block;
+  background: var(--ground);
+  border: 1px solid var(--glow);
+  border-radius: 2px;
+  color: var(--paper);
+  padding: 6px 9px;
+  font: 600 11px var(--font-sans);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.map-token-notice {
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  right: 56px;
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--paper);
+  background: var(--ground);
+  border: 1px solid color-mix(in srgb, var(--paper) 30%, transparent);
+  padding: 9px 10px;
+  border-radius: 2px;
+  pointer-events: none;
+}
+.map-token-notice svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.map-legend {
+  position: absolute;
+  bottom: 28px;
+  right: 14px;
+  width: 264px;
+  max-width: calc(100% - 28px);
+  padding: 14px;
+  background: var(--paper);
+  border: 1px solid color-mix(in srgb, var(--char) 20%, transparent);
+  border-radius: 2px;
+  font-size: 11px;
+}
+.map-legend-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.map-legend-heading strong {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.map-legend-heading span {
+  font: 9px var(--font-mono);
+  color: var(--metadata);
+}
+.map-legend-scale {
+  display: flex;
+  height: 10px;
+  margin-top: 9px;
+  border: 1px solid color-mix(in srgb, var(--char) 20%, transparent);
+}
+.map-legend-scale span {
+  flex: 1;
+}
+.map-legend-values {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 5px;
+  font: 9px var(--font-mono);
+  color: var(--metadata);
+}
+.map-legend-symbols {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 11px;
+  font-size: 10px;
+}
+.map-legend-symbols > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.map-legend-caveat {
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid var(--border);
+  font-size: 9px;
+  line-height: 1.5;
+  color: var(--metadata);
+}
+.hatch-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 12px;
+  background: repeating-linear-gradient(135deg, var(--char) 0 2px, var(--paper) 2px 5px);
+  border: 1px solid var(--border-strong);
+}
+.mapboxgl-ctrl-attrib,
+.maplibregl-ctrl-attrib {
+  font-size: 10px;
+}
+.shap-positive {
+  fill: var(--chart-positive);
+}
+.shap-negative {
+  fill: var(--chart-negative);
+}
+@media (min-width: 1800px) {
+  .survey-grid {
+    grid-template-columns: 310px minmax(0, 1fr) 365px;
+  }
+  .survey-map-column {
+    height: 720px;
+  }
+  .survey-left,
+  .survey-outlook {
+    max-height: 720px;
+  }
+}
+@media (max-width: 1450px) {
+  .survey-grid {
+    grid-template-columns: 270px minmax(0, 1fr) 310px;
+  }
+  .survey-map-toolbar {
+    flex-wrap: wrap;
+  }
+  .survey-map-toolbar > div:last-child {
+    width: 100%;
+  }
+  .survey-outlook {
+    padding: 18px 14px;
+  }
+}
+@media (max-width: 1200px) {
+  .survey-grid {
+    grid-template-columns: 290px minmax(0, 1fr);
+  }
+  .survey-outlook {
+    grid-column: 1/-1;
+    max-height: none;
+    border-top: 1px solid var(--border) !important;
+    border-left: 0 !important;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 1fr;
+    gap: 0 30px;
+  }
+  .survey-outlook > .section-label,
+  .survey-outlook > h2,
+  .survey-outlook > p {
+    grid-column: 1;
+  }
+  .survey-outlook .chart-figure {
+    height: 210px;
+  }
+}
+@media (max-width: 900px) {
+  .survey-page {
+    padding: 22px 18px;
+  }
+}
+@media (max-width: 700px) {
+  .survey-page {
+    padding: 18px 12px;
+  }
+  .survey-grid {
+    display: flex;
+    flex-direction: column;
+  }
+  .survey-left {
+    max-height: none;
+    border-right: 0 !important;
+  }
+  .survey-map-column {
+    height: 780px;
+    order: -1;
+    border-bottom: 1px solid var(--border) !important;
+  }
+  .survey-map-toolbar {
+    padding: 13px;
+  }
+  .survey-outlook {
+    display: block;
+    max-height: none;
+  }
+  .survey-outlook .chart-figure {
+    height: 240px;
+  }
+  .survey-left .inspector [role="tab"] {
+    font-size: 13px;
+  }
+  .survey-intro {
+    padding: 20px;
+  }
+  .survey-left .inspector > div:nth-child(2) {
+    padding: 20px;
+  }
+  .explorer-page-heading h1 {
+    font-size: 28px;
+  }
+  .explorer-mode-label {
+    display: none;
+  }
+}

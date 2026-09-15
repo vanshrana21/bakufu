@@ -1,0 +1,131 @@
+/* Print: A4 landscape briefing. Loaded last so it overrides every screen rule. */
+@media print {
+  [data-theme="dark"] {
+    color-scheme: light;
+    --background: var(--paper);
+    --foreground: var(--ink);
+    --surface: var(--paper);
+    --card: var(--paper);
+    --card-foreground: var(--ink);
+    --muted: var(--paper);
+    --muted-foreground: var(--ink);
+    --metadata: var(--char);
+    --border: var(--char);
+    --surface-raised: var(--paper);
+    --row-hover: var(--paper);
+    --row-selected: var(--paper);
+    --primary-ink: var(--ink);
+    --primary-soft: var(--paper);
+    --success: var(--ink);
+    --success-soft: var(--paper);
+    --warning: var(--ink);
+    --warning-soft: var(--paper);
+    --critical: var(--ink);
+    --critical-soft: var(--paper);
+    --info: var(--ink);
+    --info-soft: var(--paper);
+    --mark-ink: var(--char);
+    --mark-core: var(--ore);
+  }
+  .ui-table-scroll {
+    overflow: visible;
+  }
+}
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 12mm;
+  }
+  :root {
+    --background: var(--paper);
+    --foreground: var(--ink);
+    --surface: var(--paper);
+    --primary: var(--ink);
+    --muted-foreground: var(--ink);
+    --metadata: var(--char);
+    --border: var(--char);
+    --oxide: var(--ink);
+    --info: var(--ink);
+    --success: var(--ink);
+    --warning: var(--ink);
+    --critical: var(--ink);
+    --chart-actual: var(--ink);
+    --chart-forecast: var(--ore);
+    --chart-interval: color-mix(in srgb, var(--glow) 25%, transparent);
+    --surface-raised: var(--paper);
+  }
+  body {
+    font-size: 11pt;
+    color: var(--ink);
+    background: var(--paper);
+  }
+  .workspace {
+    display: block;
+    height: auto;
+    overflow: visible;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .skip-link {
+    display: none !important;
+  }
+  .workspace-content {
+    overflow: visible;
+  }
+  .inspector {
+    overflow: visible;
+  }
+  .survey-grid {
+    display: block;
+  }
+  .production-layout,
+  .actions-layout {
+    display: block;
+  }
+  .survey-left,
+  .survey-outlook {
+    max-height: none;
+    overflow: visible;
+  }
+  .survey-map-column,
+  .map-surface {
+    display: none;
+  }
+  .survey-page {
+    padding: 0;
+    max-width: none;
+  }
+  .briefing-page {
+    padding: 0;
+    max-width: none;
+  }
+  .briefing-columns {
+    grid-template-columns: minmax(0, 1fr) 280px;
+    gap: 16px;
+  }
+  .inspector {
+    border: 0;
+  }
+  .evidence-table {
+    font-size: 10pt;
+  }
+  .evidence-table th,
+  .evidence-table td {
+    padding: 8px;
+  }
+  .note,
+  .status-label {
+    color: var(--ink);
+    background: var(--paper);
+  }
+  .print-section {
+    break-inside: avoid;
+  }
+  details > * {
+    display: block !important;
+  }
+  svg {
+    filter: grayscale(1);
+  }
+}

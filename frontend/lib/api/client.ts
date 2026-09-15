@@ -10,6 +10,8 @@
  * numbers as live model output with no visible difference.
  */
 
+import { API_KEY_HEADER, BROWSER_PROXY_PREFIX } from "./backend-proxy";
+
 /** Trailing slash stripped so `${API_BASE_URL}${path}` never doubles up. */
 export const API_BASE_URL: string = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").trim().replace(/\/+$/, "");
 export const LIVE_MODE: boolean = API_BASE_URL.length > 0;
@@ -18,8 +20,8 @@ export const LIVE_MODE: boolean = API_BASE_URL.length > 0;
  * backend documents 5s warm / 45s cold for that route alone. */
 export const DEFAULT_TIMEOUT_MS = 15_000;
 export const HEATMAP_TIMEOUT_MS = 60_000;
-/** The first `/predict/point` after an API start imports torch/shap and loads
- * the model lazily: measured 26s, against ~0.1s once warm. */
+/** The API loads the point model at startup (~0.1s per call once warm). This
+ * budget covers a request that lands before that warm-up has finished. */
 export const PREDICT_POINT_TIMEOUT_MS = 45_000;
 
 /** A request that reached the server and came back non-2xx, or never arrived. */
@@ -75,16 +77,31 @@ function withTimeout(signal: AbortSignal | undefined, timeoutMs: number): { sign
   };
 }
 
+const IN_BROWSER = typeof window !== "undefined";
+
 function buildUrl(path: string, query: RequestOptions["query"]): string {
-  const url = new URL(`${API_BASE_URL}${path}`);
+  // The browser goes through this app's /api/backend proxy (see backend-proxy.ts),
+  // which adds the API key on the server. Server Components call the API directly.
+  const base = IN_BROWSER ? `${window.location.origin}${BROWSER_PROXY_PREFIX}` : API_BASE_URL;
+  const url = new URL(`${base}${path}`);
   for (const [key, value] of Object.entries(query ?? {})) {
     if (value !== null && value !== undefined) url.searchParams.set(key, String(value));
   }
   return url.toString();
 }
 
+function requestHeaders(hasBody: boolean): Record<string, string> {
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (hasBody) headers["Content-Type"] = "application/json";
+  // BAKUFU_API_KEY has no NEXT_PUBLIC_ prefix, so Next.js never bundles it for
+  // the browser; the guard keeps it server-side even if that ever changed.
+  const key = IN_BROWSER ? undefined : process.env.BAKUFU_API_KEY;
+  if (key) headers[API_KEY_HEADER] = key;
+  return headers;
+}
+
 /** The backend has three documented error shapes. Turn any of them into one message.
- *   500 -> {error_code, detail, remedy}
+ *   500, 401 -> {error_code, detail, remedy}
  *   422 -> {detail: [{type, loc, msg, input}]}   (FastAPI native)
  *   404 -> {detail: "mine 'Foo' not found..."}
  */
@@ -126,7 +143,7 @@ async function request<T>(method: "GET" | "POST", path: string, options: Request
       // Model output changes when the backend promotes an artifact; a cached
       // response would keep serving the superseded one.
       cache: "no-store",
-      headers: options.body === undefined ? { Accept: "application/json" } : { Accept: "application/json", "Content-Type": "application/json" },
+      headers: requestHeaders(options.body !== undefined),
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
     });
     if (!response.ok) throw await readError(response, path);

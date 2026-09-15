@@ -1,0 +1,68 @@
+/* Page layouts for Production & Risk and Corrective Actions. */
+/* These layouts also serve loading/error/print states of the operational pages. */
+.production-layout {
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+.production-layout > .briefing-columns {
+  grid-template-columns: minmax(0, 1fr) 300px;
+}
+.production-page .chart-figure {
+  height: 290px;
+}
+.actions-layout {
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr) 310px;
+  gap: 18px;
+  align-items: start;
+}
+.protocol-steps {
+  display: grid;
+  gap: 22px;
+}
+.protocol-steps li {
+  display: flex;
+  gap: 12px;
+}
+.protocol-steps li > span {
+  font: 18px var(--font-mono);
+  color: var(--primary);
+}
+.protocol-steps strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.protocol-steps p {
+  margin-top: 5px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--metadata);
+}
+@media (max-width: 1450px) {
+  .production-layout > .briefing-columns {
+    grid-template-columns: minmax(0, 1fr) 260px;
+  }
+}
+@media (max-width: 1200px) {
+  .actions-layout {
+    grid-template-columns: 230px minmax(0, 1fr);
+  }
+  .actions-layout > aside:last-child {
+    grid-column: 1/-1;
+  }
+  .production-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .production-layout > .briefing-columns {
+    grid-template-columns: minmax(0, 1fr) 300px;
+  }
+}
+@media (max-width: 700px) {
+  .production-layout > .briefing-columns,
+  .actions-layout,
+  .protocol-steps {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -1,0 +1,217 @@
+/* Shared evidence components used across the operational routes: page headers,
+ * labels, notes, evidence tables, the forecast and risk instruments, the review
+ * register. Route-specific layout lives in layouts.css and explorer.css. */
+/* Typographic signature: micro-labels are wide-tracked uppercase; display figures
+ * are light-weight, tightly tracked, set solid, and always tabular. */
+.section-label,
+.instrument-metadata dt {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1.4;
+}
+.docket-count strong,
+.risk-donut strong,
+.forecast-basis-estimate > p {
+  font-weight: 400;
+  letter-spacing: -0.035em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.briefing-page {
+  max-width: 1920px;
+  margin: 0 auto;
+  padding: 28px 32px;
+}
+/* Product voice: a quiet app header. A mono kicker, a mixed-case semibold
+ * title and one muted line; display type belongs to the landing only. */
+.app-kicker {
+  display: block;
+  margin: 0 0 10px;
+  font: 500 11px/1.4 var(--font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+.app-title,
+.briefing-page h1,
+.operations-page .operations-header h1 {
+  font-family: var(--font-sans);
+  font-size: clamp(28px, 2.2vw, 32px);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  text-transform: none;
+  color: var(--foreground);
+}
+.app-description {
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+.section-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  color: var(--metadata);
+}
+.section-heading {
+  color: var(--foreground);
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+.briefing-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  gap: 18px;
+  align-items: start;
+}
+.paper-panel {
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.note {
+  border: 1px solid color-mix(in srgb, var(--warning) 45%, transparent);
+  background: var(--warning-soft);
+  color: var(--warning);
+  border-radius: 3px;
+  padding: 12px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.status-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.evidence-table {
+  width: 100%;
+  text-align: left;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.evidence-table th {
+  color: var(--muted-foreground);
+  font-weight: 500;
+}
+.evidence-table th,
+.evidence-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.evidence-table tbody tr:last-child th,
+.evidence-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.evidence-table thead {
+  background: var(--surface-raised);
+}
+.evidence-table .numeric {
+  text-align: right;
+  font-family: var(--font-mono);
+}
+.evidence-table tbody tr {
+  transition: background 160ms;
+}
+.evidence-table tbody tr:hover {
+  background: var(--row-hover);
+}
+.forecast-instrument {
+  overflow: hidden;
+}
+.risk-instrument {
+  min-height: 100%;
+}
+.chart-figure {
+  height: 220px;
+  min-width: 0;
+  overflow: clip;
+}
+.risk-donut {
+  position: relative;
+  width: 118px;
+  height: 118px;
+  flex-shrink: 0;
+}
+.risk-donut svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.risk-donut strong {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font: 550 32px var(--font-sans);
+  color: var(--foreground);
+  letter-spacing: -0.035em;
+}
+.review-register {
+  margin-top: 20px;
+  background: var(--surface);
+  padding: 20px 22px 12px;
+  border: 1px solid var(--border);
+  min-width: 0;
+}
+.register-heading {
+  font: 600 22px/1.2 var(--font-sans);
+  color: var(--foreground);
+  letter-spacing: -0.025em;
+}
+.review-register table {
+  min-width: 800px;
+  font-size: 12px;
+}
+.review-register th,
+.review-register td {
+  padding: 11px 12px;
+}
+.review-register th {
+  font-size: 11px;
+}
+.review-status {
+  display: inline-flex;
+  white-space: nowrap;
+  border: 1px solid var(--border-strong);
+  padding: 3px 8px;
+  color: var(--foreground);
+  font-size: 11px;
+  border-radius: 3px;
+  background: var(--surface);
+}
+@media (max-width: 1200px) {
+  .briefing-columns {
+    grid-template-columns: minmax(0, 1fr) 300px;
+  }
+}
+@media (max-width: 900px) {
+  .briefing-page {
+    padding: 22px 18px;
+  }
+  .briefing-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .risk-instrument {
+    min-height: 0;
+  }
+}
+@media (max-width: 700px) {
+  .briefing-page {
+    padding: 18px 12px;
+  }
+  .briefing-page h1 {
+    font-size: 30px;
+  }
+  .review-register {
+    padding: 16px 12px;
+  }
+}

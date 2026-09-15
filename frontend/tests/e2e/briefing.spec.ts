@@ -18,8 +18,8 @@ async function settle(page: import("@playwright/test").Page) {
 test("Briefing keeps uncertainty, horizon and demo provenance visible", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Operational briefing" })).toBeVisible();
+  await page.goto("/operations");
+  await expect(page.getByRole("heading", { name: "Command Center", level: 1 })).toBeVisible();
   await expect(page.getByRole("meter", { name: "Shortfall probability" })).toHaveAttribute("aria-valuenow", "32");
   await expect(page.getByTestId("vital-risk")).toHaveText("32%");
   await expect(page.getByRole("region", { name: "Review register" }).getByRole("row")).toHaveCount(5);
@@ -51,7 +51,7 @@ test("Briefing keeps uncertainty, horizon and demo provenance visible", async ({
   await expect(page.getByText("Synthetic bounds · coverage untested")).toBeVisible();
   await settle(page);
   await page.screenshot({ path: "test-results/production-1080p.png", fullPage: true });
-  await page.goto("/");
+  await page.goto("/operations");
   await page.setViewportSize({ width: 390, height: 844 });
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await settle(page);
@@ -61,6 +61,6 @@ test("Briefing keeps uncertainty, horizon and demo provenance visible", async ({
   await page.emulateMedia({ media: "print" });
   await settle(page);
   await page.screenshot({ path: "test-results/command-center-print.png", fullPage: true });
-  await expect(page.getByText("Operational briefing", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Command Center", level: 1 })).toBeVisible();
   expect(errors).toEqual([]);
 });
