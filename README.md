@@ -85,10 +85,14 @@ curl -L -o moil_artifacts_bundle.tar.gz \
 tar -xzf moil_artifacts_bundle.tar.gz
 
 cp .env.example .env            # add DATABASE_URL
+python -m src.db.init_db        # fresh database: creates every table
+python -m scripts.migrations.add_background_jobs   # existing database: idempotent upgrade
 uvicorn src.api.main:app --host 127.0.0.1 --port 8000
 ```
 
 On startup the API warms the forecasts, the shortfall model, the point model and the Explorer surfaces on a background thread.
+
+**API key (optional).** Set `API_KEY` in `backend/.env` and every route except the health check requires it in the `X-API-Key` header. Put the same value in `frontend/.env.local` as `BAKUFU_API_KEY`. It stays on the server: pages fetch the API from the server, and the browser reaches its two live routes through the app's own `/api/backend` proxy. Leave both blank for local development.
 
 ### Frontend
 
@@ -122,7 +126,8 @@ bakufu/
 │   ├── requirements.txt
 │   └── .env.example
 └── frontend/
-    ├── app/               landing (/) and the (workspace) routes
+    ├── app/               landing (/), the (workspace) routes, api/backend proxy
+    │   └── styles/        area stylesheets, loaded in order after globals.css
     ├── components/        landing, explorer, operations, shell, ui, one folder per module
     ├── lib/
     │   ├── api/           typed adapters for the FastAPI contract
@@ -142,9 +147,10 @@ cd frontend
 npm test              # Vitest unit suite
 npx tsc --noEmit      # strict type check
 npx next build        # production build
+npm run test:e2e      # Playwright, against demonstration fixtures
 ```
 
-Backend: `cd backend && python -m pytest`.
+Backend: `cd backend && python -m pytest`. Tests that need rasters, PDFs or a database skip with the reason when those are absent.
 
 ## Disclaimer
 

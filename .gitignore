@@ -17,6 +17,9 @@ frontend/output/
 frontend/.playwright-cli/
 frontend/test-results/
 frontend/playwright-report/
+# The same tool output when a browser tool runs from the repository root
+/output/
+/.playwright-cli/
 
 # Backend environments and caches (backend/.gitignore covers models and data)
 .venv/
