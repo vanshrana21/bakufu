@@ -126,6 +126,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div
       className="workspace"
+      data-theme="dark"
       onKeyDown={(event) => {
         if (event.key === "Escape" && menuOpen) {
           event.preventDefault();
@@ -200,6 +201,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           data-open={menuOpen}
           aria-label="Workspace modules"
         >
+          <div className={styles.workspaceLabel}><span className={styles.workspaceMonogram}>B</span><div><strong>Mineral intelligence</strong><small>Research workspace</small></div></div>
           <nav
             id="workspace-navigation"
             aria-label="Main navigation"

@@ -176,7 +176,8 @@ def get_shortfall_risk(request: Request) -> dict[str, Any]:
         design = pd.DataFrame([row])[order]
         probability = float(bundle["model"].predict_proba(design)[:, 1][0])
 
-        explainer = shap.TreeExplainer(bundle["model"])
+        from src.models.prospectivity.explain import _explainer
+        explainer = _explainer(bundle)
         contributions = explainer.shap_values(design)[0]
         base_value = float(np.ravel(explainer.expected_value)[0])
     except DataNotLoaded:

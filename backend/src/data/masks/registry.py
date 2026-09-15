@@ -13,26 +13,30 @@ so a kept score is capped exactly as an unmasked one would be.
 
 from __future__ import annotations
 
+import threading
 from typing import Any
 
 VALID_MASKS: tuple[str, ...] = ("none", "geological", "occurrence_buffer", "both")
 
 _CACHE: dict[str, Any] = {}
+_CACHE_LOCK = threading.Lock()
 
 
 def _geological():
     if "geological" not in _CACHE:
-        from src.data.masks.geological_mask import GeologicalMask
-
-        _CACHE["geological"] = GeologicalMask()
+        with _CACHE_LOCK:
+            if "geological" not in _CACHE:
+                from src.data.masks.geological_mask import GeologicalMask
+                _CACHE["geological"] = GeologicalMask()
     return _CACHE["geological"]
 
 
 def _buffer():
     if "buffer" not in _CACHE:
-        from src.data.masks.occurrence_buffer_mask import OccurrenceBufferMask
-
-        _CACHE["buffer"] = OccurrenceBufferMask()
+        with _CACHE_LOCK:
+            if "buffer" not in _CACHE:
+                from src.data.masks.occurrence_buffer_mask import OccurrenceBufferMask
+                _CACHE["buffer"] = OccurrenceBufferMask()
     return _CACHE["buffer"]
 
 

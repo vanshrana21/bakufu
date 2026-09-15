@@ -1,0 +1,611 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - link "Skip to content" [ref=e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=e4]:
+      - link "BAKUFU home" [ref=e5] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e6]:
+          - generic [ref=e10]: BAKUFU
+          - generic [ref=e11]: 幕府
+      - button "Collapse sidebar" [expanded] [ref=e12] [cursor=pointer]
+      - generic [ref=e16]:
+        - generic [ref=e17]: Operations
+        - generic [aria-hidden] [ref=e18]: /
+        - strong [ref=e19]: Command Center
+      - generic [ref=e20]: MOIL-oriented prototype
+    - generic [ref=e22]:
+      - complementary "Workspace modules" [ref=e23]:
+        - navigation "Main navigation" [ref=e24]:
+          - region "Operations" [ref=e25]:
+            - heading "Operations" [level=2] [ref=e26]
+            - list [ref=e27]:
+              - listitem [ref=e28]:
+                - link "Command Center" [ref=e29] [cursor=pointer]:
+                  - /url: /operations
+              - listitem [ref=e36]:
+                - link "Production & Risk" [ref=e37] [cursor=pointer]:
+                  - /url: /production
+              - listitem [ref=e41]:
+                - link "Corrective Actions" [ref=e42] [cursor=pointer]:
+                  - /url: /actions
+              - listitem [ref=e47]:
+                - link "Assets & Inventory" [ref=e48] [cursor=pointer]:
+                  - /url: /assets
+          - region "Intelligence" [ref=e53]:
+            - heading "Intelligence" [level=2] [ref=e54]
+            - list [ref=e55]:
+              - listitem [ref=e56]:
+                - link "Prospectivity" [ref=e57] [cursor=pointer]:
+                  - /url: /explorer
+              - listitem [ref=e64]:
+                - link "Geologist Feedback" [ref=e65] [cursor=pointer]:
+                  - /url: /feedback
+              - listitem [ref=e69]:
+                - link "Data Pipeline" [ref=e70] [cursor=pointer]:
+                  - /url: /pipeline
+          - region "Administration" [ref=e76]:
+            - heading "Administration" [level=2] [ref=e77]
+            - list [ref=e78]:
+              - listitem [ref=e79]:
+                - link "Compliance" [ref=e80] [cursor=pointer]:
+                  - /url: /compliance
+              - listitem [ref=e86]:
+                - link "Reports & Exports" [ref=e87] [cursor=pointer]:
+                  - /url: /reports
+              - listitem [ref=e95]:
+                - link "Administration & RBAC" [ref=e96] [cursor=pointer]:
+                  - /url: /admin
+        - generic [ref=e105]:
+          - strong [ref=e106]: Sausar Belt, India
+          - paragraph [ref=e107]: Validated geographic scope
+      - main [ref=e109]:
+        - generic [ref=e110]:
+          - region [ref=e111]:
+            - generic [ref=e112]:
+              - generic [ref=e113]:
+                - generic [ref=e114]: Live
+                - generic [ref=e116]: 01 / Operations
+                - generic [ref=e117]: Data through May 2026 · Briefing issued 15 Sept 2026
+              - generic [ref=e118]:
+                - generic [ref=e119]:
+                  - heading "The morning briefing." [level=1] [ref=e120]
+                  - paragraph [ref=e121]:
+                    - generic [ref=e122]: Four numbers.
+                    - generic [ref=e123]: One list.
+                    - generic [ref=e124]: Zero surprises.
+                  - generic [ref=e125]:
+                    - link "Explore the Sausar Belt" [ref=e126] [cursor=pointer]:
+                      - /url: /explorer
+                    - button "Print briefing" [ref=e134] [cursor=pointer]
+                - generic "Today in one breath" [ref=e135]:
+                  - paragraph [ref=e136]: Today in one breath
+                  - list [ref=e137]:
+                    - listitem [ref=e138]: We dug 14.4% more than the month before.
+                    - listitem [ref=e143]: Next month we expect 6.2% less.
+                    - listitem [ref=e148]: The chance of falling short is low.
+                    - listitem [ref=e153]: Nothing is waiting on a person.
+          - generic [ref=e157]:
+            - region [ref=e158]:
+              - heading "Where we stand" [level=2] [ref=e159]
+              - generic [ref=e160]:
+                - article "Last month we dug" [ref=e161]:
+                  - generic [ref=e162]:
+                    - generic [ref=e163]: Last month we dug
+                    - generic [ref=e164]: live
+                  - paragraph [ref=e166]:
+                    - generic [ref=e167]:
+                      - generic [ref=e168]: 2,14,624
+                      - generic [aria-hidden] [ref=e169]:
+                        - generic [ref=e171]:
+                          - generic [ref=e172]: "0"
+                          - generic [ref=e173]: "1"
+                          - generic [ref=e174]: "2"
+                          - generic [ref=e175]: "3"
+                          - generic [ref=e176]: "4"
+                          - generic [ref=e177]: "5"
+                          - generic [ref=e178]: "6"
+                          - generic [ref=e179]: "7"
+                          - generic [ref=e180]: "8"
+                          - generic [ref=e181]: "9"
+                          - generic [ref=e182]: "0"
+                          - generic [ref=e183]: "1"
+                          - generic [ref=e184]: "2"
+                          - generic [ref=e185]: "3"
+                          - generic [ref=e186]: "4"
+                          - generic [ref=e187]: "5"
+                          - generic [ref=e188]: "6"
+                          - generic [ref=e189]: "7"
+                          - generic [ref=e190]: "8"
+                          - generic [ref=e191]: "9"
+                        - generic [ref=e192]: ","
+                        - generic [ref=e194]:
+                          - generic [ref=e195]: "0"
+                          - generic [ref=e196]: "1"
+                          - generic [ref=e197]: "2"
+                          - generic [ref=e198]: "3"
+                          - generic [ref=e199]: "4"
+                          - generic [ref=e200]: "5"
+                          - generic [ref=e201]: "6"
+                          - generic [ref=e202]: "7"
+                          - generic [ref=e203]: "8"
+                          - generic [ref=e204]: "9"
+                          - generic [ref=e205]: "0"
+                          - generic [ref=e206]: "1"
+                          - generic [ref=e207]: "2"
+                          - generic [ref=e208]: "3"
+                          - generic [ref=e209]: "4"
+                          - generic [ref=e210]: "5"
+                          - generic [ref=e211]: "6"
+                          - generic [ref=e212]: "7"
+                          - generic [ref=e213]: "8"
+                          - generic [ref=e214]: "9"
+                        - generic [ref=e216]:
+                          - generic [ref=e217]: "0"
+                          - generic [ref=e218]: "1"
+                          - generic [ref=e219]: "2"
+                          - generic [ref=e220]: "3"
+                          - generic [ref=e221]: "4"
+                          - generic [ref=e222]: "5"
+                          - generic [ref=e223]: "6"
+                          - generic [ref=e224]: "7"
+                          - generic [ref=e225]: "8"
+                          - generic [ref=e226]: "9"
+                          - generic [ref=e227]: "0"
+                          - generic [ref=e228]: "1"
+                          - generic [ref=e229]: "2"
+                          - generic [ref=e230]: "3"
+                          - generic [ref=e231]: "4"
+                          - generic [ref=e232]: "5"
+                          - generic [ref=e233]: "6"
+                          - generic [ref=e234]: "7"
+                          - generic [ref=e235]: "8"
+                          - generic [ref=e236]: "9"
+                        - generic [ref=e237]: ","
+                        - generic [ref=e239]:
+                          - generic [ref=e240]: "0"
+                          - generic [ref=e241]: "1"
+                          - generic [ref=e242]: "2"
+                          - generic [ref=e243]: "3"
+                          - generic [ref=e244]: "4"
+                          - generic [ref=e245]: "5"
+                          - generic [ref=e246]: "6"
+                          - generic [ref=e247]: "7"
+                          - generic [ref=e248]: "8"
+                          - generic [ref=e249]: "9"
+                          - generic [ref=e250]: "0"
+                          - generic [ref=e251]: "1"
+                          - generic [ref=e252]: "2"
+                          - generic [ref=e253]: "3"
+                          - generic [ref=e254]: "4"
+                          - generic [ref=e255]: "5"
+                          - generic [ref=e256]: "6"
+                          - generic [ref=e257]: "7"
+                          - generic [ref=e258]: "8"
+                          - generic [ref=e259]: "9"
+                        - generic [ref=e261]:
+                          - generic [ref=e262]: "0"
+                          - generic [ref=e263]: "1"
+                          - generic [ref=e264]: "2"
+                          - generic [ref=e265]: "3"
+                          - generic [ref=e266]: "4"
+                          - generic [ref=e267]: "5"
+                          - generic [ref=e268]: "6"
+                          - generic [ref=e269]: "7"
+                          - generic [ref=e270]: "8"
+                          - generic [ref=e271]: "9"
+                          - generic [ref=e272]: "0"
+                          - generic [ref=e273]: "1"
+                          - generic [ref=e274]: "2"
+                          - generic [ref=e275]: "3"
+                          - generic [ref=e276]: "4"
+                          - generic [ref=e277]: "5"
+                          - generic [ref=e278]: "6"
+                          - generic [ref=e279]: "7"
+                          - generic [ref=e280]: "8"
+                          - generic [ref=e281]: "9"
+                        - generic [ref=e283]:
+                          - generic [ref=e284]: "0"
+                          - generic [ref=e285]: "1"
+                          - generic [ref=e286]: "2"
+                          - generic [ref=e287]: "3"
+                          - generic [ref=e288]: "4"
+                          - generic [ref=e289]: "5"
+                          - generic [ref=e290]: "6"
+                          - generic [ref=e291]: "7"
+                          - generic [ref=e292]: "8"
+                          - generic [ref=e293]: "9"
+                          - generic [ref=e294]: "0"
+                          - generic [ref=e295]: "1"
+                          - generic [ref=e296]: "2"
+                          - generic [ref=e297]: "3"
+                          - generic [ref=e298]: "4"
+                          - generic [ref=e299]: "5"
+                          - generic [ref=e300]: "6"
+                          - generic [ref=e301]: "7"
+                          - generic [ref=e302]: "8"
+                          - generic [ref=e303]: "9"
+                    - generic [ref=e304]: t
+                  - generic [ref=e305]:
+                    - paragraph [ref=e306]: measured, not guessed
+                    - generic [ref=e307]: +14.4% vs month before
+                  - img "Measured production for the last 12 months" [ref=e311]
+                - article "Next month we expect" [ref=e316]:
+                  - paragraph [ref=e319]:
+                    - generic [ref=e320]:
+                      - generic [ref=e321]: 2,01,284
+                      - generic [aria-hidden] [ref=e322]:
+                        - generic [ref=e324]:
+                          - generic [ref=e325]: "0"
+                          - generic [ref=e326]: "1"
+                          - generic [ref=e327]: "2"
+                          - generic [ref=e328]: "3"
+                          - generic [ref=e329]: "4"
+                          - generic [ref=e330]: "5"
+                          - generic [ref=e331]: "6"
+                          - generic [ref=e332]: "7"
+                          - generic [ref=e333]: "8"
+                          - generic [ref=e334]: "9"
+                          - generic [ref=e335]: "0"
+                          - generic [ref=e336]: "1"
+                          - generic [ref=e337]: "2"
+                          - generic [ref=e338]: "3"
+                          - generic [ref=e339]: "4"
+                          - generic [ref=e340]: "5"
+                          - generic [ref=e341]: "6"
+                          - generic [ref=e342]: "7"
+                          - generic [ref=e343]: "8"
+                          - generic [ref=e344]: "9"
+                        - generic [ref=e345]: ","
+                        - generic [ref=e347]:
+                          - generic [ref=e348]: "0"
+                          - generic [ref=e349]: "1"
+                          - generic [ref=e350]: "2"
+                          - generic [ref=e351]: "3"
+                          - generic [ref=e352]: "4"
+                          - generic [ref=e353]: "5"
+                          - generic [ref=e354]: "6"
+                          - generic [ref=e355]: "7"
+                          - generic [ref=e356]: "8"
+                          - generic [ref=e357]: "9"
+                          - generic [ref=e358]: "0"
+                          - generic [ref=e359]: "1"
+                          - generic [ref=e360]: "2"
+                          - generic [ref=e361]: "3"
+                          - generic [ref=e362]: "4"
+                          - generic [ref=e363]: "5"
+                          - generic [ref=e364]: "6"
+                          - generic [ref=e365]: "7"
+                          - generic [ref=e366]: "8"
+                          - generic [ref=e367]: "9"
+                        - generic [ref=e369]:
+                          - generic [ref=e370]: "0"
+                          - generic [ref=e371]: "1"
+                          - generic [ref=e372]: "2"
+                          - generic [ref=e373]: "3"
+                          - generic [ref=e374]: "4"
+                          - generic [ref=e375]: "5"
+                          - generic [ref=e376]: "6"
+                          - generic [ref=e377]: "7"
+                          - generic [ref=e378]: "8"
+                          - generic [ref=e379]: "9"
+                          - generic [ref=e380]: "0"
+                          - generic [ref=e381]: "1"
+                          - generic [ref=e382]: "2"
+                          - generic [ref=e383]: "3"
+                          - generic [ref=e384]: "4"
+                          - generic [ref=e385]: "5"
+                          - generic [ref=e386]: "6"
+                          - generic [ref=e387]: "7"
+                          - generic [ref=e388]: "8"
+                          - generic [ref=e389]: "9"
+                        - generic [ref=e390]: ","
+                        - generic [ref=e392]:
+                          - generic [ref=e393]: "0"
+                          - generic [ref=e394]: "1"
+                          - generic [ref=e395]: "2"
+                          - generic [ref=e396]: "3"
+                          - generic [ref=e397]: "4"
+                          - generic [ref=e398]: "5"
+                          - generic [ref=e399]: "6"
+                          - generic [ref=e400]: "7"
+                          - generic [ref=e401]: "8"
+                          - generic [ref=e402]: "9"
+                          - generic [ref=e403]: "0"
+                          - generic [ref=e404]: "1"
+                          - generic [ref=e405]: "2"
+                          - generic [ref=e406]: "3"
+                          - generic [ref=e407]: "4"
+                          - generic [ref=e408]: "5"
+                          - generic [ref=e409]: "6"
+                          - generic [ref=e410]: "7"
+                          - generic [ref=e411]: "8"
+                          - generic [ref=e412]: "9"
+                        - generic [ref=e414]:
+                          - generic [ref=e415]: "0"
+                          - generic [ref=e416]: "1"
+                          - generic [ref=e417]: "2"
+                          - generic [ref=e418]: "3"
+                          - generic [ref=e419]: "4"
+                          - generic [ref=e420]: "5"
+                          - generic [ref=e421]: "6"
+                          - generic [ref=e422]: "7"
+                          - generic [ref=e423]: "8"
+                          - generic [ref=e424]: "9"
+                          - generic [ref=e425]: "0"
+                          - generic [ref=e426]: "1"
+                          - generic [ref=e427]: "2"
+                          - generic [ref=e428]: "3"
+                          - generic [ref=e429]: "4"
+                          - generic [ref=e430]: "5"
+                          - generic [ref=e431]: "6"
+                          - generic [ref=e432]: "7"
+                          - generic [ref=e433]: "8"
+                          - generic [ref=e434]: "9"
+                        - generic [ref=e436]:
+                          - generic [ref=e437]: "0"
+                          - generic [ref=e438]: "1"
+                          - generic [ref=e439]: "2"
+                          - generic [ref=e440]: "3"
+                          - generic [ref=e441]: "4"
+                          - generic [ref=e442]: "5"
+                          - generic [ref=e443]: "6"
+                          - generic [ref=e444]: "7"
+                          - generic [ref=e445]: "8"
+                          - generic [ref=e446]: "9"
+                          - generic [ref=e447]: "0"
+                          - generic [ref=e448]: "1"
+                          - generic [ref=e449]: "2"
+                          - generic [ref=e450]: "3"
+                          - generic [ref=e451]: "4"
+                          - generic [ref=e452]: "5"
+                          - generic [ref=e453]: "6"
+                          - generic [ref=e454]: "7"
+                          - generic [ref=e455]: "8"
+                          - generic [ref=e456]: "9"
+                    - generic [ref=e457]: t
+                  - paragraph [ref=e458]: our best guess — range shown below
+                  - generic [ref=e459]: −6.2% vs last month
+                  - img "Measured last month beside the best guess for each of the next months" [ref=e463]:
+                    - generic [ref=e464]: May
+                    - generic [ref=e466]: Jun
+                    - generic [ref=e468]: Jul
+                    - generic [ref=e470]: Aug
+                - article "Chance we fall short" [ref=e472]:
+                  - generic [ref=e476]:
+                    - paragraph [ref=e485]:
+                      - generic [ref=e486]:
+                        - generic [ref=e487]: 11%
+                        - generic [aria-hidden] [ref=e488]:
+                          - generic [ref=e490]:
+                            - generic [ref=e491]: "0"
+                            - generic [ref=e492]: "1"
+                            - generic [ref=e493]: "2"
+                            - generic [ref=e494]: "3"
+                            - generic [ref=e495]: "4"
+                            - generic [ref=e496]: "5"
+                            - generic [ref=e497]: "6"
+                            - generic [ref=e498]: "7"
+                            - generic [ref=e499]: "8"
+                            - generic [ref=e500]: "9"
+                            - generic [ref=e501]: "0"
+                            - generic [ref=e502]: "1"
+                            - generic [ref=e503]: "2"
+                            - generic [ref=e504]: "3"
+                            - generic [ref=e505]: "4"
+                            - generic [ref=e506]: "5"
+                            - generic [ref=e507]: "6"
+                            - generic [ref=e508]: "7"
+                            - generic [ref=e509]: "8"
+                            - generic [ref=e510]: "9"
+                          - generic [ref=e512]:
+                            - generic [ref=e513]: "0"
+                            - generic [ref=e514]: "1"
+                            - generic [ref=e515]: "2"
+                            - generic [ref=e516]: "3"
+                            - generic [ref=e517]: "4"
+                            - generic [ref=e518]: "5"
+                            - generic [ref=e519]: "6"
+                            - generic [ref=e520]: "7"
+                            - generic [ref=e521]: "8"
+                            - generic [ref=e522]: "9"
+                            - generic [ref=e523]: "0"
+                            - generic [ref=e524]: "1"
+                            - generic [ref=e525]: "2"
+                            - generic [ref=e526]: "3"
+                            - generic [ref=e527]: "4"
+                            - generic [ref=e528]: "5"
+                            - generic [ref=e529]: "6"
+                            - generic [ref=e530]: "7"
+                            - generic [ref=e531]: "8"
+                            - generic [ref=e532]: "9"
+                          - generic [ref=e533]: "%"
+                    - paragraph [ref=e534]: low right now
+                - article "Waiting on a person" [ref=e535]:
+                  - generic [ref=e536]:
+                    - generic [ref=e537]: Waiting on a person
+                    - paragraph [ref=e538]:
+                      - generic [ref=e539]:
+                        - generic [ref=e540]:
+                          - generic [ref=e541]: "0"
+                          - generic [ref=e544]:
+                            - generic [ref=e545]: "0"
+                            - generic [ref=e546]: "1"
+                            - generic [ref=e547]: "2"
+                            - generic [ref=e548]: "3"
+                            - generic [ref=e549]: "4"
+                            - generic [ref=e550]: "5"
+                            - generic [ref=e551]: "6"
+                            - generic [ref=e552]: "7"
+                            - generic [ref=e553]: "8"
+                            - generic [ref=e554]: "9"
+                            - generic [ref=e555]: "0"
+                            - generic [ref=e556]: "1"
+                            - generic [ref=e557]: "2"
+                            - generic [ref=e558]: "3"
+                            - generic [ref=e559]: "4"
+                            - generic [ref=e560]: "5"
+                            - generic [ref=e561]: "6"
+                            - generic [ref=e562]: "7"
+                            - generic [ref=e563]: "8"
+                            - generic [ref=e564]: "9"
+                        - generic [ref=e565]: proposed
+                      - generic [ref=e567]:
+                        - generic [ref=e568]:
+                          - generic [ref=e569]: "1"
+                          - generic [ref=e572]:
+                            - generic [ref=e573]: "0"
+                            - generic [ref=e574]: "1"
+                            - generic [ref=e575]: "2"
+                            - generic [ref=e576]: "3"
+                            - generic [ref=e577]: "4"
+                            - generic [ref=e578]: "5"
+                            - generic [ref=e579]: "6"
+                            - generic [ref=e580]: "7"
+                            - generic [ref=e581]: "8"
+                            - generic [ref=e582]: "9"
+                            - generic [ref=e583]: "0"
+                            - generic [ref=e584]: "1"
+                            - generic [ref=e585]: "2"
+                            - generic [ref=e586]: "3"
+                            - generic [ref=e587]: "4"
+                            - generic [ref=e588]: "5"
+                            - generic [ref=e589]: "6"
+                            - generic [ref=e590]: "7"
+                            - generic [ref=e591]: "8"
+                            - generic [ref=e592]: "9"
+                        - generic [ref=e593]: draft
+                    - paragraph [ref=e594]: decisions, not notifications
+                  - list "How a decision moves" [ref=e595]:
+                    - listitem [ref=e596]:
+                      - generic [ref=e597]: "1"
+                      - text: Draft
+                    - listitem [ref=e598]:
+                      - generic [ref=e599]: "0"
+                      - text: Proposed
+                    - listitem [ref=e600]:
+                      - generic [ref=e601]: "0"
+                      - text: Reviewed
+                  - link "See the list" [ref=e602] [cursor=pointer]:
+                    - /url: "#human-heading"
+            - region [ref=e605]:
+              - generic [ref=e607]:
+                - heading "The forecast" [level=2] [ref=e608]
+                - paragraph [ref=e609]: The solid line is what we dug. The dashes are what we expect next.
+              - generic [ref=e610]:
+                - generic [ref=e611]:
+                  - generic [ref=e612]:
+                    - generic "Chart legend" [ref=e613]:
+                      - generic [ref=e614]: What really happened
+                      - generic [ref=e616]: Our best guess
+                      - generic [ref=e618]: Where the truth usually lands
+                    - tablist "Forecast horizon" [ref=e621]:
+                      - tab "1 month" [ref=e622] [cursor=pointer]
+                      - tab "3 months" [selected] [ref=e623] [cursor=pointer]
+                  - img "Monthly production in tonnes. Solid line for measured months, dashed line for the best guess, shaded band for the range. Exact values follow in the table." [ref=e624]
+                  - group [ref=e625]:
+                    - generic "See the numbers" [ref=e626] [cursor=pointer]
+                  - paragraph [ref=e627]: IBM MSMP monthly bulletins via prophet_baseline_v1.0 (vanilla variant), trained through 2026-05
+                - complementary "Reading the forecast" [ref=e628]:
+                  - generic [ref=e629]:
+                    - paragraph [ref=e630]: Next month, 80% range
+                    - paragraph [ref=e631]:
+                      - text: 1,77,174
+                      - generic [ref=e632]: –
+                      - text: 2,26,008
+                      - generic [ref=e633]: t
+                    - paragraph [ref=e634]: The glowing band on the chart.
+                  - generic [ref=e635]:
+                    - paragraph [ref=e636]: Falling short means
+                    - paragraph [ref=e637]: actual production below 90% of the Prophet forecast for that month
+                    - paragraph [ref=e638]: Probability estimate · not calibrated
+                    - group [ref=e639]:
+                      - generic "Definition & limitations" [ref=e640] [cursor=pointer]
+            - region [ref=e641]:
+              - generic [ref=e642]:
+                - generic [ref=e643]:
+                  - heading "Places to look" [level=2] [ref=e644]
+                  - paragraph [ref=e645]: Higher score = more likely the waste still holds metal. A high score is not permission to dig.
+                - link "Open the map" [ref=e646] [cursor=pointer]:
+                  - /url: /explorer
+              - table [ref=e648]:
+                - caption [ref=e649]: Synthetic screening register and documented farmland diagnostic. 2 Ghost Reserve candidates in the Sausar Belt; scores are raw, before masks.
+                - rowgroup [ref=e650]:
+                  - row [ref=e651]:
+                    - columnheader "Place" [ref=e652]
+                    - columnheader "First score (0–1)" [ref=e653]
+                    - columnheader "Inside safety buffer?" [ref=e654]
+                    - columnheader "What happens next" [ref=e655]
+                - rowgroup [ref=e656]:
+                  - row [ref=e657]:
+                    - rowheader "Demo waste dump A Synthetic inventory" [ref=e658]:
+                      - generic [ref=e659]: Demo waste dump A
+                      - generic [ref=e660]: Synthetic inventory
+                    - cell "0.84" [ref=e661]
+                    - cell "Inside" [ref=e666]
+                    - cell "Assay pending" [ref=e670]
+                  - row [ref=e671]:
+                    - rowheader "Demo slag heap B Synthetic inventory" [ref=e672]:
+                      - generic [ref=e673]: Demo slag heap B
+                      - generic [ref=e674]: Synthetic inventory
+                    - cell "0.62" [ref=e675]
+                    - cell "Inside" [ref=e680]
+                    - cell "Assay pending" [ref=e684]
+                  - row [ref=e685]:
+                    - rowheader "Demo waste dump C · outside buffer Synthetic inventory" [ref=e686]:
+                      - generic [ref=e687]: Demo waste dump C · outside buffer
+                      - generic [ref=e688]: Synthetic inventory
+                    - cell "0.76" [ref=e689]
+                    - cell "Outside" [ref=e694]
+                    - cell "Assay pending" [ref=e699]
+                  - row [ref=e700]:
+                    - rowheader "Farmland diagnostic · north of Nagpur Project-state diagnostic" [ref=e701]:
+                      - generic [ref=e702]: Farmland diagnostic · north of Nagpur
+                      - generic [ref=e703]: Project-state diagnostic
+                    - cell "0.99" [ref=e704]
+                    - cell "Outside" [ref=e709]
+                    - cell "Mask comparison" [ref=e714]
+              - generic [ref=e715]:
+                - paragraph [ref=e716]: Eligibility identifies candidates for investigation. Recoverable tonnes and environmental clearance are not established.
+                - paragraph [ref=e717]: Sausar Belt model scope. Sandur and Bonai return “Outside validated scope”, with no score. Waste-material transfer requires assay validation.
+            - region [ref=e718]:
+              - generic [ref=e720]:
+                - heading "What needs a human" [level=2] [ref=e721]
+                - paragraph [ref=e722]: The system suggests. A person decides.
+              - generic [ref=e723]:
+                - region "Review register" [ref=e724]:
+                  - generic [ref=e725]:
+                    - paragraph [ref=e726]: Review register
+                    - group "Filter reviews" [ref=e727]:
+                      - button "All 0" [pressed] [ref=e728] [cursor=pointer]:
+                        - text: All
+                        - generic [ref=e729]: "0"
+                      - button "Proposed 0" [ref=e730] [cursor=pointer]:
+                        - text: Proposed
+                        - generic [ref=e731]: "0"
+                      - button "Reviewed 0" [ref=e732] [cursor=pointer]:
+                        - text: Reviewed
+                        - generic [ref=e733]: "0"
+                  - status [ref=e734]:
+                    - paragraph [ref=e740]: Nothing needs a decision right now.
+                    - paragraph [ref=e741]: No corrective action needed at current risk level.
+                  - paragraph [ref=e742]: Synthetic evidence, owners and dates. No equipment command, procurement order or supply commitment has been executed.
+                - article [ref=e744]:
+                  - generic [ref=e745]: DEMONSTRATION — not real yet
+                  - paragraph [ref=e746]:
+                    - generic [ref=e747]: DEMO-R-01
+                    - generic [ref=e748]: Company-wide
+                    - generic [ref=e749]: Demo rule · draft
+                  - heading "Review procurement lead times" [level=3] [ref=e750]
+                  - paragraph [ref=e751]: Ask the planning team to review procurement lead times. This demonstration rule has not been domain-validated.
+                  - paragraph [ref=e752]:
+                    - generic [ref=e753]: Trigger
+                    - text: Illustrative downside probability exceeds the demonstration review threshold.
+                  - paragraph [ref=e754]:
+                    - generic [ref=e755]: draft
+                    - link "Review trigger and evidence" [ref=e756] [cursor=pointer]:
+                      - /url: /actions
+            - generic [ref=e760]:
+              - generic [ref=e761]: "LIVE: production · forecast · risk"
+              - generic [ref=e763]: "SYNTHETIC: waste list · demo rules"
+  - alert [ref=e765]

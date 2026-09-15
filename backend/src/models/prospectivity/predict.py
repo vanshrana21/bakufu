@@ -7,6 +7,7 @@ assembly used at inference is exactly the one used in training.
 from __future__ import annotations
 
 import os
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -68,13 +69,16 @@ def cap_score(value):
     return np.clip(value, 0.0, SCORE_CAP)
 
 _AE_CACHE: dict[str, Any] = {}
+_AE_LOCK = threading.Lock()
 
 
 def _autoencoder():
     if "model" not in _AE_CACHE:
-        _AE_CACHE["model"] = (
-            load_autoencoder(ACTIVE_AE_PATH) if ACTIVE_AE_PATH else load_autoencoder()
-        )
+        with _AE_LOCK:
+            if "model" not in _AE_CACHE:
+                _AE_CACHE["model"] = (
+                    load_autoencoder(ACTIVE_AE_PATH) if ACTIVE_AE_PATH else load_autoencoder()
+                )
     return _AE_CACHE["model"]
 
 

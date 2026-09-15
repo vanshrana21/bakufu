@@ -257,6 +257,63 @@ class ShortfallRiskOut(BaseModel):
     decision_threshold: float | None = None
 
 
+class AccuracyAtHorizon(BaseModel):
+    mape: float
+    naive_mape: float
+    skill_vs_naive_pp: float
+    ci80_coverage: float
+    rmse: float
+    n_origins: int
+
+
+class ForecastModelMeta(BaseModel):
+    version: str
+    variant: str
+    regressors: list[str]
+    trained_through: str
+    changepoint_prior_scale: float
+    mcmc_samples: int
+
+
+class ForecastResponse(BaseModel):
+    forecast_date: str
+    target_period: str
+    horizon_months: int
+    predicted_tonnes: float
+    predicted_lower_ci: float
+    predicted_upper_ci: float
+    ci_level: float
+    components: dict[str, float]
+    model: ForecastModelMeta
+    accuracy_at_horizon: AccuracyAtHorizon | None
+    series: list[dict[str, Any]]
+
+
+class ForecastHistoryOrigin(BaseModel):
+    horizon_months: int
+    origin_month: str
+    target_month: str
+    actual_tonnes: float
+    predicted_tonnes: float
+    covered: bool
+
+
+class ForecastHistoryBenchmark(BaseModel):
+    name: str
+    definition: str
+
+
+class ForecastHistoryModel(BaseModel):
+    version: str
+    variant: str
+
+
+class ForecastHistoryResponse(BaseModel):
+    horizons: list[dict[str, Any]]
+    origins: list[ForecastHistoryOrigin]
+    model: ForecastHistoryModel
+    benchmark: ForecastHistoryBenchmark
+
 class ProductionHistoryOut(BaseModel):
     """One month of MOIL production history."""
 

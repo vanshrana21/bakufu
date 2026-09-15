@@ -42,7 +42,7 @@ export function useProspectivitySurface(sites: readonly SiteFixture[], mask: Mas
     if (!LIVE_MODE) return;
     const controller = new AbortController();
     let current = true;
-    setState((previous) => ({ ...previous, loading: true, error: null }));
+    setState((previous) => ({ ...previous, surface: null, loading: true, error: null }));
     fetchHeatmap({ ...WARM_VIEWPORTS.full_bbox, gridSize: 32, mask, signal: controller.signal }).then(
       (result) => {
         if (!current) return;

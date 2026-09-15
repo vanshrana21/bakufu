@@ -14,6 +14,8 @@ from src.api.schemas import (
     ShortfallRiskOut,
     TrainStatusOut,
     TrainTaskOut,
+    ForecastResponse,
+    ForecastHistoryResponse,
 )
 
 from src.api.errors import NotImplementedInDemo, PredictionFailed
@@ -28,8 +30,10 @@ VALID_HORIZONS: tuple[int, ...] = (1, 3, 6, 12)
 #: target. The bundle is immutable for the life of the process and there are
 #: only four valid horizons, so the result is memoised rather than recomputed.
 #: Cleared when the lifespan handler reloads artifacts.
-_FORECAST_CACHE: dict[int, dict[str, Any]] = {}
+import time
 
+_FORECAST_CACHE: dict[int, tuple[float, ForecastResponse]] = {}
+_CACHE_TTL = 900  # 15 minutes
 
 def clear_forecast_cache() -> None:
     _FORECAST_CACHE.clear()
@@ -49,8 +53,8 @@ def _unavailable(exc: Exception, what: str) -> HTTPException:
     )
 
 
-@router.get("/forecast", summary="Forecast MH+MP production")
-def get_forecast(request: Request, horizon: int = Query(1, description=f"Months ahead. One of {VALID_HORIZONS}.")) -> dict[str, Any]:
+@router.get("/forecast", response_model=ForecastResponse, summary="Forecast MH+MP production")
+def get_forecast(request: Request, horizon: int = Query(1, description=f"Months ahead. One of {VALID_HORIZONS}.")) -> ForecastResponse:
     """Prophet forecast at one of the backtested horizons.
 
     Reads the promoted bundle and the shipped backtest metrics from app.state.
@@ -70,8 +74,12 @@ def get_forecast(request: Request, horizon: int = Query(1, description=f"Months 
 
     cached = _FORECAST_CACHE.get(horizon)
     if cached is not None:
-        # forecast_date is the only field that can go stale within a process.
-        return {**cached, "forecast_date": date.today().isoformat()}
+        timestamp, cached_payload = cached
+        if time.time() - timestamp < _CACHE_TTL:
+            # forecast_date is the only field that can go stale within a process.
+            return cached_payload.model_copy(update={"forecast_date": date.today().isoformat()})
+        else:
+            del _FORECAST_CACHE[horizon]
 
     model, frame = bundle["model"], bundle["frame"]
     try:
@@ -121,7 +129,7 @@ def get_forecast(request: Request, horizon: int = Query(1, description=f"Months 
         else None
     )
 
-    payload = {
+    payload_dict = {
         "forecast_date": date.today().isoformat(),
         "target_period": pd.Period(row.ds, freq="M").strftime("%Y-%m"),
         "horizon_months": horizon,
@@ -141,12 +149,14 @@ def get_forecast(request: Request, horizon: int = Query(1, description=f"Months 
         "accuracy_at_horizon": accuracy,
         "series": series,
     }
-    _FORECAST_CACHE[horizon] = payload
+    
+    payload = ForecastResponse(**payload_dict)
+    _FORECAST_CACHE[horizon] = (time.time(), payload)
     return payload
 
 
-@router.get("/forecast/history", summary="Backtest results per horizon")
-def get_forecast_history(request: Request) -> dict[str, Any]:
+@router.get("/forecast/history", response_model=ForecastHistoryResponse, summary="Backtest results per horizon")
+def get_forecast_history(request: Request) -> ForecastHistoryResponse:
     """Per-horizon metrics plus the per-origin rows behind them."""
     artifacts = request.app.state.artifacts
     metrics = artifacts.require("forecast_metrics")
@@ -176,15 +186,15 @@ def get_forecast_history(request: Request) -> dict[str, Any]:
         for r in rows.itertuples()
     ]
 
-    return {
-        "horizons": horizons,
-        "origins": origins,
-        "model": {"version": FORECAST_MODEL_VERSION, "variant": "vanilla"},
-        "benchmark": {
+    return ForecastHistoryResponse(
+        horizons=horizons,
+        origins=origins,
+        model={"version": FORECAST_MODEL_VERSION, "variant": "vanilla"},
+        benchmark={
             "name": "seasonal_naive",
             "definition": "same calendar month one year earlier",
         },
-    }
+    )
 
 
 @router.get("/production/history", summary="MH+MP monthly manganese production")
@@ -289,7 +299,7 @@ def _run_retrain(task_id: str) -> None:
 
 
 @router.post("/forecast/retrain", summary="Retrain the forecast model")
-def retrain_forecast() -> dict[str, Any]:
+def retrain_forecast() -> TrainTaskOut:
     """Disabled for the demo.
 
     Retraining takes ~40 minutes with MCMC sampling, cannot be meaningfully

@@ -63,10 +63,3 @@ def SessionLocal() -> Session:  # noqa: N802 - conventional factory name
     return get_session_factory()()
 
 
-def get_session() -> Iterator[Session]:
-    """FastAPI dependency yielding a session and always closing it."""
-    session = SessionLocal()
-    try:
-        yield session
-    finally:
-        session.close()

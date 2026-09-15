@@ -33,10 +33,6 @@ router = APIRouter(tags=["predictions"])
 #: (~30 m, half of the 60 m grid the model reasons at).
 _CELL_HALF_DEG = 0.00027
 
-#: In-process registry of background training tasks. Deliberately not Celery -
-#: Phase 2 keeps the dependency surface small.
-_TRAIN_TASKS: dict[str, dict[str, Any]] = {}
-
 
 def _model_unavailable(exc: FileNotFoundError) -> HTTPException:
     return HTTPException(
@@ -186,46 +182,72 @@ def get_prediction(prediction_id: int, db: Session = Depends(get_db)) -> Predict
     return PredictionRecordOut.model_validate(row)
 
 
-def _run_training(task_id: str) -> None:
-    """Background training job. Records terminal state in _TRAIN_TASKS."""
+def _run_training(job_id: str) -> None:
+    """Background training job. Records terminal state in the database."""
     from src.models.prospectivity.train_pu_xgboost import main as train_main
+    from src.db.session import SessionLocal
+    from src.db.models import BackgroundJob
 
-    task = _TRAIN_TASKS[task_id]
-    task["status"] = "running"
-    task["started_at"] = datetime.now(UTC)
-    try:
-        train_main()
-        task["status"] = "completed"
-        task["detail"] = "model retrained and saved"
-    except Exception as exc:  # noqa: BLE001 - surfaced through the status endpoint
-        task["status"] = "failed"
-        task["detail"] = f"{type(exc).__name__}: {exc}"
-        task["traceback"] = traceback.format_exc()
-    finally:
-        task["finished_at"] = datetime.now(UTC)
+    with SessionLocal() as db:
+        job = db.query(BackgroundJob).filter(BackgroundJob.job_id == job_id).first()
+        if not job:
+            return
+        
+        job.status = "running"
+        job.progress = 0.0
+        db.commit()
+
+        try:
+            train_main()
+            job.status = "completed"
+            job.progress = 100.0
+            job.result_data = {"detail": "model retrained and saved"}
+        except Exception as exc:  # noqa: BLE001
+            job.status = "failed"
+            job.error_message = f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}"
+        finally:
+            db.commit()
 
 
 @router.post("/train", response_model=TrainTaskOut, status_code=202, summary="Retrain in background")
-def start_training(background_tasks: BackgroundTasks) -> TrainTaskOut:
-    task_id = uuid.uuid4().hex
-    _TRAIN_TASKS[task_id] = {"status": "queued", "started_at": None, "finished_at": None}
-    background_tasks.add_task(_run_training, task_id)
+def start_training(background_tasks: BackgroundTasks, db: Session = Depends(get_db)) -> TrainTaskOut:
+    from src.db.models import BackgroundJob
+    
+    job_id = uuid.uuid4().hex
+    job = BackgroundJob(
+        job_id=job_id,
+        task_name="train_pu_xgboost",
+        status="queued"
+    )
+    db.add(job)
+    db.commit()
+    
+    background_tasks.add_task(_run_training, job_id)
     return TrainTaskOut(
-        task_id=task_id,
+        task_id=job_id,
         status="started",
         detail="training runs in-process; poll GET /train/{task_id}",
     )
 
 
 @router.get("/train/{task_id}", response_model=TrainStatusOut, summary="Background training status")
-def training_status(task_id: str) -> TrainStatusOut:
-    task = _TRAIN_TASKS.get(task_id)
-    if task is None:
+def training_status(task_id: str, db: Session = Depends(get_db)) -> TrainStatusOut:
+    from src.db.models import BackgroundJob
+    
+    job = db.query(BackgroundJob).filter(BackgroundJob.job_id == task_id).first()
+    if job is None:
         raise HTTPException(status_code=404, detail=f"task {task_id} not found")
+        
+    detail = None
+    if job.status == "completed" and job.result_data:
+        detail = job.result_data.get("detail")
+    elif job.status == "failed":
+        detail = job.error_message
+        
     return TrainStatusOut(
         task_id=task_id,
-        status=task["status"],
-        started_at=task.get("started_at"),
-        finished_at=task.get("finished_at"),
-        detail=task.get("detail"),
+        status=job.status,
+        started_at=job.created_at if job.status != "queued" else None,
+        finished_at=job.updated_at if job.status in ("completed", "failed") else None,
+        detail=detail,
     )

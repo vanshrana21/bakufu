@@ -148,7 +148,7 @@ class Prediction(Base):
     prospectivity_score: Mapped[float] = mapped_column(Float)
     deposit_type: Mapped[str] = mapped_column(String(32), default="UNKNOWN")
     uncertainty: Mapped[float | None] = mapped_column(Float, nullable=True)
-    model_version: Mapped[str] = mapped_column(String(64))
+    model_version: Mapped[str] = mapped_column(String(64), index=True)
     #: Post-processing mask that produced final_score. prospectivity_score
     #: mirrors final_score; raw_score keeps the pre-mask value so a masked-out
     #: cell can still be inspected.
@@ -156,7 +156,7 @@ class Prediction(Base):
     raw_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     final_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+        DateTime(timezone=True), server_default=func.now(), index=True
     )
 
 

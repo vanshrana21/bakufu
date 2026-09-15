@@ -10,6 +10,7 @@ Run: python -m src.models.prospectivity.explain
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -28,26 +29,31 @@ from src.models.prospectivity.pu_xgboost import MODEL_PATH  # noqa: E402
 SUMMARY_PLOT_PATH: Path = settings.DATA_PROCESSED / "shap_summary.png"
 
 _CACHE: dict[str, Any] = {}
+_CACHE_LOCK = threading.Lock()
 
 
 def load_bundle(model_path: Path | str = MODEL_PATH) -> dict[str, Any]:
     """Load and memoise the trained model bundle."""
     key = str(model_path)
     if key not in _CACHE:
-        path = Path(model_path)
-        if not path.exists():
-            raise FileNotFoundError(
-                f"no trained model at {path} - "
-                "run python -m src.models.prospectivity.train_pu_xgboost"
-            )
-        _CACHE[key] = joblib.load(path)
+        with _CACHE_LOCK:
+            if key not in _CACHE:
+                path = Path(model_path)
+                if not path.exists():
+                    raise FileNotFoundError(
+                        f"no trained model at {path} - "
+                        "run python -m src.models.prospectivity.train_pu_xgboost"
+                    )
+                _CACHE[key] = joblib.load(path)
     return _CACHE[key]
 
 
 def _explainer(bundle: dict[str, Any]) -> shap.TreeExplainer:
     key = f"explainer::{id(bundle)}"
     if key not in _CACHE:
-        _CACHE[key] = shap.TreeExplainer(bundle["model"])
+        with _CACHE_LOCK:
+            if key not in _CACHE:
+                _CACHE[key] = shap.TreeExplainer(bundle["model"])
     return _CACHE[key]
 
 
