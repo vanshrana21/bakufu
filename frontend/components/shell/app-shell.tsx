@@ -15,6 +15,8 @@ import {
   MapPin,
   Menu,
   MessageSquareText,
+  PanelLeftClose,
+  PanelLeftOpen,
   Scan,
   ShieldCheck,
   X,
@@ -23,6 +25,9 @@ import { Button } from "@/components/ui/button";
 import { BakufuLockup } from "@/components/brand/logo-b";
 import { LIVE_MODE } from "@/lib/api/client";
 import styles from "./app-shell.module.css";
+
+/** Remembers a collapsed sidebar across visits; a per-viewer convenience only. */
+const COLLAPSE_KEY = "bakufu-sidebar-collapsed";
 
 /** Routes whose figures come from the FastAPI backend in live mode. */
 const LIVE_ROUTES = new Set(["/operations", "/production", "/actions", "/explorer"]);
@@ -72,6 +77,7 @@ function isActive(pathname: string, href: string) {
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
   const main = useRef<HTMLElement>(null);
   const activeGroup = navigationGroups.find((group) =>
@@ -88,6 +94,26 @@ export function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     setMenuOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    try {
+      setCollapsed(window.localStorage.getItem(COLLAPSE_KEY) === "true");
+    } catch {
+      // Storage can be blocked; the sidebar simply starts expanded.
+    }
+  }, []);
+
+  function toggleCollapsed() {
+    setCollapsed((current) => {
+      const next = !current;
+      try {
+        window.localStorage.setItem(COLLAPSE_KEY, String(next));
+      } catch {
+        // Not persisted when storage is unavailable.
+      }
+      return next;
+    });
+  }
 
   function navigate() {
     if (menuOpen) {
@@ -120,6 +146,21 @@ export function AppShell({ children }: { children: ReactNode }) {
         >
           <BakufuLockup size={28} />
         </Link>
+        <button
+          type="button"
+          className={styles.collapseButton}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-expanded={!collapsed}
+          aria-controls="workspace-sidebar"
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          onClick={toggleCollapsed}
+        >
+          {collapsed ? (
+            <PanelLeftOpen size={18} strokeWidth={1.6} aria-hidden="true" />
+          ) : (
+            <PanelLeftClose size={18} strokeWidth={1.6} aria-hidden="true" />
+          )}
+        </button>
         <div className={styles.context}>
           <span>{activeGroup?.label}</span>
           <span aria-hidden="true">/</span>
@@ -151,8 +192,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           <span>Menu</span>
         </Button>
       </header>
-      <div className={styles.body}>
+      <div className={styles.body} data-collapsed={collapsed}>
         <aside
+          id="workspace-sidebar"
           className={styles.sidebar}
           data-theme="dark"
           data-open={menuOpen}
@@ -176,9 +218,10 @@ export function AppShell({ children }: { children: ReactNode }) {
                           isActive(pathname, href) ? "page" : undefined
                         }
                         onClick={navigate}
+                        title={collapsed ? label : undefined}
                       >
                         <Icon size={17} strokeWidth={1.6} aria-hidden="true" />
-                        <span>{label}</span>
+                        <span className={styles.linkLabel}>{label}</span>
                       </Link>
                     </li>
                   ))}
@@ -188,7 +231,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </nav>
           <div className={styles.sidebarFooter}>
             <MapPin size={15} aria-hidden="true" />
-            <div>
+            <div className={styles.footerText}>
               <strong>Sausar Belt, India</strong>
               <p>Validated geographic scope</p>
             </div>

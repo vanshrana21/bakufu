@@ -14,6 +14,10 @@
   --glow: #D39858;
   --char: #34150F;
   --ink: #000000;
+  /* Status semantics only, never decoration: good / live / inside / low, and
+   * attention / outside / high. Kept to a few percent of any screen. */
+  --moss: #7E9B72;
+  --brick: #B4472E;
   --chrome: linear-gradient(
     180deg,
     var(--paper),

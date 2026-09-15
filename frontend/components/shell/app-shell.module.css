@@ -75,6 +75,60 @@
   grid-template-columns: 236px minmax(0, 1fr);
   flex: 1;
   min-width: 0;
+  transition: grid-template-columns 240ms var(--ease-out);
+}
+/* Collapsed: a slim icon rail, so the page takes almost the full width. Labels
+ * stay in the accessibility tree; each link keeps its aria-label and a title. */
+.body[data-collapsed="true"] {
+  grid-template-columns: 68px minmax(0, 1fr);
+}
+.collapseButton {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  margin-left: -12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast),
+    color var(--dur-fast),
+    border-color var(--dur-fast);
+}
+.collapseButton:hover {
+  color: var(--foreground);
+  background: var(--muted);
+  border-color: var(--border-strong);
+}
+.body[data-collapsed="true"] .navigation {
+  padding: 24px 10px;
+}
+.body[data-collapsed="true"] .groupLabel,
+.body[data-collapsed="true"] .linkLabel,
+.body[data-collapsed="true"] .footerText {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.body[data-collapsed="true"] .navigation section + section {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.body[data-collapsed="true"] .navigation a {
+  justify-content: center;
+  padding: 11px 0;
+}
+.body[data-collapsed="true"] .sidebarFooter {
+  justify-content: center;
+  padding: 20px 0;
 }
 .sidebar {
   display: flex;
@@ -180,8 +234,30 @@
   .menuButton {
     display: inline-flex;
   }
-  .body {
+  .collapseButton {
+    display: none;
+  }
+  .body,
+  .body[data-collapsed="true"] {
     display: block;
+  }
+  .body[data-collapsed="true"] .groupLabel,
+  .body[data-collapsed="true"] .linkLabel {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
+  }
+  .body[data-collapsed="true"] .navigation a {
+    justify-content: flex-start;
+    padding: 11px 12px;
+  }
+  .body[data-collapsed="true"] .navigation section + section {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
   }
   .sidebar {
     position: static;
