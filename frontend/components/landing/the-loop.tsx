@@ -1,73 +1,69 @@
-import { ChapterLabel, Crest } from "./shared";
+import localFont from "next/font/local";
+import { LoopVisual } from "./loop-visual";
+import { TerrainAtmosphere } from "./terrain-atmosphere";
 import s from "./story.module.css";
+import l from "./loop.module.css";
+
+const loopSans = localFont({
+  src: "./fonts/public-sans-latin-variable.woff2",
+  weight: "400 700",
+  display: "swap",
+  variable: "--font-loop",
+});
+
 export function TheLoop() {
   return (
     <section
-      className={s.chapter + " " + s.loop}
+      id="loop"
+      className={`${s.chapter} ${l.section} ${loopSans.variable}`}
       aria-labelledby="loop-heading"
     >
-      <ChapterLabel number="07">STAGE 9 / THE FEEDBACK LOOP / 巡</ChapterLabel>
-      <div className={s.twoColumn}>
-        <div className={s.loopDiagram}>
-          <svg
-            viewBox="0 0 500 500"
-            className={s.loopOrbit}
-            data-ring
-            aria-hidden="true"
-          >
-            <circle
-              cx="250"
-              cy="250"
-              r="195"
-              fill="none"
-              stroke="var(--shade-3)"
-              strokeWidth="2"
-              strokeDasharray="4 9"
-            />
-            <path
-              d="M250 55A195 195 0 0 1 445 250"
-              fill="none"
-              stroke="var(--glow)"
-              strokeWidth="3"
-            />
-            <circle cx="445" cy="250" r="9" fill="var(--glow)" />
-          </svg>
-          <Crest className={s.loopCrest} />
-          <span className={s.loopTop}>01 / GEOLOGIST FLAGS</span>
-          <span className={s.loopRight}>02 / ANNOTATE</span>
-          <span className={s.loopBottom}>03 / REVIEW + RETRAIN</span>
-          <span className={s.loopLeft}>04 / VALIDATE</span>
-          <strong className={s.version}>
-            v6 → v7<span>CANDIDATE, NOT AUTO-DEPLOYED</span>
-          </strong>
-        </div>
-        <div>
-          <h2 id="loop-heading" className={s.display}>
-            <span className={s.stepOne}>CORRECT.</span>{" "}
-            <span className={`${s.stepTwo} ${s.outline}`}>QUESTION.</span>{" "}
-            <span className={s.stepThree}>REPEAT.</span>
-          </h2>
-          <p className={s.lead}>
-            Every correction makes
-            <br />
-            the house better informed.
-          </p>
-          <p>
-            Geologists flag false positives, missed signals and data issues.
-            Reviewed annotations enter the next training cycle. A new version
-            earns promotion through evaluation.
-          </p>
-          <span className={s.sticker + " " + s.limeSticker}>
-            HUMAN KNOWLEDGE.
-            <br />
-            VERSIONED.
-          </span>
+      <TerrainAtmosphere variant="screening" />
+      <span className={`${s.chapterIndex} ${l.index}`} aria-hidden="true">07</span>
+      <header className={l.label}>
+        <span>07 / FIELD NOTES</span>
+        <span>STAGE 9 / HOW IT LEARNS / 巡</span>
+      </header>
+      <div className={l.intro}>
+        <h2 id="loop-heading" className={l.title}>
+          PEOPLE TEACH <span>THE MACHINE.</span>
+        </h2>
+        <p className={l.aside}>
+          When the model gets it wrong, a person says so.
+          <span>That correction trains the next version.</span>
+        </p>
+      </div>
+      <div className={l.body}>
+        <figure className={l.visual}>
+          <div className={l.stage}>
+            <LoopVisual />
+            <span className={l.sticker}>
+              STAGE 9
+              <strong>HUMAN KNOWLEDGE, VERSIONED.</strong>
+            </span>
+          </div>
+          <figcaption>
+            Workflow illustration · Feedback alone does not prove the model got better. The held-out test still decides.
+          </figcaption>
+        </figure>
+        <div className={l.text}>
+          <div className={l.stanza}>
+            <p>The model points at a place.</p>
+            <p>A geologist walks it, or checks the records.</p>
+            <p>If the model was wrong, we write down why.</p>
+            <p>The next version learns from it — and still has to pass the test.</p>
+          </div>
+          <div className={l.moment}>
+            <span>MODEL VERSION</span>
+            <strong>
+              v6 <span className={l.arrow}>→</span> <span className={l.next}>v7</span>
+            </strong>
+            <p className={l.gloss}>
+              The new version must beat the old one on places it has never seen. Until then, it waits.
+            </p>
+          </div>
         </div>
       </div>
-      <p className={s.footnote}>
-        Workflow illustration. Feedback is not proof of improved accuracy;
-        held-out spatial evaluation remains the gate.
-      </p>
     </section>
   );
 }
