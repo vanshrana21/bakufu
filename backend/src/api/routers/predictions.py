@@ -2,18 +2,20 @@
 
 from __future__ import annotations
 
+import logging
 import traceback
 import uuid
 from datetime import UTC, datetime
-from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from geoalchemy2.shape import from_shape
 from shapely.geometry import box
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from src.api.deps import get_db, get_optional_db
+from src.api.errors import DataNotLoaded
 from src.api.schemas import (
     MaskInfoOut,
     PredictBboxIn,
@@ -25,9 +27,15 @@ from src.api.schemas import (
     TrainTaskOut,
 )
 from src.data.masks.registry import VALID_MASKS, apply_mask, describe as describe_masks
-from src.db.models import Prediction
+from src.db import session as db_session
+from src.db.models import BackgroundJob, Prediction
+
+logger = logging.getLogger("api.predictions")
 
 router = APIRouter(tags=["predictions"])
+
+#: BackgroundJob.task_name for POST /train.
+TRAIN_TASK_NAME = "train_pu_xgboost"
 
 #: Half-width of the cell polygon stored for a point prediction, in degrees
 #: (~30 m, half of the 60 m grid the model reasons at).
@@ -182,46 +190,64 @@ def get_prediction(prediction_id: int, db: Session = Depends(get_db)) -> Predict
     return PredictionRecordOut.model_validate(row)
 
 
-def _run_training(job_id: str) -> None:
-    """Background training job. Records terminal state in the database."""
-    from src.models.prospectivity.train_pu_xgboost import main as train_main
-    from src.db.session import SessionLocal
-    from src.db.models import BackgroundJob
+def _update_job(job_id: str, **fields: object) -> None:
+    """Write fields onto one job in a short transaction of its own.
 
-    with SessionLocal() as db:
-        job = db.query(BackgroundJob).filter(BackgroundJob.job_id == job_id).first()
-        if not job:
+    Training runs for minutes; holding one session across it would pin a pooled
+    connection for the whole run. Each state change gets its own session.
+    """
+    with db_session.SessionLocal() as db:
+        job = db.scalars(select(BackgroundJob).where(BackgroundJob.job_id == job_id)).first()
+        if job is None:
+            logger.warning("background job %s vanished before %s", job_id, sorted(fields))
             return
-        
-        job.status = "running"
-        job.progress = 0.0
+        for name, value in fields.items():
+            setattr(job, name, value)
         db.commit()
 
-        try:
-            train_main()
-            job.status = "completed"
-            job.progress = 100.0
-            job.result_data = {"detail": "model retrained and saved"}
-        except Exception as exc:  # noqa: BLE001
-            job.status = "failed"
-            job.error_message = f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}"
-        finally:
-            db.commit()
+
+def _run_training(job_id: str) -> None:
+    """Background training job. Every state change is recorded on the job row."""
+    try:
+        _update_job(job_id, status="running", progress=0.0, started_at=datetime.now(UTC))
+    except SQLAlchemyError:
+        logger.exception("could not mark training job %s as running", job_id)
+        return
+
+    try:
+        from src.models.prospectivity.train_pu_xgboost import main as train_main
+
+        train_main()
+    except Exception as exc:  # noqa: BLE001 - surfaced through the status endpoint
+        outcome: dict[str, object] = {
+            "status": "failed",
+            "error_message": f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}",
+        }
+    else:
+        outcome = {
+            "status": "completed",
+            "progress": 100.0,
+            "result_data": {"detail": "model retrained and saved"},
+        }
+    try:
+        _update_job(job_id, finished_at=datetime.now(UTC), **outcome)
+    except SQLAlchemyError:
+        logger.exception("could not record the outcome of training job %s", job_id)
 
 
 @router.post("/train", response_model=TrainTaskOut, status_code=202, summary="Retrain in background")
 def start_training(background_tasks: BackgroundTasks, db: Session = Depends(get_db)) -> TrainTaskOut:
-    from src.db.models import BackgroundJob
-    
     job_id = uuid.uuid4().hex
-    job = BackgroundJob(
-        job_id=job_id,
-        task_name="train_pu_xgboost",
-        status="queued"
-    )
-    db.add(job)
-    db.commit()
-    
+    db.add(BackgroundJob(job_id=job_id, task_name=TRAIN_TASK_NAME, status="queued"))
+    try:
+        db.commit()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise DataNotLoaded(
+            detail=f"could not record the training job: {type(exc).__name__}",
+            remedy="run python -m scripts.migrations.add_background_jobs to create the background_jobs table",
+        ) from exc
+
     background_tasks.add_task(_run_training, job_id)
     return TrainTaskOut(
         task_id=job_id,
@@ -232,22 +258,24 @@ def start_training(background_tasks: BackgroundTasks, db: Session = Depends(get_
 
 @router.get("/train/{task_id}", response_model=TrainStatusOut, summary="Background training status")
 def training_status(task_id: str, db: Session = Depends(get_db)) -> TrainStatusOut:
-    from src.db.models import BackgroundJob
-    
-    job = db.query(BackgroundJob).filter(BackgroundJob.job_id == task_id).first()
+    job = db.scalars(
+        select(BackgroundJob).where(
+            BackgroundJob.job_id == task_id, BackgroundJob.task_name == TRAIN_TASK_NAME
+        )
+    ).first()
     if job is None:
         raise HTTPException(status_code=404, detail=f"task {task_id} not found")
-        
+
     detail = None
     if job.status == "completed" and job.result_data:
         detail = job.result_data.get("detail")
     elif job.status == "failed":
         detail = job.error_message
-        
+
     return TrainStatusOut(
         task_id=task_id,
         status=job.status,
-        started_at=job.created_at if job.status != "queued" else None,
-        finished_at=job.updated_at if job.status in ("completed", "failed") else None,
+        started_at=job.started_at,
+        finished_at=job.finished_at,
         detail=detail,
     )

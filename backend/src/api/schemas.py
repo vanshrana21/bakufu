@@ -258,6 +258,8 @@ class ShortfallRiskOut(BaseModel):
 
 
 class AccuracyAtHorizon(BaseModel):
+    """The shipped backtest row for one horizon."""
+
     mape: float
     naive_mape: float
     skill_vs_naive_pp: float
@@ -267,6 +269,8 @@ class AccuracyAtHorizon(BaseModel):
 
 
 class ForecastModelMeta(BaseModel):
+    """Which promoted Prophet bundle produced a forecast."""
+
     version: str
     variant: str
     regressors: list[str]
@@ -275,7 +279,19 @@ class ForecastModelMeta(BaseModel):
     mcmc_samples: int
 
 
+class ForecastSeriesPoint(BaseModel):
+    """One month of a multi-month forecast. p10/p90 bound the 80% interval."""
+
+    month: str
+    month_label: str
+    p10: float
+    p50: float
+    p90: float
+
+
 class ForecastResponse(BaseModel):
+    """GET /forecast."""
+
     forecast_date: str
     target_period: str
     horizon_months: int
@@ -286,10 +302,24 @@ class ForecastResponse(BaseModel):
     components: dict[str, float]
     model: ForecastModelMeta
     accuracy_at_horizon: AccuracyAtHorizon | None
-    series: list[dict[str, Any]]
+    series: list[ForecastSeriesPoint]
+
+
+class ForecastHistoryHorizon(BaseModel):
+    """Backtest metrics for one horizon."""
+
+    horizon_months: int
+    n_origins: int
+    mape: float
+    rmse: float
+    naive_mape: float
+    skill_vs_naive_pp: float
+    ci80_coverage: float
 
 
 class ForecastHistoryOrigin(BaseModel):
+    """One rolling-origin backtest prediction."""
+
     horizon_months: int
     origin_month: str
     target_month: str
@@ -309,10 +339,13 @@ class ForecastHistoryModel(BaseModel):
 
 
 class ForecastHistoryResponse(BaseModel):
-    horizons: list[dict[str, Any]]
+    """GET /forecast/history."""
+
+    horizons: list[ForecastHistoryHorizon]
     origins: list[ForecastHistoryOrigin]
     model: ForecastHistoryModel
     benchmark: ForecastHistoryBenchmark
+
 
 class ProductionHistoryOut(BaseModel):
     """One month of MOIL production history."""

@@ -9,10 +9,10 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import rasterio
-from pyproj import Transformer
 from rasterio.io import DatasetReader
 
 from src.config.settings import S2_BANDS, settings
+from src.data import raster_pool
 
 #: Feature columns produced by this module, in order.
 BAND_FEATURES: list[str] = [band.lower() for band in S2_BANDS]
@@ -119,7 +119,7 @@ def extract_features_bulk(
     lon_col: str = "lon",
     lat_col: str = "lat",
 ) -> pd.DataFrame:
-    """Extract features for many points, opening each raster exactly once.
+    """Extract features for many points from each raster's pooled handle.
 
     Returns `points_df` with the feature columns appended. Points outside a
     raster get NaN for that raster's columns.
@@ -132,21 +132,19 @@ def extract_features_bulk(
     lats = out[lat_col].astype(float).tolist()
 
     band_rows: list[dict[str, Any]] = []
-    with rasterio.open(s2) as src:
-        to_raster = Transformer.from_crs("EPSG:4326", src.crs, always_xy=True)
-        xs, ys = to_raster.transform(lons, lats)
-        left, bottom, right, top = src.bounds
-        inside = [left <= x <= right and bottom <= y <= top for x, y in zip(xs, ys, strict=True)]
-        sampled = _sample_bands(src, list(xs), list(ys))
-        for is_inside, row in zip(inside, sampled, strict=True):
-            band_rows.append(row if is_inside else dict.fromkeys(BAND_COLUMNS.values()))
+    src = raster_pool.dataset(s2)
+    xs, ys = raster_pool.transformer("EPSG:4326", src.crs).transform(lons, lats)
+    left, bottom, right, top = src.bounds
+    inside = [left <= x <= right and bottom <= y <= top for x, y in zip(xs, ys, strict=True)]
+    sampled = _sample_bands(src, list(xs), list(ys))
+    for is_inside, row in zip(inside, sampled, strict=True):
+        band_rows.append(row if is_inside else dict.fromkeys(BAND_COLUMNS.values()))
 
     terrain_rows: list[dict[str, float | None]] = []
-    with rasterio.open(dem) as src:
-        to_dem = Transformer.from_crs("EPSG:4326", src.crs, always_xy=True)
-        dxs, dys = to_dem.transform(lons, lats)
-        for x, y in zip(dxs, dys, strict=True):
-            terrain_rows.append(_terrain_at(src, float(x), float(y)))
+    src = raster_pool.dataset(dem)
+    dxs, dys = raster_pool.transformer("EPSG:4326", src.crs).transform(lons, lats)
+    for x, y in zip(dxs, dys, strict=True):
+        terrain_rows.append(_terrain_at(src, float(x), float(y)))
 
     features = pd.concat(
         [pd.DataFrame(band_rows), pd.DataFrame(terrain_rows)], axis=1

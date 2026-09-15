@@ -14,6 +14,7 @@ from fastapi import APIRouter, Request
 
 from src.api.errors import DataNotLoaded, PredictionFailed
 from src.api.state import SHORTFALL_MODEL_VERSION
+from src.models.explainers import tree_explainer
 from src.config.settings import settings
 
 logger = logging.getLogger("api.shortfall")
@@ -122,8 +123,6 @@ def get_shortfall_risk(request: Request) -> dict[str, Any]:
     time: IMD publishes rainfall near-real-time, so the concurrent month is
     known, and the deviations come from months already published.
     """
-    import shap
-
     from src.models.forecast.prophet_baseline import load_monthly_rainfall
     from src.models.shortfall_classifier import SHORTFALL_THRESHOLD
 
@@ -176,8 +175,7 @@ def get_shortfall_risk(request: Request) -> dict[str, Any]:
         design = pd.DataFrame([row])[order]
         probability = float(bundle["model"].predict_proba(design)[:, 1][0])
 
-        from src.models.prospectivity.explain import _explainer
-        explainer = _explainer(bundle)
+        explainer = tree_explainer(bundle)
         contributions = explainer.shap_values(design)[0]
         base_value = float(np.ravel(explainer.expected_value)[0])
     except DataNotLoaded:

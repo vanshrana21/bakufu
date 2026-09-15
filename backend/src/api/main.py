@@ -7,7 +7,7 @@ import threading
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.errors import ApiError, api_error_handler
@@ -16,6 +16,7 @@ from src.api.routers import (
     shortfall,
 )
 from src.api.schemas import HealthOut
+from src.api.security import API_KEY_HEADER, api_key_required, require_api_key
 from src.api.state import load_all
 from src.config.settings import settings
 
@@ -43,15 +44,21 @@ async def lifespan(app: FastAPI):
     from src.api.routers.shortfall import clear_shortfall_cache
 
     from src.api.routers.reference import clear_heatmap_memory
+    from src.models.explainers import clear_explainers
 
     clear_forecast_cache()
     clear_shortfall_cache()
     clear_heatmap_memory()
+    clear_explainers()
     app.state.artifacts = load_all()
     loaded = [name for name, a in app.state.artifacts.artifacts.items() if a.ok]
     failed = app.state.artifacts.degraded
     logger.info("startup: %d artifacts loaded%s", len(loaded),
                 f", {len(failed)} failed: {', '.join(failed)}" if failed else "")
+    if api_key_required():
+        logger.info("startup: %s required on every route except /", API_KEY_HEADER)
+    else:
+        logger.warning("startup: API_KEY is not set - the API is open; set it before exposing this server")
     stop_warming = _start_heatmap_warming()
     yield
     stop_warming.set()
@@ -68,6 +75,7 @@ app = FastAPI(
     ),
     version=API_VERSION,
     lifespan=lifespan,
+    dependencies=[Depends(require_api_key)],
 )
 
 #: Local frontend dev servers: CRA (3000), Vite (5173), and a plain static
@@ -82,12 +90,14 @@ ALLOWED_ORIGINS = [
     for host in ("localhost", "127.0.0.1")
 ]
 
+#: Exactly what the frontend sends. No cookies or browser credentials are used,
+#: so credentials stay off; the API key travels in its own header.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Accept", "Content-Type", API_KEY_HEADER],
 )
 
 app.add_exception_handler(ApiError, api_error_handler)

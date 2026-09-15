@@ -180,11 +180,11 @@ def test_grid_points_respects_cap() -> None:
 
 
 def test_v6_promotion_ordering() -> None:
-    """Pin the two properties that motivated promoting v1 -> v6.
+    """Pin the first property that motivated promoting v1 -> v6.
 
     v1 scored MOIL's flagship mines near zero while scoring 0.990 at points
-    whose features were entirely null - a near-inverted map. These assertions
-    fail if a future bundle regresses on either half of that.
+    whose features were entirely null - a near-inverted map. This half checks
+    the flagship mines; test_v6_scores_null_feature_points_low checks the other.
     """
     from pathlib import Path
 
@@ -202,10 +202,28 @@ def test_v6_promotion_ordering() -> None:
         assert result is not None, f"{name} unexpectedly outside the footprint"
         assert result["prospectivity_score"] > 0.5, f"{name} scored {result['prospectivity_score']}"
 
-    # Points whose features are entirely null must not score high.
+
+def test_v6_scores_null_feature_points_low() -> None:
+    """The other half of the v1 -> v6 promotion: all-null features must score low.
+
+    Kandri and Beldongri lie outside the Sausar mosaic, so they only reach the
+    model through the national tiles in data/raw/satellite/unlabelled/. Without
+    those rasters predict_point correctly returns None (no footprint, no score),
+    and there is nothing to assert about the score.
+    """
+    from pathlib import Path
+
+    from src.config.settings import settings
+    from src.models.prospectivity.predict import SHIPPED_MODEL_PATH, predict_point
+
+    if not SHIPPED_MODEL_PATH.exists():
+        pytest.skip(f"{SHIPPED_MODEL_PATH.name} not present")
+    if not any((settings.DATA_RAW / "satellite" / "unlabelled").glob("*.tif")):
+        pytest.skip("national unlabelled tiles not present in data/raw/satellite/unlabelled/")
+
     for lat, lon, name in ((21.2667, 79.0, "Kandri"), (21.2833, 79.05, "Beldongri")):
         result = predict_point(lat, lon, model_path=Path(SHIPPED_MODEL_PATH), explain=False)
-        assert result is not None
+        assert result is not None, f"{name} unexpectedly outside every tile footprint"
         nulls = sum(1 for v in result["features_extracted"].values() if v is None)
         assert nulls == len(result["features_extracted"]), f"{name} expected all-null features"
         assert result["prospectivity_score"] < 0.1, (

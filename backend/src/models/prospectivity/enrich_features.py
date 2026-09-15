@@ -16,12 +16,11 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import rasterio
-from pyproj import Transformer
 from rasterio.enums import Resampling
 from rasterio.windows import Window
 
 from src.config.settings import settings
+from src.data import raster_pool
 from src.models.prospectivity.autoencoder import (
     BOTTLENECK_DIM,
     PATCH_SIZE,
@@ -53,27 +52,30 @@ def read_patch(
     or None if the point falls outside the raster.
     """
     path = Path(raster_path) if raster_path is not None else settings.s2_smoke_test
-    with rasterio.open(path) as src:
-        transformer = Transformer.from_crs("EPSG:4326", src.crs, always_xy=True)
-        x, y = transformer.transform(lon, lat)
-        left, bottom, right, top = src.bounds
-        if not (left <= x <= right and bottom <= y <= top):
-            return None
+    # Pooled per thread: this runs once per point, so a fresh open and a fresh
+    # transformer here cost 1,024 of each for one 32x32 heatmap.
+    src = raster_pool.dataset(path)
+    x, y = raster_pool.transformer("EPSG:4326", src.crs).transform(lon, lat)
+    left, bottom, right, top = src.bounds
+    if not (left <= x <= right and bottom <= y <= top):
+        return None
 
-        native_res = abs(src.transform.a)
-        # How many native pixels span one patch at the target GSD.
-        span_px = patch_size * (target_gsd_m / native_res)
-        row, col = src.index(x, y)
-        half = span_px / 2.0
-        window = Window(col - half, row - half, span_px, span_px)
+    native_res = abs(src.transform.a)
+    # How many native pixels span one patch at the target GSD.
+    span_px = patch_size * (target_gsd_m / native_res)
+    row, col = src.index(x, y)
+    half = span_px / 2.0
+    window = Window(col - half, row - half, span_px, span_px)
 
-        patch = src.read(
-            window=window,
-            out_shape=(src.count, patch_size, patch_size),
-            resampling=Resampling.average,
-            boundless=True,
-            fill_value=0,
-        ).astype("float32")
+    # Boundless on purpose, even for interior windows: a plain read differs for
+    # windows touching nodata, which would silently change the embeddings.
+    patch = src.read(
+        window=window,
+        out_shape=(src.count, patch_size, patch_size),
+        resampling=Resampling.average,
+        boundless=True,
+        fill_value=0,
+    ).astype("float32")
 
     return np.clip(patch / S2_SCALE, 0.0, 1.0)
 

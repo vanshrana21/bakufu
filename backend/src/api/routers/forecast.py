@@ -3,19 +3,17 @@
 from __future__ import annotations
 
 import traceback
-import uuid
 from datetime import UTC, date, datetime
 from typing import Any
 
 import pandas as pd
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 
 from src.api.schemas import (
-    ShortfallRiskOut,
+    ForecastHistoryResponse,
+    ForecastResponse,
     TrainStatusOut,
     TrainTaskOut,
-    ForecastResponse,
-    ForecastHistoryResponse,
 )
 
 from src.api.errors import NotImplementedInDemo, PredictionFailed
@@ -29,11 +27,12 @@ VALID_HORIZONS: tuple[int, ...] = (1, 3, 6, 12)
 #: Prophet's MCMC posterior makes a predict() call ~950ms, over the 500ms
 #: target. The bundle is immutable for the life of the process and there are
 #: only four valid horizons, so the result is memoised rather than recomputed.
-#: Cleared when the lifespan handler reloads artifacts.
-import time
+#: No TTL: nothing it depends on can change while the process runs, and Prophet
+#: re-samples its interval on every predict(), so recomputing would only make
+#: the published bounds drift between page loads. Cleared when the lifespan
+#: handler reloads artifacts.
+_FORECAST_CACHE: dict[int, ForecastResponse] = {}
 
-_FORECAST_CACHE: dict[int, tuple[float, ForecastResponse]] = {}
-_CACHE_TTL = 900  # 15 minutes
 
 def clear_forecast_cache() -> None:
     _FORECAST_CACHE.clear()
@@ -74,12 +73,8 @@ def get_forecast(request: Request, horizon: int = Query(1, description=f"Months 
 
     cached = _FORECAST_CACHE.get(horizon)
     if cached is not None:
-        timestamp, cached_payload = cached
-        if time.time() - timestamp < _CACHE_TTL:
-            # forecast_date is the only field that can go stale within a process.
-            return cached_payload.model_copy(update={"forecast_date": date.today().isoformat()})
-        else:
-            del _FORECAST_CACHE[horizon]
+        # forecast_date is the only field that can go stale within a process.
+        return cached.model_copy(update={"forecast_date": date.today().isoformat()})
 
     model, frame = bundle["model"], bundle["frame"]
     try:
@@ -129,7 +124,7 @@ def get_forecast(request: Request, horizon: int = Query(1, description=f"Months 
         else None
     )
 
-    payload_dict = {
+    payload = ForecastResponse(**{
         "forecast_date": date.today().isoformat(),
         "target_period": pd.Period(row.ds, freq="M").strftime("%Y-%m"),
         "horizon_months": horizon,
@@ -148,10 +143,8 @@ def get_forecast(request: Request, horizon: int = Query(1, description=f"Months 
         },
         "accuracy_at_horizon": accuracy,
         "series": series,
-    }
-    
-    payload = ForecastResponse(**payload_dict)
-    _FORECAST_CACHE[horizon] = (time.time(), payload)
+    })
+    _FORECAST_CACHE[horizon] = payload
     return payload
 
 

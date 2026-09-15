@@ -10,6 +10,7 @@ import pandas as pd
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from src.api.state import FORECAST_MODEL_VERSION, SHORTFALL_MODEL_VERSION
+from src.models.explainers import tree_explainer
 from src.config.settings import settings
 from src.reference.moil_mines import MOIL_MINES
 
@@ -80,11 +81,11 @@ def get_dashboard_summary(request: Request) -> dict[str, Any]:
     try:
         forecast = get_forecast(request, horizon=1)
         next_forecast = {
-            "month": forecast["target_period"],
-            "predicted_tonnes": forecast["predicted_tonnes"],
-            "lower_ci": forecast["predicted_lower_ci"],
-            "upper_ci": forecast["predicted_upper_ci"],
-            "ci_level": forecast["ci_level"],
+            "month": forecast.target_period,
+            "predicted_tonnes": forecast.predicted_tonnes,
+            "lower_ci": forecast.predicted_lower_ci,
+            "upper_ci": forecast.predicted_upper_ci,
+            "ci_level": forecast.ci_level,
         }
         metrics = artifacts.require("forecast_metrics")
         best = metrics.loc[metrics.skill_vs_naive_pp.idxmax()]
@@ -171,8 +172,6 @@ def get_scenario_recommendations(
     sees is genuine output rather than a fabricated scenario. Allowed months
     live in `settings.SCENARIO_MONTHS`.
     """
-    import shap
-
     from src.models.recommendations.engine import generate_recommendations
     from src.models.shortfall_classifier import SHORTFALL_THRESHOLD
     from src.api.routers.shortfall import FEATURE_LABELS, _display_value
@@ -200,8 +199,7 @@ def get_scenario_recommendations(
     order = list(bundle["features"])
     design = row[order]
     probability = float(bundle["model"].predict_proba(design)[:, 1][0])
-    from src.models.prospectivity.explain import _explainer
-    explainer = _explainer(bundle)
+    explainer = tree_explainer(bundle)
     contributions = explainer.shap_values(design)[0]
 
     ranked = sorted(

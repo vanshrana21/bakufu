@@ -88,14 +88,14 @@ def _covering_tile(lon: float, lat: float) -> Path | None:
     v4 trains on national NGDR records, so inference has to resolve rasters
     beyond the Sausar mosaic or every out-of-belt query 404s.
     """
-    import rasterio
-    from rasterio.warp import transform_bounds
+    from src.data import raster_pool
 
     tile_dir = settings.DATA_RAW / "satellite" / "unlabelled"
     for tile in sorted(tile_dir.glob("*.tif")):
         try:
-            with rasterio.open(tile) as src:
-                left, bottom, right, top = transform_bounds(src.crs, "EPSG:4326", *src.bounds)
+            # Footprints are cached per file version; this used to open every
+            # tile for every point that missed the primary mosaic.
+            left, bottom, right, top = raster_pool.wgs84_bounds(tile)
         except Exception:  # noqa: BLE001 - unreadable tile must not break serving
             continue
         if left <= lon <= right and bottom <= lat <= top:

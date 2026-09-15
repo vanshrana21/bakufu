@@ -1,4 +1,7 @@
-"""Create the PostGIS extension and every Phase 1 table.
+"""Create the PostGIS extension and every table in src/db/models.py.
+
+For a fresh database. An existing one keeps its tables (create_all never alters
+them); bring it up to date with the idempotent scripts in scripts/migrations/.
 
 Run standalone with:  python -m src.db.init_db
 """

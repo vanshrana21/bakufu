@@ -68,6 +68,11 @@ returns `series: []` with `coverage.months_present: 0`.
 
 **Months are `YYYY-MM` strings** throughout. Tonnages are floats in tonnes.
 
+**Authentication is optional.** When the server sets `API_KEY`, every route
+except `GET /` requires that value in the `X-API-Key` header. A missing or wrong
+key is `401` with the usual flat body:
+`{"error_code": "unauthorized", "detail": "missing or invalid API key", "remedy": "..."}`.
+
 ### Model path split
 
 Endpoints read frozen, promoted artifacts. Training writes elsewhere, and

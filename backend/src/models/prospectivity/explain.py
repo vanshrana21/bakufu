@@ -24,6 +24,7 @@ import pandas as pd  # noqa: E402
 import shap  # noqa: E402
 
 from src.config.settings import settings  # noqa: E402
+from src.models.explainers import tree_explainer  # noqa: E402
 from src.models.prospectivity.pu_xgboost import MODEL_PATH  # noqa: E402
 
 SUMMARY_PLOT_PATH: Path = settings.DATA_PROCESSED / "shap_summary.png"
@@ -49,12 +50,7 @@ def load_bundle(model_path: Path | str = MODEL_PATH) -> dict[str, Any]:
 
 
 def _explainer(bundle: dict[str, Any]) -> shap.TreeExplainer:
-    key = f"explainer::{id(bundle)}"
-    if key not in _CACHE:
-        with _CACHE_LOCK:
-            if key not in _CACHE:
-                _CACHE[key] = shap.TreeExplainer(bundle["model"])
-    return _CACHE[key]
+    return tree_explainer(bundle)
 
 
 def sigmoid(x: float | np.ndarray) -> float | np.ndarray:

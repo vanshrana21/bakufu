@@ -8,7 +8,7 @@ from __future__ import annotations
 from datetime import date, datetime
 
 from geoalchemy2 import Geometry
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, UniqueConstraint, func
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 SRID: int = 4326
@@ -224,6 +224,32 @@ class ShortfallRisk(Base):
     model_version: Mapped[str] = mapped_column(String(32), default="shortfall_v1")
 
 
+class BackgroundJob(Base):
+    """A long-running task started through the API, e.g. POST /train.
+
+    Persisted so a job's outcome survives the request that started it and can be
+    polled from any worker. `status` moves queued -> running -> completed|failed.
+    """
+
+    __tablename__ = "background_jobs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    job_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    task_name: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(16), default="queued", index=True)
+    progress: Mapped[float | None] = mapped_column(Float, nullable=True)
+    result_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 #: Creation order respected by init_db (FKs first).
 ALL_TABLES: list[type[Base]] = [
     Borehole,
@@ -236,4 +262,5 @@ ALL_TABLES: list[type[Base]] = [
     ImdRainfallDaily,
     ProductionForecast,
     ShortfallRisk,
+    BackgroundJob,
 ]

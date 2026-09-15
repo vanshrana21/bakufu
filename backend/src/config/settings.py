@@ -77,6 +77,9 @@ class Settings(BaseSettings):
     DATABASE_URL: str = ""
     SUPABASE_URL: str = ""
     SUPABASE_KEY: str = ""
+    #: When set, every route except the health check requires this value in the
+    #: X-API-Key header (src/api/security.py). Blank keeps the API open.
+    API_KEY: str = ""
 
     # Re-exported so callers only need to import Settings.
     PROJECT_ROOT: Path = PROJECT_ROOT
