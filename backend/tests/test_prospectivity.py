@@ -125,6 +125,7 @@ def test_predict_point_endpoint(api_client, trained_model_path, monkeypatch: pyt
         "uncertainty": 0.54,
         "features_extracted": {"b02": 0.11, "elevation": 512.0},
         "shap_top5": [{"feature": "b11", "shap_value": 0.42, "actual_value": 0.31}],
+        "shap_base_value": -0.18,
         "model_version": "prospectivity_v1",
         "lat": 21.8,
         "lon": 80.2,
@@ -142,6 +143,7 @@ def test_predict_point_endpoint(api_client, trained_model_path, monkeypatch: pyt
     assert 0.0 <= body["uncertainty"] <= 1.0
     assert body["predicted_type"] in {"sedimentary", "lateritic", "unknown"}
     assert body["shap_top5"][0]["feature"] == "b11"
+    assert body["shap_base_value"] == pytest.approx(-0.18)
     assert body["prediction_id"] is not None
     assert router_module is not None
 

@@ -278,9 +278,12 @@ def acceptance_report(staged: Path, active: ActiveModel) -> AcceptanceReport:
     metrics = _fold_metrics(staged / METRICS_FILENAME) or {}
 
     try:
-        candidate_features = list(joblib.load(staged / MODEL_FILENAME)["features"])
+        candidate_bundle = joblib.load(staged / MODEL_FILENAME)
+        candidate_features = list(candidate_bundle["features"])
     except Exception as exc:  # noqa: BLE001 - validate_artifact reports the detail
         return AcceptanceReport(False, [f"the candidate bundle could not be read: {exc}"], metrics)
+    if "provenance" not in candidate_bundle:
+        reasons.append("the candidate bundle has no scientific input provenance")
     try:
         serving_features = list(joblib.load(active.path)["features"])
     except Exception:  # noqa: BLE001 - nothing to compare against; the floors still apply

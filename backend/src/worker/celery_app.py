@@ -68,6 +68,18 @@ celery_app.conf.update(
         ),
     ),
     task_routes={TRAIN_TASK: {"queue": TRAINING_QUEUE, "routing_key": TRAINING_QUEUE}},
+    beat_schedule={
+        "dispatch-training-outbox": {
+            "task": "bakufu.dispatch_training_outbox",
+            "schedule": 15.0,
+            "options": {"queue": TRAINING_QUEUE},
+        },
+        "sweep-stale-training-jobs": {
+            "task": "bakufu.sweep_stale_training_jobs",
+            "schedule": 60.0,
+            "options": {"queue": TRAINING_QUEUE},
+        },
+    },
     broker_connection_retry_on_startup=True,
     broker_transport_options={
         # Beyond the hard time limit, or Redis would hand a task that is still
@@ -97,10 +109,7 @@ def _uses_prefork(sender: object) -> bool:
     name = getattr(pool, "__module__", "") + " " + str(getattr(pool, "__name__", pool))
     if "prefork" in name:
         return True
-    if "solo" in name or "thread" in name or "gevent" in name or "eventlet" in name:
-        return False
-    # Nothing conclusive: the default pool is prefork, so assume the risky one.
-    return True
+    return not ("solo" in name or "thread" in name or "gevent" in name or "eventlet" in name)
 
 
 def check_fork_safety(sender: object | None = None) -> None:

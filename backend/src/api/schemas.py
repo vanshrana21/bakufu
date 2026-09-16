@@ -163,6 +163,7 @@ class PredictPointOut(BaseModel):
     uncertainty: float
     features_extracted: dict[str, float | None]
     shap_top5: list[ShapContribution]
+    shap_base_value: float | None = None
     model_version: str
     lat: float
     lon: float

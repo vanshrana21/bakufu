@@ -52,7 +52,8 @@ export const ShapSchema = z.object({
 export const PredictionResponseSchema = z.object({
   prediction_id: Nonempty,
   provenance: ProvenanceSchema,
-  asset: AssetSchema,
+  /** Fixture mode may provide demo inventory context; live scoring does not. */
+  asset: AssetSchema.nullable(),
   location: LocationSchema.nullable(),
   validated_scope: z.literal("Sausar Belt"),
   scope_status: ScopeStatusSchema,

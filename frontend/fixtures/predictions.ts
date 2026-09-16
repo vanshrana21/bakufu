@@ -5,7 +5,7 @@ export interface SiteFixture {
   id: string;
   name: string;
   location: PredictionResponse["location"];
-  asset_type: PredictionResponse["asset"]["asset_type"];
+  asset_type: NonNullable<PredictionResponse["asset"]>["asset_type"];
   scope_status: PredictionResponse["scope_status"];
   inside_buffer: boolean | null;
   geological_pass: boolean | null;

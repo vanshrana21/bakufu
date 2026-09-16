@@ -87,14 +87,7 @@ function composeLive(site: SiteFixture, wire: WirePredictPoint, mask: MaskMode):
       model_version: wire.model_version,
       generated_at: new Date().toISOString(),
     },
-    asset: {
-      id: site.id, name: site.name, asset_type: site.asset_type,
-      inventory_status: site.synthetic ? ("synthetic" as const) : ("documented" as const),
-      assay_status: site.asset_type === "historical_waste_dump" || site.asset_type === "slag_heap"
-        ? ("pending" as const) : ("not_applicable" as const),
-      occurrence_buffer_membership: site.inside_buffer === null
-        ? ("unknown" as const) : site.inside_buffer ? ("inside" as const) : ("outside" as const),
-    },
+    asset: null,
     location: site.location,
     validated_scope: "Sausar Belt" as const,
     mask_requested: mask,
@@ -134,10 +127,7 @@ function composeLive(site: SiteFixture, wire: WirePredictPoint, mask: MaskMode):
     shap: wire.shap_top5.length === 0 ? null : {
       output_scale: "raw_margin",
       explains: "underlying_classifier_before_pu_adjustment_and_masks",
-      // The backend sends only the top 5 contributions and no base value, so the
-      // waterfall cannot be reconciled to the prediction the way the shortfall
-      // explanation can. Zero is the neutral origin for the bar chart.
-      base_value: 0,
+      base_value: wire.shap_base_value ?? 0,
       contributions: wire.shap_top5.map((row) => ({
         feature: row.feature,
         label: row.feature.replaceAll("_", " "),
@@ -184,12 +174,7 @@ export const predictionClient: PredictionClient = {
             model_version: "unavailable",
             generated_at: new Date().toISOString(),
           },
-          asset: {
-            id: site.id, name: site.name, asset_type: site.asset_type,
-            inventory_status: site.synthetic ? "synthetic" : "documented",
-            assay_status: site.asset_type === "historical_waste_dump" || site.asset_type === "slag_heap" ? "pending" : "not_applicable",
-            occurrence_buffer_membership: site.inside_buffer === null ? "unknown" : site.inside_buffer ? "inside" : "outside",
-          },
+          asset: null,
           location: site.location,
           validated_scope: "Sausar Belt" as const,
           scope_status: "unknown",

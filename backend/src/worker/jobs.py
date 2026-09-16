@@ -21,12 +21,12 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import and_, func, or_, select, text, update
+from sqlalchemy import and_, func, inspect, or_, select, text, update
 from sqlalchemy.orm import Session
 
 from src.config.settings import settings
 from src.db import session as db_session
-from src.db.models import FENCE_SEQUENCE, BackgroundJob
+from src.db.models import FENCE_SEQUENCE, BackgroundJob, JobOutbox
 
 #: BackgroundJob.task_name for POST /train.
 TRAIN_TASK_NAME = "train_pu_xgboost"
@@ -37,6 +37,79 @@ ACTIVE_STATUSES: tuple[str, ...] = ("queued", "running")
 
 def utcnow() -> datetime:
     return datetime.now(UTC)
+
+
+def add_delivery(db: Session, job_id: str, task_name: str, payload: dict[str, Any]) -> None:
+    """Add a broker delivery intent to the caller's transaction."""
+    if not inspect(db.get_bind()).has_table(JobOutbox.__tablename__):
+        raise RuntimeError(
+            "job_outbox is missing; run python -m scripts.migrations.add_background_jobs "
+            "before creating background jobs"
+        )
+    db.add(JobOutbox(job_id=job_id, task_name=task_name, payload=payload, status="pending"))
+
+
+def pending_deliveries(db: Session, now: datetime, limit: int = 50) -> list[JobOutbox]:
+    """Claim a bounded batch for publishing.
+
+    ``dispatching`` rows are deliberately reclaimable after a short delay: a
+    dispatcher can die after claiming and before publishing without losing the
+    delivery.
+    """
+    stale = now - timedelta(seconds=settings.TRAINING_HEARTBEAT_SECONDS * 2)
+    query = select(JobOutbox.id).where(
+        JobOutbox.status.in_(("pending", "dispatching")),
+        JobOutbox.available_at <= now,
+        or_(JobOutbox.status == "pending", JobOutbox.updated_at < stale),
+    ).order_by(JobOutbox.id).limit(limit)
+    if db.get_bind().dialect.name == "postgresql":
+        query = query.with_for_update(skip_locked=True)
+    candidate_ids = db.scalars(query).all()
+    claimed: list[JobOutbox] = []
+    for event_id in candidate_ids:
+        result = db.execute(
+            update(JobOutbox)
+            .where(
+                JobOutbox.id == event_id,
+                JobOutbox.available_at <= now,
+                or_(
+                    JobOutbox.status == "pending",
+                    and_(JobOutbox.status == "dispatching", JobOutbox.updated_at < stale),
+                ),
+            )
+            .values(
+                status="dispatching",
+                attempts=JobOutbox.attempts + 1,
+                updated_at=now,
+            )
+            .execution_options(synchronize_session=False)
+        )
+        if result.rowcount == 1:
+            row = db.get(JobOutbox, event_id)
+            if row is not None:
+                claimed.append(row)
+    return claimed
+
+
+def mark_delivery(db: Session, event_id: int, *, published: bool, error: str | None = None,
+                  now: datetime | None = None) -> None:
+    row = db.get(JobOutbox, event_id)
+    if row is None:
+        return
+    stamp = now or utcnow()
+    row.status = "published" if published else "pending"
+    row.published_at = stamp if published else None
+    row.last_error = None if published else error
+    row.available_at = stamp + timedelta(seconds=min(300, 2 ** min(row.attempts, 8)))
+    row.updated_at = stamp
+
+
+def mark_delivery_for_job(db: Session, job_id: str, **kwargs: Any) -> None:
+    if not inspect(db.get_bind()).has_table(JobOutbox.__tablename__):
+        return
+    row = db.scalars(select(JobOutbox).where(JobOutbox.job_id == job_id)).first()
+    if row is not None:
+        mark_delivery(db, row.id, **kwargs)
 
 
 # --- API side: run inside the request's transaction ----------------------

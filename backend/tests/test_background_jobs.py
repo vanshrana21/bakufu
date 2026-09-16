@@ -21,7 +21,7 @@ import joblib
 import pytest
 from fastapi.testclient import TestClient
 from kombu.exceptions import OperationalError
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -30,10 +30,10 @@ from src.api.deps import get_db
 from src.api.main import app
 from src.config.settings import settings
 from src.db import session as db_session
-from src.db.models import BackgroundJob, Base
+from src.db.models import BackgroundJob, Base, JobOutbox
 from src.worker import jobs
 from src.worker.celery_app import TRAIN_TASK, TRAINING_QUEUE, celery_app
-from src.worker.tasks import train_prospectivity_model
+from src.worker.tasks import dispatch_outbox, train_prospectivity_model
 
 TASK = jobs.TRAIN_TASK_NAME
 
@@ -43,6 +43,7 @@ def factory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[session
     """A file-backed SQLite database: worker threads get their own connections."""
     engine = create_engine(f"sqlite:///{tmp_path / 'jobs.db'}", connect_args={"timeout": 30})
     BackgroundJob.__table__.create(engine)
+    JobOutbox.__table__.create(engine)
     sessions = sessionmaker(bind=engine, expire_on_commit=False)
     monkeypatch.setattr(db_session, "SessionLocal", sessions)
     yield sessions
@@ -155,7 +156,10 @@ def test_starting_training_queues_a_job_and_publishes_it(
     job = _row(factory, body["task_id"])
     assert (job.status, job.task_name, job.started_at, job.finished_at) == ("queued", TASK, None, None)
     # The Celery task id is the job id, so a job can be traced across both.
-    assert published == [{"args": (body["task_id"],), "task_id": body["task_id"]}]
+    assert published == []
+    with factory() as db:
+        delivery = db.scalars(select(JobOutbox)).one()
+        assert delivery.status == "pending"
 
 
 def test_a_second_start_is_refused_while_a_job_is_active(
@@ -169,7 +173,7 @@ def test_a_second_start_is_refused_while_a_job_is_active(
     assert body["error_code"] == "training_in_progress"
     assert first in body["detail"] and "queued" in body["detail"]
     assert f"GET /train/{first}" in body["remedy"]
-    assert len(published) == 1
+    assert len(published) == 0
 
 
 def test_concurrent_starts_create_exactly_one_active_job(
@@ -197,7 +201,7 @@ def test_concurrent_starts_create_exactly_one_active_job(
     assert codes.count(202) == 1, f"{codes.count(202)} starts were accepted: {codes}"
     assert sorted(set(codes) - {202}) == [409], f"unexpected statuses: {sorted(set(codes))}"
     assert len(active) == 1 and len(rows) == 1
-    assert len(published) == 1
+    assert len(published) == 0
 
 
 def test_a_running_job_also_refuses_a_second_start(
@@ -210,7 +214,7 @@ def test_a_running_job_also_refuses_a_second_start(
     assert published == []
 
 
-def test_a_broker_outage_fails_the_job_instead_of_stranding_it(
+def test_a_broker_outage_leaves_the_outbox_pending_for_retry(
     client: TestClient, factory: sessionmaker[Session], store: Path, trains: list[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -219,23 +223,60 @@ def test_a_broker_outage_fails_the_job_instead_of_stranding_it(
 
     monkeypatch.setattr(train_prospectivity_model, "apply_async", refuse)
     response = client.post("/train")
-    assert response.status_code == 503
-    body = response.json()
-    assert body["error_code"] == "broker_unavailable"
-    assert "CELERY_BROKER_URL" in body["remedy"]
+    assert response.status_code == 202
+    task_id = response.json()["task_id"]
+    assert dispatch_outbox() == 0
 
     with factory() as db:
         job = db.scalars(select(BackgroundJob)).one()
+        delivery = db.scalars(select(JobOutbox)).one()
     # A broker can accept a message and still fail the acknowledgement, so the
     # job stays claimable rather than being discarded on a maybe.
     assert job.status == "queued"
-    assert "did not confirm the publish" in (job.error_message or "")
+    assert delivery.status == "pending"
+    assert "OperationalError" in (delivery.last_error or "")
     assert job.finished_at is None
-    assert job.job_id in body["detail"]
+    assert job.job_id == task_id
 
     # A worker that did receive the message runs it normally.
     assert train_prospectivity_model.apply(args=(job.job_id,)).get() == "claimed"
     assert _row(factory, job.job_id).status == "completed"
+    with factory() as db:
+        delivery = db.scalars(select(JobOutbox)).one()
+        assert delivery.status == "pending"
+
+
+def test_outbox_dispatch_is_retryable_and_idempotent(
+    factory: sessionmaker[Session], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    job_id = _insert(factory, job_id="outbox-job")
+    with factory() as db:
+        jobs.add_delivery(db, job_id, TRAIN_TASK, {"job_id": job_id})
+        db.commit()
+    published: list[str] = []
+
+    def publish(*, args: tuple[str], task_id: str) -> None:
+        published.append(task_id)
+
+    monkeypatch.setattr(train_prospectivity_model, "apply_async", publish)
+    assert dispatch_outbox() == 1
+    assert dispatch_outbox() == 0
+    assert published == [job_id]
+    with factory() as db:
+        assert db.scalars(select(JobOutbox)).one().status == "published"
+
+
+def test_missing_outbox_migration_fails_job_creation(
+    client: TestClient, factory: sessionmaker[Session]
+) -> None:
+    with factory() as db:
+        db.execute(text("DROP TABLE job_outbox"))
+        db.commit()
+    response = client.post("/train")
+    assert response.status_code == 500
+    body = response.json()
+    assert body["error_code"] == "data_not_loaded"
+    assert "add_background_jobs" in body["remedy"]
 
 
 def test_a_job_no_worker_received_is_failed_by_the_queue_timeout(
@@ -248,7 +289,8 @@ def test_a_job_no_worker_received_is_failed_by_the_queue_timeout(
 
     monkeypatch.setattr(train_prospectivity_model, "apply_async", refuse)
     refused = client.post("/train")
-    assert refused.status_code == 503
+    assert refused.status_code == 202
+    assert dispatch_outbox() == 0
 
     with factory() as db:
         row = db.scalars(select(BackgroundJob)).one()
@@ -465,7 +507,12 @@ def _serving_features() -> list[str]:
 
 
 def _bundle(marker: str) -> dict[str, Any]:
-    return {"model": marker, "features": _serving_features(), "elkan_noto_c": 0.8}
+    return {
+        "model": marker,
+        "features": _serving_features(),
+        "elkan_noto_c": 0.8,
+        "provenance": {},
+    }
 
 
 #: Fold metrics a candidate passes the acceptance checks with.
@@ -571,7 +618,7 @@ def test_a_model_that_passes_the_checks_takes_over_serving(
     assert settings.TRAINING_ACTIVATE_ON_SUCCESS is True
     _stub_training_with(
         monkeypatch,
-        {"model": "candidate", "features": _serving_features(), "elkan_noto_c": 0.8},
+        {"model": "candidate", "features": _serving_features(), "elkan_noto_c": 0.8, "provenance": {}},
         _metrics(auc=0.72, auc_pr=0.30),
     )
     _insert(factory, job_id="good", status="queued")
@@ -595,7 +642,7 @@ def test_a_model_no_better_than_chance_is_published_but_not_served(
     monkeypatch.delenv("PROSPECTIVITY_MODEL", raising=False)
     _stub_training_with(
         monkeypatch,
-        {"model": "hopeless", "features": _serving_features(), "elkan_noto_c": 0.8},
+        {"model": "hopeless", "features": _serving_features(), "elkan_noto_c": 0.8, "provenance": {}},
         _metrics(auc=0.41, auc_pr=0.01),
     )
     _insert(factory, job_id="weak", status="queued")
@@ -892,6 +939,7 @@ def test_a_real_worker_consumes_the_queued_job(
 
     with start_worker(celery_app, pool="solo", perform_ping_check=False, queues=[TRAINING_QUEUE], shutdown_timeout=30):
         task_id = client.post("/train").json()["task_id"]
+        assert dispatch_outbox() == 1
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
             status = client.get(f"/train/{task_id}").json()["status"]

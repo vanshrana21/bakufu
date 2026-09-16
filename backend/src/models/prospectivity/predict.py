@@ -6,6 +6,8 @@ assembly used at inference is exactly the one used in training.
 
 from __future__ import annotations
 
+import hashlib
+import logging
 import os
 import threading
 from pathlib import Path
@@ -15,13 +17,15 @@ import numpy as np
 import pandas as pd
 from pyproj import Transformer
 
+from src.config.settings import settings
 from src.data.preprocess.compute_indices import add_indices
 from src.data.preprocess.extract_features import extract_features_bulk
 from src.models.prospectivity.autoencoder import load_autoencoder
 from src.models.prospectivity.enrich_features import AE_COLUMNS, embed_points
 from src.models.prospectivity.explain import explain_prediction, load_bundle
-from src.config.settings import settings
-from src.models.prospectivity.pu_xgboost import ALL_FEATURES, MODEL_PATH
+from src.models.prospectivity.pu_xgboost import ALL_FEATURES
+
+logger = logging.getLogger("models.prospectivity.predict")
 
 #: The promoted bundle the service scores with. Promotion is deliberate and
 #: recorded, never a side effect of a training run - the same discipline the
@@ -111,6 +115,36 @@ def clear_encoder_cache() -> None:
         _AE_CACHE.clear()
 
 
+def _sha256(path: Path) -> str | None:
+    if not path.is_file():
+        return None
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _verify_provenance(bundle: dict[str, Any]) -> None:
+    """Reject a versioned bundle when its recorded inputs drift at runtime."""
+    provenance = bundle.get("provenance") or {}
+    if not provenance:
+        return  # Legacy shipped bundles predate provenance binding.
+    runtime_raster = ACTIVE_S2_PATH or settings.s2_smoke_test
+    runtime_encoder = ACTIVE_AE_PATH or (
+        settings.MODELS_DIR / "autoencoder_v1.pt"
+    )
+    for label, runtime_path in (("training_raster", runtime_raster), ("encoder", runtime_encoder)):
+        expected = provenance.get(label) or {}
+        expected_hash = expected.get("sha256")
+        actual_hash = _sha256(Path(runtime_path))
+        if expected_hash and actual_hash != expected_hash:
+            raise RuntimeError(
+                f"model provenance mismatch for {label}: expected {expected.get('path')}, "
+                f"serving {runtime_path}"
+            )
+
+
 def _covering_tile(lon: float, lat: float) -> Path | None:
     """First unlabelled tile whose footprint contains the point, if any.
 
@@ -125,7 +159,8 @@ def _covering_tile(lon: float, lat: float) -> Path | None:
             # Footprints are cached per file version; this used to open every
             # tile for every point that missed the primary mosaic.
             left, bottom, right, top = raster_pool.wgs84_bounds(tile)
-        except Exception:  # noqa: BLE001 - unreadable tile must not break serving
+        except (OSError, RuntimeError, ValueError) as exc:
+            logger.warning("could not inspect raster tile %s: %s", tile, exc)
             continue
         if left <= lon <= right and bottom <= lat <= top:
             return tile
@@ -172,6 +207,7 @@ def score_frame(
 ) -> np.ndarray:
     """Predicted probabilities, optionally Elkan-Noto adjusted."""
     bundle = load_bundle(model_path or active_model_path())
+    _verify_provenance(bundle)
     X = frame.reindex(columns=bundle["features"]).astype("float64")
     # Bundles trained with a missing-value sentinel must be served the same way,
     # or absent terrain reaches the trees as NaN instead of the value they split on.
@@ -204,8 +240,11 @@ def predict_point(
     row = frame.reindex(columns=bundle["features"]).astype("float64")
 
     shap_top5: list[dict[str, Any]] = []
+    shap_base_value: float | None = None
     if explain:
-        shap_top5 = explain_prediction(row.iloc[0], model_path)["top_5_features"]
+        explanation = explain_prediction(row.iloc[0], model_path)
+        shap_top5 = explanation["top_5_features"]
+        shap_base_value = float(explanation["base_value"])
 
     extracted = {
         column: (None if pd.isna(frame.iloc[0][column]) else float(frame.iloc[0][column]))
@@ -219,6 +258,7 @@ def predict_point(
         "uncertainty": float(uncertainty_from_probability(score)),
         "features_extracted": extracted,
         "shap_top5": shap_top5,
+        "shap_base_value": shap_base_value,
         # The version scored with, not the active one: predict_point can be
         # handed an explicit bundle, and reporting the pointer's version then
         # would attribute the score to a model that never saw the point.
@@ -306,7 +346,7 @@ def predict_bbox(
 
     return {
         "predictions": result.to_dict(orient="records"),
-        "count": int(len(result)),
+        "count": len(result),
         "bbox": [min_lon, min_lat, max_lon, max_lat],
         "grid_resolution_m": float(step),
         "cells_outside_raster": int((~inside).sum()),

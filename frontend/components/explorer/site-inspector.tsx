@@ -149,7 +149,7 @@ export function SiteInspector() {
               )}
             </div>
             <h2 className="text-[24px] font-semibold leading-tight tracking-tight">
-              {data.asset.name}
+              {data.asset?.name ?? "Live coordinate query"}
             </h2>
             {data.location && (
               <p className="mt-2 text-xs text-muted-foreground">
@@ -161,7 +161,7 @@ export function SiteInspector() {
               <p className="mt-3 flex justify-between border-y py-2 text-xs">
                 <span className="text-metadata">Assay status</span>
                 <strong className="font-medium">
-                  {data.asset.assay_status.replaceAll("_", " ")}
+                  {data.asset?.assay_status.replaceAll("_", " ") ?? "Not supplied"}
                 </strong>
               </p>
             )}
@@ -210,7 +210,7 @@ export function SiteInspector() {
                 </div>
                 <Tabs
                   defaultValue="evidence"
-                  key={data.asset.id}
+                  key={data.asset?.id ?? data.prediction_id}
                   className="mt-6"
                 >
                   <TabsList aria-label="Site details">
@@ -223,24 +223,26 @@ export function SiteInspector() {
                       <div className="flex justify-between gap-4 px-4 py-3">
                         <dt className="text-muted-foreground">Inventory</dt>
                         <dd className="text-right">
-                          {data.asset.inventory_status === "synthetic"
-                            ? "Synthetic demo asset"
-                            : "Document diagnostic"}
+                          {data.asset
+                            ? data.asset.inventory_status === "synthetic"
+                              ? "Synthetic demo asset"
+                              : "Document diagnostic"
+                            : "No inventory record"}
                         </dd>
                       </div>
                       <div className="flex justify-between gap-4 px-4 py-3">
                         <dt className="text-muted-foreground">Assay</dt>
-                        <dd>{data.asset.assay_status.replaceAll("_", " ")}</dd>
+                        <dd>{data.asset?.assay_status.replaceAll("_", " ") ?? "Not supplied"}</dd>
                       </div>
                       <div className="flex justify-between gap-4 px-4 py-3">
                         <dt className="text-muted-foreground">
                           5km membership
                         </dt>
-                        <dd>{data.asset.occurrence_buffer_membership}</dd>
+                        <dd>{data.asset?.occurrence_buffer_membership ?? "Not supplied"}</dd>
                       </div>
                     </dl>
                     <p className="note mt-5">
-                      {data.asset.asset_type === "slag_heap"
+                      {data.asset?.asset_type === "slag_heap"
                         ? "Processed slag differs from the geology used for training. Geographic inclusion does not validate material recoverability."
                         : "Ghost Reserve examples demonstrate the workflow. The project state contains no verified waste-dump inventory."}
                     </p>

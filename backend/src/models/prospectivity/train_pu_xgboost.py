@@ -6,6 +6,7 @@ Run: python -m src.models.prospectivity.train_pu_xgboost
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 from collections.abc import Sequence
@@ -21,6 +22,9 @@ from sklearn.model_selection import StratifiedKFold
 from xgboost import XGBClassifier
 
 from src.config.settings import settings
+from src.models.prospectivity.autoencoder import MODEL_PATH as AUTOENCODER_PATH
+from src.models.prospectivity.autoencoder import PATCH_SIZE, S2_SCALE
+from src.models.prospectivity.enrich_features import TARGET_GSD_M
 from src.models.prospectivity.pu_xgboost import (
     ALL_FEATURES,
     MODEL_PATH,
@@ -38,6 +42,16 @@ TOP_K: tuple[int, ...] = (5, 10, 20)
 SAUSAR_V2_PATH: Path = settings.DATA_RAW / "satellite" / "s2_sausar_v2.tif"
 FOREIGN_FEATURES_V3: Path = settings.DATA_PROCESSED / "foreign_features_v3.parquet"
 MODEL_PATH_V2: Path = settings.MODELS_DIR / "prospectivity_v2.pkl"
+
+
+def _sha256(path: Path) -> str | None:
+    if not path.is_file():
+        return None
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 def top_k_precision(y_true: np.ndarray, scores: np.ndarray, k: int) -> float | None:
@@ -151,7 +165,12 @@ def run_lobo_cv(dataset: Dataset, log_mlflow: bool = True) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def train_final(dataset: Dataset, save_path: Path = MODEL_PATH, log_mlflow: bool = True) -> dict[str, object]:
+def train_final(
+    dataset: Dataset,
+    save_path: Path = MODEL_PATH,
+    log_mlflow: bool = True,
+    provenance: dict[str, object] | None = None,
+) -> dict[str, object]:
     """Retrain on everything and persist the model bundle."""
     X, y, w = dataset.X, dataset.y, dataset.w
     model = XGBClassifier(**XGB_PARAMS)
@@ -167,9 +186,10 @@ def train_final(dataset: Dataset, save_path: Path = MODEL_PATH, log_mlflow: bool
         "model": model,
         "features": dataset.features,
         "elkan_noto_c": c,
-        "n_train": int(len(y)),
+        "n_train": len(y),
         "n_positive": int(y.sum()),
         "params": XGB_PARAMS,
+        "provenance": provenance or {},
     }
     save_path.parent.mkdir(parents=True, exist_ok=True)
     # Write beside the target, then rename. os.replace is atomic, so a crash
@@ -234,6 +254,23 @@ def main(
         print(f"Phase 2.5 run: raster={Path(s2_path).name}, foreign={Path(foreign_path).name}")
 
     dataset = build_dataset(s2_path=s2_path, foreign_features_path=foreign_path)
+    raster_path = Path(s2_path) if s2_path else settings.s2_smoke_test
+    provenance = {
+        "schema": "prospectivity-provenance-v1",
+        "training_raster": {"path": str(raster_path), "sha256": _sha256(raster_path)},
+        "encoder": {"path": str(AUTOENCODER_PATH), "sha256": _sha256(AUTOENCODER_PATH)},
+        "foreign_features": (
+            {"path": str(foreign_path), "sha256": _sha256(Path(foreign_path))}
+            if foreign_path else None
+        ),
+        "preprocessing": {
+            "s2_scale": S2_SCALE,
+            "patch_size": PATCH_SIZE,
+            "target_gsd_m": TARGET_GSD_M,
+            "features": list(dataset.features),
+        },
+        "training_seed": RANDOM_SEED,
+    }
 
     print("\n" + "=" * 60)
     print("LEAVE-ONE-BLOCK-OUT CV")
@@ -243,7 +280,7 @@ def main(
     print("\n" + "=" * 60)
     print("FINAL MODEL")
     print("=" * 60)
-    final = train_final(dataset, save_path=model_path)
+    final = train_final(dataset, save_path=model_path, provenance=provenance)
 
     print("\nPer-fold results:")
     print(results.to_string(index=False))

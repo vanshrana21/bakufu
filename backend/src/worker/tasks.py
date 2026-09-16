@@ -35,6 +35,38 @@ MAX_RETRIES = settings.TRAINING_TIME_LIMIT_SECONDS // LEASE_RECHECK_SECONDS + 5
 OUTCOME_WRITE_ATTEMPTS = 5
 
 
+def dispatch_outbox(limit: int = 50) -> int:
+    """Publish durable delivery intents, leaving failures available to retry."""
+    sent = 0
+    with db_session.SessionLocal() as db, db.begin():
+        rows = jobs.pending_deliveries(db, jobs.utcnow(), limit)
+    for row in rows:
+        try:
+            train_prospectivity_model.apply_async(
+                args=(row.payload["job_id"],), task_id=row.payload["job_id"]
+            )
+        except Exception as exc:  # noqa: BLE001 - broker clients expose varied transport errors
+            with db_session.SessionLocal() as db, db.begin():
+                jobs.mark_delivery(db, row.id, published=False, error=f"{type(exc).__name__}: {exc}")
+            continue
+        with db_session.SessionLocal() as db, db.begin():
+            jobs.mark_delivery(db, row.id, published=True)
+        sent += 1
+    return sent
+
+
+@celery_app.task(name="bakufu.dispatch_training_outbox", ignore_result=True)
+def dispatch_training_outbox() -> int:
+    return dispatch_outbox()
+
+
+@celery_app.task(name="bakufu.sweep_stale_training_jobs", ignore_result=True)
+def sweep_stale_training_jobs() -> int:
+    """Periodic safety net for jobs whose status endpoint is never polled."""
+    with db_session.SessionLocal() as db, db.begin():
+        return jobs.expire_stale_jobs(db, jobs.TRAIN_TASK_NAME, jobs.utcnow())
+
+
 @celery_app.task(
     bind=True,
     name=TRAIN_TASK,

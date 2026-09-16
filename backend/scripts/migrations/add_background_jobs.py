@@ -30,7 +30,7 @@ from __future__ import annotations
 
 from sqlalchemy import Engine, inspect, text
 
-from src.db.models import BackgroundJob
+from src.db.models import BackgroundJob, JobOutbox
 from src.db.session import get_engine
 
 ACTIVE_JOB_INDEX = "uq_background_jobs_one_active_per_task"
@@ -308,6 +308,8 @@ def migrate(engine: Engine | None = None) -> dict[str, object]:
 
     BackgroundJob.__table__.create(bind=engine, checkfirst=True)
     print("  ensured background_jobs")
+    JobOutbox.__table__.create(bind=engine, checkfirst=True)
+    print("  ensured job_outbox")
 
     added = _add_missing_job_columns(engine)
     print(f"  added missing columns: {added or 'none'}")

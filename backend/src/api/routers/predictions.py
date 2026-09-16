@@ -13,7 +13,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from src.api.deps import get_db, get_optional_db
-from src.api.errors import BrokerUnavailable, DataNotLoaded, TrainingInProgress
+from src.api.errors import DataNotLoaded, TrainingInProgress
 from src.api.schemas import (
     MaskInfoOut,
     PredictBboxIn,
@@ -24,12 +24,12 @@ from src.api.schemas import (
     TrainStatusOut,
     TrainTaskOut,
 )
-from src.config.settings import settings
-from src.data.masks.registry import VALID_MASKS, apply_mask, describe as describe_masks
+from src.data.masks.registry import VALID_MASKS, apply_mask
+from src.data.masks.registry import describe as describe_masks
 from src.db.models import BackgroundJob, Prediction
 from src.worker import jobs
+from src.worker.celery_app import TRAIN_TASK
 from src.worker.jobs import TRAIN_TASK_NAME
-from src.worker.tasks import train_prospectivity_model
 
 logger = logging.getLogger("api.predictions")
 
@@ -71,7 +71,7 @@ def predict_point_endpoint(
 
     try:
         result = predict_point(body.lat, body.lon)
-    except FileNotFoundError as exc:
+    except (FileNotFoundError, RuntimeError) as exc:
         raise _model_unavailable(exc) from exc
 
     if result is None:
@@ -116,8 +116,13 @@ def predict_point_endpoint(
             db.commit()
             db.refresh(record)
             prediction_id = record.id
-        except SQLAlchemyError:
+        except (SQLAlchemyError, RuntimeError) as exc:
             db.rollback()
+            logger.exception("could not persist prediction for model version %s", result["model_version"])
+            raise HTTPException(
+                status_code=503,
+                detail="Prediction computed, but its audit record could not be persisted. Retry the request.",
+            ) from exc
 
     return PredictPointOut(
         **result,
@@ -242,48 +247,24 @@ def start_training(db: Session = Depends(get_db)) -> TrainTaskOut:
                 updated_at=now,
             )
         )
+        jobs.add_delivery(
+            db,
+            job_id,
+            TRAIN_TASK,
+            {"job_id": job_id},
+        )
         db.commit()
     except IntegrityError as exc:
         # The partial unique index caught a start the advisory lock did not.
         db.rollback()
         raise _training_in_progress(None, None) from exc
-    except SQLAlchemyError as exc:
+    except (SQLAlchemyError, RuntimeError) as exc:
         db.rollback()
         raise DataNotLoaded(
             detail=f"could not record the training job: {type(exc).__name__}",
             remedy=(
                 "run python -m scripts.migrations.add_background_jobs to bring "
                 "background_jobs up to date"
-            ),
-        ) from exc
-
-    try:
-        train_prospectivity_model.apply_async(args=(job_id,), task_id=job_id)
-    except Exception as exc:  # noqa: BLE001 - the publish may or may not have landed
-        # A broker can accept a message and still fail the client's
-        # acknowledgement, so this cannot tell "not queued" from "queued, ack
-        # lost". Failing the row here would discard a job a worker may be about
-        # to run, so it stays queued with the error recorded: a worker that does
-        # receive it proceeds, and if none does, the queue timeout fails it.
-        logger.exception("could not confirm the publish of training job %s", job_id)
-        try:
-            jobs.note_publish_failure(
-                db, job_id, f"the broker did not confirm the publish: {type(exc).__name__}: {exc}", jobs.utcnow()
-            )
-            db.commit()
-        except SQLAlchemyError:
-            db.rollback()
-            logger.exception("could not record the publish failure for training job %s", job_id)
-        raise BrokerUnavailable(
-            detail=(
-                f"the task broker did not confirm the job: {type(exc).__name__}. "
-                f"Job {job_id} is still queued in case the message did arrive"
-            ),
-            remedy=(
-                f"poll GET /train/{job_id}: it runs if a worker received it, and fails after "
-                f"{settings.TRAINING_QUEUE_TIMEOUT_SECONDS}s if none did. Start Redis and a worker "
-                "(celery -A src.worker.celery_app worker --queues training --concurrency 1) and check "
-                "CELERY_BROKER_URL"
             ),
         ) from exc
 

@@ -309,6 +309,37 @@ class BackgroundJob(Base):
     )
 
 
+class JobOutbox(Base):
+    """Durable intent to deliver a background job to Celery.
+
+    The row is inserted in the same transaction as ``BackgroundJob``.  A
+    dispatcher may therefore retry broker delivery without relying on the API
+    request that created the job remaining alive.
+    """
+
+    __tablename__ = "job_outbox"
+    __table_args__ = (
+        Index("ix_job_outbox_pending", "status", "available_at"),
+        UniqueConstraint("job_id", name="uq_job_outbox_job_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    job_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("background_jobs.job_id"), nullable=False
+    )
+    task_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    payload: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
+    available_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 #: Creation order respected by init_db (FKs first).
 ALL_TABLES: list[type[Base]] = [
     Borehole,
@@ -322,4 +353,5 @@ ALL_TABLES: list[type[Base]] = [
     ProductionForecast,
     ShortfallRisk,
     BackgroundJob,
+    JobOutbox,
 ]

@@ -153,6 +153,7 @@ export interface WirePredictPoint {
   // Null when the feature's raster had no value at this point; the backend
   // declares it nullable, so the wire type has to as well.
   shap_top5: Array<{ feature: string; shap_value: number; actual_value: number | null }>;
+  shap_base_value: number | null;
   model_version: string;
   lat: number; lon: number;
   prediction_id: number | null;
