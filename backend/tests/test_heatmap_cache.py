@@ -178,6 +178,59 @@ def test_a_flood_of_distinct_viewports_cannot_pile_up(
     assert peak <= 2, f"{peak} model passes ran at once"
 
 
+# --- the disk tier -------------------------------------------------------
+
+
+def test_the_disk_cache_stays_inside_its_budget(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Mandatory 11: thousands of unique viewports must not fill the disk."""
+    monkeypatch.setattr(reference, "CACHE_DIR", tmp_path / "cache")
+    monkeypatch.setattr(reference, "CACHE_MAX_FILES", 50)
+    monkeypatch.setattr(reference, "CACHE_MAX_BYTES", 200_000)
+
+    payload = _payload(8)
+    for index in range(2_000):
+        reference._cache_write(f"key-{index:05d}", payload)
+
+    tiles = list((tmp_path / "cache").glob("heatmap_*.json"))
+    assert len(tiles) <= reference.CACHE_MAX_FILES
+    assert sum(tile.stat().st_size for tile in tiles) <= reference.CACHE_MAX_BYTES
+    # The newest tiles are the ones kept, and each is readable.
+    assert reference._cache_read("key-01999") == payload
+    assert list((tmp_path / "cache").glob(".heatmap_*.tmp")) == [], "a partial tile was left behind"
+
+
+def test_the_byte_ceiling_evicts_before_the_file_ceiling(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(reference, "CACHE_DIR", tmp_path / "cache")
+    monkeypatch.setattr(reference, "CACHE_MAX_FILES", 1_000)
+    monkeypatch.setattr(reference, "CACHE_MAX_BYTES", 20_000)
+
+    for index in range(200):
+        reference._cache_write(f"big-{index:04d}", _payload(16))
+
+    tiles = list((tmp_path / "cache").glob("heatmap_*.json"))
+    assert 0 < len(tiles) < 200
+    assert sum(tile.stat().st_size for tile in tiles) <= reference.CACHE_MAX_BYTES
+
+
+def test_expired_tiles_are_removed_even_when_there_is_room(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import os
+
+    monkeypatch.setattr(reference, "CACHE_DIR", tmp_path / "cache")
+    reference._cache_write("fresh", _payload(4))
+    reference._cache_write("ancient", _payload(4))
+    stale = tmp_path / "cache" / "heatmap_ancient.json"
+    old_time = time.time() - reference.CACHE_TTL_SECONDS - 60
+    os.utime(stale, (old_time, old_time))
+
+    assert reference.evict_disk_cache() == 1
+    assert not stale.exists()
+    assert (tmp_path / "cache" / "heatmap_fresh.json").exists()
+
+
 # --- single flight -------------------------------------------------------
 
 

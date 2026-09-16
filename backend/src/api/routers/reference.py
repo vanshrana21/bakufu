@@ -6,6 +6,7 @@ import copy
 import hashlib
 import json
 import logging
+import os
 import threading
 import time
 from collections.abc import Callable, Iterator
@@ -133,8 +134,15 @@ MEMORY_MAX_ENTRIES = 256
 #: Grids scored at once. Each pass holds a full lattice of features in memory,
 #: so unrelated viewports queue rather than pile up and exhaust the process.
 MAX_CONCURRENT_SCORING = 2
-#: How long a request waits for one of those slots before it is refused.
-SCORING_QUEUE_TIMEOUT_SECONDS = 45
+#: How long a request waits for one of those slots before it is refused, and how
+#: many may be waiting at all. Each waiter holds an API worker thread, so the
+#: queue is short on purpose: past it, callers are told to come back.
+SCORING_QUEUE_TIMEOUT_SECONDS = 20
+MAX_SCORING_WAITERS = 8
+#: Ceiling on the tile directory. The disk cache outlives the process, so it
+#: needs its own bound: an in-memory TTL evicts nothing from disk.
+CACHE_MAX_FILES = 512
+CACHE_MAX_BYTES = 256 * 1024 * 1024
 MIN_GRID, MAX_GRID = 8, 128
 
 # TTLCache is not thread-safe - a read reorders and expires entries - so every
@@ -156,6 +164,9 @@ class _KeyLock:
 _KEY_LOCKS: dict[str, _KeyLock] = {}
 _KEY_LOCKS_GUARD = threading.Lock()
 _SCORING_SLOTS = threading.BoundedSemaphore(MAX_CONCURRENT_SCORING)
+_SCORING_WAITERS = 0
+_SCORING_WAITERS_GUARD = threading.Lock()
+_EVICTION_LOCK = threading.Lock()
 
 
 def clear_heatmap_memory() -> None:
@@ -205,8 +216,26 @@ def _scoring_slot() -> Iterator[None]:
     A cold grid is a model pass over the whole lattice. Without a ceiling,
     enough distinct viewports arriving at once - a user panning the map, or a
     crawler - would run that pass once per request until the process died.
+    Waiting is bounded twice over, by time and by how many callers may queue,
+    because each one occupies an API worker thread while it waits.
     """
-    if not _SCORING_SLOTS.acquire(timeout=SCORING_QUEUE_TIMEOUT_SECONDS):
+    global _SCORING_WAITERS
+    with _SCORING_WAITERS_GUARD:
+        if _SCORING_WAITERS >= MAX_SCORING_WAITERS:
+            raise ServiceBusy(
+                detail=(
+                    f"{MAX_SCORING_WAITERS} requests are already queued behind "
+                    f"{MAX_CONCURRENT_SCORING} uncached viewports being scored"
+                ),
+                remedy="retry shortly, or request one of the pre-warmed viewports, which are cached",
+            )
+        _SCORING_WAITERS += 1
+    try:
+        acquired = _SCORING_SLOTS.acquire(timeout=SCORING_QUEUE_TIMEOUT_SECONDS)
+    finally:
+        with _SCORING_WAITERS_GUARD:
+            _SCORING_WAITERS -= 1
+    if not acquired:
         raise ServiceBusy(
             detail=(
                 f"already scoring {MAX_CONCURRENT_SCORING} uncached viewports and this request "
@@ -241,11 +270,54 @@ def _cache_read(key: str) -> dict[str, Any] | None:
 def _cache_write(key: str, payload: dict[str, Any]) -> None:
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     try:
-        (CACHE_DIR / f"heatmap_{key}.json").write_text(
-            json.dumps(payload), encoding="utf-8"
-        )
+        # Written by rename, so a reader never parses half a tile.
+        temporary = CACHE_DIR / f".heatmap_{key}.{os.getpid()}.tmp"
+        temporary.write_text(json.dumps(payload), encoding="utf-8")
+        os.replace(temporary, CACHE_DIR / f"heatmap_{key}.json")
     except Exception:  # noqa: BLE001 - caching is an optimisation, never fatal
         logger.warning("could not write heatmap cache %s", key)
+        return
+    evict_disk_cache()
+
+
+def evict_disk_cache() -> int:
+    """Keep the tile directory inside its age, file-count and byte budget.
+
+    Every distinct bbox a client asks for leaves a tile behind, and nothing
+    else deletes them: the memory cache expires entries it holds, not files.
+    Oldest out first; the newest tile is always kept.
+    """
+    removed = 0
+    with _EVICTION_LOCK:
+        try:
+            entries = [(path, path.stat()) for path in CACHE_DIR.glob("heatmap_*.json")]
+        except OSError:
+            return 0
+        now = time.time()
+        fresh: list[tuple[Path, os.stat_result]] = []
+        for path, stat in entries:
+            if now - stat.st_mtime > CACHE_TTL_SECONDS:
+                removed += _remove_tile(path)
+            else:
+                fresh.append((path, stat))
+
+        fresh.sort(key=lambda item: item[1].st_mtime, reverse=True)
+        total = 0
+        for index, (path, stat) in enumerate(fresh):
+            total += stat.st_size
+            if index == 0:
+                continue  # never drop the tile just written
+            if index >= CACHE_MAX_FILES or total > CACHE_MAX_BYTES:
+                removed += _remove_tile(path)
+    return removed
+
+
+def _remove_tile(path: Path) -> int:
+    try:
+        path.unlink()
+    except OSError:
+        return 0
+    return 1
 
 
 def compute_heatmap(
@@ -258,9 +330,9 @@ def compute_heatmap(
     the four mask variants cost one model pass rather than four.
     """
     from src.data.masks.registry import apply_mask
-    from src.models.prospectivity.predict import ACTIVE_MODEL_PATH, heatmap_grid
+    from src.models.prospectivity.predict import active_model_version, heatmap_grid
 
-    version = Path(ACTIVE_MODEL_PATH).stem
+    version = active_model_version()
     key = _cache_key((min_lon, min_lat, max_lon, max_lat), grid_size, mask, version)
     hit = _memory_read(key)
     if hit is not None:
