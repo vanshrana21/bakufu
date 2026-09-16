@@ -131,3 +131,74 @@ def test_rejection_still_carries_cors_headers(client: TestClient) -> None:
 def test_openapi_documents_the_key_header(client: TestClient) -> None:
     schemes = client.get("/openapi.json").json()["components"]["securitySchemes"]
     assert any(scheme.get("name") == API_KEY_HEADER for scheme in schemes.values())
+
+
+# --- every route, not just the ones someone remembered to list -----------
+
+
+def _every_operation() -> list[tuple[str, str]]:
+    """(method, concrete path) for every operation the app documents.
+
+    Enumerated from the OpenAPI document rather than a hand-written list, so a
+    router added later is covered the day it is added. Path parameters get a
+    placeholder: the gate runs before routing resolves them, so the value is
+    irrelevant and a 404 would still prove the request got past the gate.
+    """
+    import re
+
+    document = TestClient(app).get("/openapi.json", headers={API_KEY_HEADER: KEY}).json()
+    operations: list[tuple[str, str]] = []
+    for path, methods in document["paths"].items():
+        concrete = re.sub(r"\{[^}]+\}", "placeholder", path)
+        for method in methods:
+            if method.upper() in {"HEAD", "OPTIONS"}:
+                continue
+            operations.append((method.upper(), concrete))
+    return sorted(operations)
+
+
+@pytest.mark.parametrize(("method", "path"), _every_operation())
+def test_every_documented_route_refuses_an_anonymous_request(
+    client: TestClient, method: str, path: str
+) -> None:
+    response = client.request(method, path, json={} if method == "POST" else None)
+    assert response.status_code == 401, f"{method} {path} answered {response.status_code} without a key"
+    assert response.json()["error_code"] == "unauthorized"
+
+
+@pytest.mark.parametrize(("method", "path"), _every_operation())
+def test_every_documented_route_refuses_a_wrong_key(
+    client: TestClient, method: str, path: str
+) -> None:
+    response = client.request(
+        method, path, json={} if method == "POST" else None, headers={API_KEY_HEADER: KEY + "x"}
+    )
+    assert response.status_code == 401, f"{method} {path} answered {response.status_code} on a wrong key"
+
+
+def test_the_app_has_a_global_key_dependency() -> None:
+    """The gate is applied once, on the app. A router that forgot it would be
+    caught above; this says why, so the failure is readable."""
+    from src.api.security import require_api_key
+
+    assert any(
+        getattr(dependency, "dependency", None) is require_api_key
+        for dependency in app.router.dependencies
+    ), "require_api_key is no longer an app-wide dependency"
+
+
+@pytest.mark.parametrize(
+    "hostile",
+    [
+        "\x00",              # NUL
+        "a" * 100_000,       # oversized header value
+        "clé",               # non-ASCII str
+        "​",            # zero-width space
+        " " + KEY,           # leading whitespace must not be trimmed into a match
+        KEY + " ",
+        KEY.upper(),         # case must matter
+    ],
+)
+def test_hostile_key_values_are_401_not_500(client: TestClient, hostile: str) -> None:
+    response = client.get("/masks", headers={API_KEY_HEADER: hostile.encode("utf-8", "surrogatepass")})
+    assert response.status_code == 401

@@ -34,6 +34,7 @@ def _validate_recommendation_params(mine_name: str | None, limit: int) -> str | 
 def _provenance(request: Request) -> dict[str, object]:
     """Whether the artifacts behind this response are the shipped trained ones."""
     from src.models.prospectivity.autoencoder import encoder_fingerprint
+    from src.models.prospectivity.predict import active_provenance
     from src.models.registry import active_model
 
     artifacts = getattr(getattr(request.app, "state", None), "artifacts", None)
@@ -52,6 +53,10 @@ def _provenance(request: Request) -> dict[str, object]:
         "prospectivity_model": serving.version,
         "prospectivity_model_source": serving.source,
         "encoder": encoder_fingerprint(),
+        # False means the bundle records no training inputs, so the raster and
+        # encoder serving it now are unverified against the ones it learned
+        # from. Reported so the screen never implies a checked pairing.
+        "prospectivity_provenance_bound": active_provenance() is not None,
         "forecast_model": FORECAST_MODEL_VERSION,
         "shortfall_model": SHORTFALL_MODEL_VERSION,
     }

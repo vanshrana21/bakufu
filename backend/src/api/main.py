@@ -229,6 +229,7 @@ def _reconcile_registry() -> list[str]:
 @app.get("/", response_model=HealthOut, tags=["health"], summary="Health check")
 def health(request: Request) -> HealthOut:
     from src.models.prospectivity.autoencoder import encoder_fingerprint
+    from src.models.prospectivity.predict import active_provenance
     from src.models.registry import active_model
 
     problems: list[str] = list(getattr(request.app.state, "registry_problems", []) or [])
@@ -239,6 +240,7 @@ def health(request: Request) -> HealthOut:
         model_version=serving.version,
         model_source=serving.source,
         encoder_version=encoder_fingerprint(),
+        provenance_bound=active_provenance() is not None,
         degraded=problems,
     )
 

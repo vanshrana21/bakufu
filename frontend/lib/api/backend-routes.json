@@ -1,0 +1,198 @@
+{
+  "_generated_by": "backend/scripts/export_routes.py",
+  "_do_not_edit": "Run the script; tests/test_route_manifest.py enforces it.",
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/",
+      "query": [],
+      "required_query": []
+    },
+    {
+      "method": "GET",
+      "path": "/boreholes",
+      "query": [
+        "block",
+        "district",
+        "limit",
+        "offset"
+      ],
+      "required_query": []
+    },
+    {
+      "method": "GET",
+      "path": "/boreholes/{borehole_id}",
+      "query": [],
+      "required_query": []
+    },
+    {
+      "method": "GET",
+      "path": "/boreholes/{borehole_id}/features",
+      "query": [],
+      "required_query": []
+    },
+    {
+      "method": "GET",
+      "path": "/dashboard/summary",
+      "query": [],
+      "required_query": []
+    },
+    {
+      "method": "GET",
+      "path": "/forecast",
+      "query": [
+        "horizon"
+      ],
+      "required_query": []
+    },
+    {
+      "method": "GET",
+      "path": "/forecast/history",
+      "query": [],
+      "required_query": []
+    },
+    {
+      "method": "POST",
+      "path": "/forecast/retrain",
+      "query": [],
+      "required_query": []
+    },
+    {
+      "method": "GET",
+      "path": "/forecast/retrain/{task_id}",
+      "query": [],
+      "required_query": []
+    },
+    {
+      "method": "GET",
+      "path": "/foreign",
+      "query": [
+        "country",
+        "deposit_type",
+        "page",
+        "page_size"
+      ],
+      "required_query": []
+    },
+    {
+      "method": "GET",
+      "path": "/masks",
+      "query": [],
+      "required_query": []
+    },
+    {
+      "method": "GET",
+      "path": "/mines",
+      "query": [
+        "mine_type",
+        "state"
+      ],
+      "required_query": []
+    },
+    {
+      "method": "GET",
+      "path": "/mines/{mine_name}",
+      "query": [],
+      "required_query": []
+    },
+    {
+      "method": "POST",
+      "path": "/predict/bbox",
+      "query": [
+        "mask"
+      ],
+      "required_query": []
+    },
+    {
+      "method": "POST",
+      "path": "/predict/point",
+      "query": [
+        "mask"
+      ],
+      "required_query": []
+    },
+    {
+      "method": "GET",
+      "path": "/predictions/{prediction_id}",
+      "query": [],
+      "required_query": []
+    },
+    {
+      "method": "GET",
+      "path": "/priors",
+      "query": [
+        "district"
+      ],
+      "required_query": []
+    },
+    {
+      "method": "GET",
+      "path": "/priors/{block_name}",
+      "query": [],
+      "required_query": []
+    },
+    {
+      "method": "GET",
+      "path": "/production/history",
+      "query": [
+        "end",
+        "start"
+      ],
+      "required_query": []
+    },
+    {
+      "method": "GET",
+      "path": "/prospectivity/heatmap",
+      "query": [
+        "grid_size",
+        "mask",
+        "max_lat",
+        "max_lon",
+        "min_lat",
+        "min_lon"
+      ],
+      "required_query": [
+        "max_lat",
+        "max_lon",
+        "min_lat",
+        "min_lon"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/recommendations",
+      "query": [
+        "limit",
+        "mine_name"
+      ],
+      "required_query": []
+    },
+    {
+      "method": "GET",
+      "path": "/recommendations/scenario/{month}",
+      "query": [
+        "limit",
+        "mine_name"
+      ],
+      "required_query": []
+    },
+    {
+      "method": "GET",
+      "path": "/shortfall/risk",
+      "query": [],
+      "required_query": []
+    },
+    {
+      "method": "POST",
+      "path": "/train",
+      "query": [],
+      "required_query": []
+    },
+    {
+      "method": "GET",
+      "path": "/train/{task_id}",
+      "query": [],
+      "required_query": []
+    }
+  ]
+}

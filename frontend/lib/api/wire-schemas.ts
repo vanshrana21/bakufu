@@ -153,6 +153,14 @@ export const WireRecommendationsSchema = z.object({
       z.object({ driver: Text, label: Text, positive_shap: Finite }).passthrough(),
     ),
     footnotes: z.array(z.string()),
+    // Optional on the wire, but the adapter reads all four. Declared so they are
+    // type-checked rather than arriving as `unknown` through `.passthrough()`:
+    // `scenario_month` decides whether the register is labelled a replay, and a
+    // replay presented as the current month would be a lie about the data.
+    message: z.string().optional(),
+    scenario_month: z.string().optional(),
+    is_historical_replay: z.boolean().optional(),
+    actual_shortfall: z.boolean().optional(),
   }).passthrough(),
   recommendations: z.array(WireRecommendationSchema),
   coverage_complete: z.boolean(),

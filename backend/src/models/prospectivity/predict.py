@@ -145,6 +145,26 @@ def _verify_provenance(bundle: dict[str, Any]) -> None:
             )
 
 
+def active_provenance() -> dict[str, Any] | None:
+    """The training inputs recorded in the bundle being served, or None.
+
+    None has a specific meaning and it is not "fine": the bundle predates
+    provenance binding, so nothing checks that the raster and encoder behind it
+    at inference are the ones it was trained against. `_verify_provenance`
+    cannot refuse a drifted input it was never told about. That is reported
+    rather than inferred - see HealthOut.provenance_bound - because a model
+    whose inputs are unverifiable must not look identical to one whose are.
+    """
+    from src.models.prospectivity.explain import load_bundle
+
+    try:
+        bundle = load_bundle(active_model_path(), production=True)
+    except Exception:  # noqa: BLE001 - a missing or unreadable model is reported elsewhere
+        return None
+    provenance = bundle.get("provenance") or None
+    return provenance if isinstance(provenance, dict) else None
+
+
 def _covering_tile(lon: float, lat: float) -> Path | None:
     """First unlabelled tile whose footprint contains the point, if any.
 

@@ -126,6 +126,11 @@ class HealthOut(BaseModel):
     #: The encoder that produced the 64 embedding features the model scores.
     #: Versioned separately from the bundle, so it is reported separately.
     encoder_version: str
+    #: False when the served bundle records no training inputs. Such a bundle is
+    #: served, but nothing can check that the raster and encoder behind it now
+    #: are the ones it was trained on, so the pairing is unverified rather than
+    #: verified. Stated here so the two cases cannot look the same.
+    provenance_bound: bool = False
     degraded: list[str] = []
 
 
@@ -229,6 +234,14 @@ class PredictionRecordOut(BaseModel):
     mask_applied: str | None = None
     raw_score: float | None = None
     final_score: float | None = None
+    #: The other half of the model identity. 64 of the features are the
+    #: autoencoder's latent space, so `model_version` alone does not say what
+    #: scored this row. Null on rows written before the column existed.
+    encoder_version: str | None = None
+    #: Where. The row stores a ~60 m cell polygon; these are its centre, so the
+    #: record identifies its own location without a PostGIS query.
+    lat: float | None = None
+    lon: float | None = None
 
 
 class TrainTaskOut(BaseModel):

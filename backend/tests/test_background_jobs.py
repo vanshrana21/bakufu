@@ -506,12 +506,24 @@ def _serving_features() -> list[str]:
     return ["b11", "b12"]
 
 
+#: What a real run records about its inputs. The acceptance gate requires the
+#: two digests specifically: without them inference cannot detect that the
+#: raster or the encoder changed under a published bundle.
+FULL_PROVENANCE: dict[str, Any] = {
+    "schema": "prospectivity-provenance-v1",
+    "training_raster": {"path": "/data/s2.tif", "sha256": "a" * 64},
+    "encoder": {"path": "/models/autoencoder_v1.pt", "sha256": "b" * 64},
+    "preprocessing": {"s2_scale": 10000, "patch_size": 16},
+    "training_seed": 42,
+}
+
+
 def _bundle(marker: str) -> dict[str, Any]:
     return {
         "model": marker,
         "features": _serving_features(),
         "elkan_noto_c": 0.8,
-        "provenance": {},
+        "provenance": dict(FULL_PROVENANCE),
     }
 
 
@@ -618,7 +630,7 @@ def test_a_model_that_passes_the_checks_takes_over_serving(
     assert settings.TRAINING_ACTIVATE_ON_SUCCESS is True
     _stub_training_with(
         monkeypatch,
-        {"model": "candidate", "features": _serving_features(), "elkan_noto_c": 0.8, "provenance": {}},
+        {"model": "candidate", "features": _serving_features(), "elkan_noto_c": 0.8, "provenance": dict(FULL_PROVENANCE)},
         _metrics(auc=0.72, auc_pr=0.30),
     )
     _insert(factory, job_id="good", status="queued")
@@ -642,7 +654,7 @@ def test_a_model_no_better_than_chance_is_published_but_not_served(
     monkeypatch.delenv("PROSPECTIVITY_MODEL", raising=False)
     _stub_training_with(
         monkeypatch,
-        {"model": "hopeless", "features": _serving_features(), "elkan_noto_c": 0.8, "provenance": {}},
+        {"model": "hopeless", "features": _serving_features(), "elkan_noto_c": 0.8, "provenance": dict(FULL_PROVENANCE)},
         _metrics(auc=0.41, auc_pr=0.01),
     )
     _insert(factory, job_id="weak", status="queued")

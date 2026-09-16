@@ -19,7 +19,8 @@ def test_health_check(api_client: TestClient) -> None:
     # endpoints bumped the version, and the health *shape* is what matters.
     body = response.json()
     assert set(body) == {
-        "status", "version", "model_version", "model_source", "encoder_version", "degraded",
+        "status", "version", "model_version", "model_source", "encoder_version",
+        "provenance_bound", "degraded",
     }
     assert body["status"] == "ok" and body["version"] == API_VERSION
     assert body["degraded"] == []
@@ -29,6 +30,10 @@ def test_health_check(api_client: TestClient) -> None:
     # The encoder defines the feature space the model scores, so it is reported
     # alongside it rather than folded into the model version.
     assert body["encoder_version"]
+    # Whether the served bundle records the inputs it was trained on. False on
+    # the shipped model, which predates provenance binding - stated rather than
+    # inferred, so an unverifiable pairing never looks like a checked one.
+    assert isinstance(body["provenance_bound"], bool)
 
 
 @requires_db

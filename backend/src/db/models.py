@@ -168,6 +168,11 @@ class Prediction(Base):
     mask_applied: Mapped[str | None] = mapped_column(String(50), nullable=True)
     raw_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     final_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    #: Fingerprint of the autoencoder that produced 64 of this row's features.
+    #: The bundle version alone cannot identify a score: the same model under a
+    #: different encoder is a different result. Nullable because rows written
+    #: before the column existed genuinely do not know.
+    encoder_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True
     )

@@ -226,6 +226,30 @@ MIN_LIFT_OVER_BASE = 1.0
 #: runs vary; a collapse does not.
 MAX_AUC_PR_REGRESSION = 0.10
 
+#: What a bundle must record about how it was made before it may serve. The
+#: digests are the ones inference re-checks at load time, so a bundle without
+#: them cannot be caught drifting - `_verify_provenance` has nothing to compare
+#: against and silently allows a different encoder to supply the same 64 feature
+#: names. `provenance: {}` used to satisfy this check by existing.
+REQUIRED_PROVENANCE_DIGESTS = ("training_raster", "encoder")
+REQUIRED_PROVENANCE_FIELDS = ("preprocessing", "training_seed")
+
+
+def _provenance_gaps(bundle: dict[str, Any]) -> list[str]:
+    """What a candidate fails to record about its own training inputs."""
+    provenance = bundle.get("provenance")
+    if not isinstance(provenance, dict) or not provenance:
+        return ["the candidate bundle has no scientific input provenance"]
+    gaps: list[str] = []
+    for name in REQUIRED_PROVENANCE_DIGESTS:
+        entry = provenance.get(name)
+        if not isinstance(entry, dict) or not entry.get("sha256"):
+            gaps.append(f"its provenance records no {name} digest, so drift cannot be detected")
+    for name in REQUIRED_PROVENANCE_FIELDS:
+        if provenance.get(name) in (None, "", {}, []):
+            gaps.append(f"its provenance records no {name}")
+    return gaps
+
 
 @dataclass(frozen=True)
 class AcceptanceReport:
@@ -281,8 +305,7 @@ def acceptance_report(staged: Path, active: ActiveModel) -> AcceptanceReport:
         candidate_features = list(candidate_bundle["features"])
     except Exception as exc:  # noqa: BLE001 - validate_artifact reports the detail
         return AcceptanceReport(False, [f"the candidate bundle could not be read: {exc}"], metrics)
-    if "provenance" not in candidate_bundle:
-        reasons.append("the candidate bundle has no scientific input provenance")
+    reasons.extend(_provenance_gaps(candidate_bundle))
     try:
         verify_model_path(active.path, registry_root=VERSIONS_DIR)
         serving_features = list(
@@ -299,9 +322,13 @@ def acceptance_report(staged: Path, active: ActiveModel) -> AcceptanceReport:
     if not metrics:
         reasons.append("the run recorded no fold metrics to judge it by")
     else:
-        if metrics["mean_auc"] < MIN_MEAN_AUC:
+        # Strictly greater, not "no worse than". AUC of exactly 0.500 is a coin
+        # flip and lift of exactly 1.0 is the base rate; both used to pass,
+        # because `< 0.5` and `< 1.0` are false at the boundary. A model that
+        # has learned nothing must not be allowed to take over serving.
+        if metrics["mean_auc"] <= MIN_MEAN_AUC:
             reasons.append(f"mean AUC {metrics['mean_auc']:.3f} is not better than chance")
-        if metrics["lift"] < MIN_LIFT_OVER_BASE:
+        if metrics["lift"] <= MIN_LIFT_OVER_BASE:
             reasons.append(
                 f"mean AUC-PR {metrics['mean_auc_pr']:.4f} does not beat the base rate "
                 f"{metrics['base_rate']:.4f}"

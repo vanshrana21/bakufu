@@ -16,6 +16,7 @@ import type { ActionResponse } from "@/lib/contracts";
 import { ActionResponseSchema } from "@/lib/contracts";
 import type { WireRecommendation, WireRecommendations } from "./wire";
 import { apiGet, toIsoTimestamp } from "./client";
+import { WireRecommendationsSchema, parseWire } from "./wire-schemas";
 
 /** One row of the review register. `owner` and `target_date` are nullable
  * because the backend supplies neither — the fixture's "Planning / 2026-09-15"
@@ -133,12 +134,12 @@ export function adaptRecommendations(
       target_date: null,
     })),
     message: wire.context.message ?? null,
-    footnotes: wire.context.footnotes ?? [],
+    footnotes: wire.context.footnotes,
     probability: wire.context.shortfall_probability,
     riskLevel: wire.context.risk_level,
     forecastMonth: wire.context.forecast_month,
     coverageComplete: wire.coverage_complete,
-    actionTypesOmitted: wire.action_types_omitted ?? [],
+    actionTypesOmitted: wire.action_types_omitted,
     scenario: wire.context.scenario_month
       ? { month: wire.context.scenario_month, actualShortfall: Boolean(wire.context.actual_shortfall) }
       : null,
@@ -148,10 +149,12 @@ export function adaptRecommendations(
 export const fetchRecommendations = (
   options: { mineName?: string; limit?: number; linkedRiskId: string | null; modelVersion: string; signal?: AbortSignal },
 ) =>
-  apiGet<WireRecommendations>("/recommendations", {
+  apiGet<unknown>("/recommendations", {
     query: { mine_name: options.mineName, limit: options.limit },
     signal: options.signal,
-  }).then((wire) => adaptRecommendations(wire, options));
+  })
+    .then((raw) => parseWire(WireRecommendationsSchema, raw, "/recommendations"))
+    .then((wire) => adaptRecommendations(wire, options));
 
 /** Replays a real historical shortfall month. Useful for the demo, because the
  * current month usually scores low and correctly returns zero cards. */
@@ -159,7 +162,9 @@ export const fetchScenarioRecommendations = (
   month: string,
   options: { mineName?: string; limit?: number; linkedRiskId: string | null; modelVersion: string; signal?: AbortSignal },
 ) =>
-  apiGet<WireRecommendations>(`/recommendations/scenario/${encodeURIComponent(month)}`, {
+  apiGet<unknown>(`/recommendations/scenario/${encodeURIComponent(month)}`, {
     query: { mine_name: options.mineName, limit: options.limit },
     signal: options.signal,
-  }).then((wire) => adaptRecommendations(wire, options));
+  })
+    .then((raw) => parseWire(WireRecommendationsSchema, raw, `/recommendations/scenario/${month}`))
+    .then((wire) => adaptRecommendations(wire, options));

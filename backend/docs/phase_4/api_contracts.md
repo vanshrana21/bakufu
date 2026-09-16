@@ -1,7 +1,17 @@
-# Phase 4 API Contracts — v1.6
+# Phase 4 API Contracts — v1.8
 
 Source of truth for the frontend. Schemas here are fixed; if implementation
 forces a change, the change is raised before it is made, not after.
+
+**v1.8 changes from v1.7:** `GET /` adds `provenance_bound`;
+`/dashboard/summary`'s `data_provenance` adds `prospectivity_provenance_bound`;
+`GET /predictions/{prediction_id}` adds `encoder_version`, `lat` and `lon`.
+Which routes the browser may reach is now stated in `docs/api-surface.md` and
+enforced by a generated route manifest.
+
+**v1.7 changes from v1.6:** `GET /` adds `encoder_version` and `model_source`;
+`/dashboard/summary` adds `data_provenance`; `POST /predict/point` adds
+`mask_applied`, `mask_decision`, `raw_score` and `final_score`.
 
 **v1.6 changes from v1.5:** `/recommendations` is implemented — the `501`
 stub is gone. Adds `context.footnotes`, `coverage_complete`,
@@ -64,10 +74,23 @@ Entity, and one shape means the frontend needs one handler.
 Error codes: `model_not_loaded`, `data_not_loaded`, `prediction_failed`.
 
 **`GET /` carries the served model.** `{status, version, model_version,
-model_source, degraded}`. `status` is `"degraded"` - and `degraded` lists what -
-when the database and the model registry disagree about a published artifact,
-or the active pointer cannot be followed; the API keeps serving the shipped
-model rather than going down.
+model_source, encoder_version, provenance_bound, degraded}`. `status` is
+`"degraded"` - and `degraded` lists what - when the database and the model
+registry disagree about a published artifact, or the active pointer cannot be
+followed; the API keeps serving the shipped model rather than going down.
+
+`encoder_version` is the autoencoder's digest prefix. It is reported separately
+from `model_version` because 64 of the model's 78 features ARE that encoder's
+latent space: the same bundle under a different encoder is a different model,
+and the feature NAMES (`ae_0` … `ae_63`) do not change to say so.
+
+`provenance_bound` is `false` when the served bundle records no training inputs.
+Such a bundle is still served, but nothing can check that the raster and encoder
+behind it now are the ones it learned from, so the pairing is unverified rather
+than verified. The shipped `prospectivity_v6` predates provenance binding and
+reports `false`; artifacts published by `POST /train` record digests for the
+training raster and the encoder, and inference refuses to score when either has
+drifted.
 
 **An empty result is `200`, never an error.** A date filter matching no months
 returns `series: []` with `coverage.months_present: 0`.
@@ -507,9 +530,29 @@ One call for the landing view; composes the endpoints above.
     "shortfall_version": "shortfall_classifier_v1",
     "best_horizon": {"horizon_months": 12, "mape": 9.92, "skill_vs_naive_pp": 0.24}
   },
-  "mines": {"total": 10, "underground": 7, "opencast": 3}
+  "mines": {"total": 10, "underground": 7, "opencast": 3},
+  "degraded": [],
+  "data_provenance": {
+    "origin": "shipped trained models",
+    "synthetic": false,
+    "note": null,
+    "prospectivity_model": "prospectivity_v6",
+    "prospectivity_model_source": "shipped",
+    "encoder": "24c39a1c97f1",
+    "prospectivity_provenance_bound": false,
+    "forecast_model": "prophet_baseline_v1.0",
+    "shortfall_model": "shortfall_classifier_v1"
+  }
 }
 ```
+
+`data_provenance` is always present, and it decides how the screen labels
+itself. `synthetic: true` means artifacts failed to load and what is shown is
+NOT the shipped trained output; `note` then says which. The frontend treats a
+missing block as a fault rather than as "production", so this key is never
+omitted. `prospectivity_provenance_bound` mirrors `GET /`'s `provenance_bound`:
+`false` means the served bundle records no training inputs, so the raster and
+encoder behind it are unverified.
 
 If a component fails to load, its block is `null` and the rest still returns
 `200` — a broken shortfall model must not blank the whole landing page. The

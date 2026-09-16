@@ -101,6 +101,8 @@ def predict_point_endpoint(
     # caller the row id and nothing else - `prediction_id` is already nullable.
     prediction_id: int | None = None
     if db is not None:
+        from src.models.prospectivity.autoencoder import encoder_fingerprint
+
         record = Prediction(
             geom=from_shape(cell, srid=4326),
             prospectivity_score=final_score,
@@ -110,6 +112,8 @@ def predict_point_endpoint(
             mask_applied=mask,
             raw_score=min(max(raw_score, 0.0), SCORE_CAP),
             final_score=final_score,
+            # Both halves of the model identity, or the row cannot be reproduced.
+            encoder_version=encoder_fingerprint(),
         )
         try:
             db.add(record)
@@ -190,7 +194,32 @@ def get_prediction(prediction_id: int, db: Session = Depends(get_db)) -> Predict
     row = db.get(Prediction, prediction_id)
     if row is None:
         raise HTTPException(status_code=404, detail=f"prediction {prediction_id} not found")
-    return PredictionRecordOut.model_validate(row)
+    record = PredictionRecordOut.model_validate(row)
+    # The stored geometry is the ~60 m cell that was scored; its centre is the
+    # point the caller asked about. Derived here rather than duplicated into
+    # columns, so the location can never disagree with the geometry.
+    centre = _cell_centre(row.geom)
+    if centre is not None:
+        record.lat, record.lon = centre
+    return record
+
+
+def _cell_centre(geom: object) -> tuple[float, float] | None:
+    """(lat, lon) at the centre of a stored cell, or None if it cannot be read.
+
+    A row whose geometry will not load is still a usable audit record for the
+    score and the model identity, so this degrades to null coordinates rather
+    than failing the read.
+    """
+    from geoalchemy2.shape import to_shape
+
+    try:
+        shape = to_shape(geom)
+    except Exception:  # noqa: BLE001 - any geometry backend failure means "unknown"
+        logger.warning("prediction geometry could not be decoded", exc_info=True)
+        return None
+    centroid = shape.centroid
+    return (float(centroid.y), float(centroid.x))
 
 
 def _training_in_progress(job_id: str | None, status: str | None) -> TrainingInProgress:
