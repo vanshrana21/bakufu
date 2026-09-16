@@ -79,7 +79,14 @@ can be read in a browser; they expose no data.
 `409 training_in_progress` while a job is queued or running, `503
 broker_unavailable` when the broker cannot be reached (nothing is left queued).
 `GET /train/{task_id}` reports `queued`, `running`, `completed` or `failed`; a
-job whose worker died reads as `failed` once its lease lapses.
+job whose worker died reads as `failed` once its lease lapses. A run writes its
+model to a staging file and promotes it by rename only while it still holds the
+lease, so an overlapping run can never half-write or overwrite the served one.
+
+**`GET /prospectivity/heatmap` can answer `503 service_busy`.** Two uncached
+grids are scored at a time; a third waits, and is refused rather than queued
+indefinitely. Cached viewports - everything the startup warmer holds - are
+unaffected.
 
 ### Model path split
 

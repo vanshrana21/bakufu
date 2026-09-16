@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+from collections.abc import Sequence
 from pathlib import Path
 
 import joblib
@@ -169,7 +171,15 @@ def train_final(dataset: Dataset, save_path: Path = MODEL_PATH, log_mlflow: bool
         "params": XGB_PARAMS,
     }
     save_path.parent.mkdir(parents=True, exist_ok=True)
-    joblib.dump(bundle, save_path)
+    # Write beside the target, then rename. os.replace is atomic, so a crash
+    # here - or a second training run racing this one - can never leave a
+    # half-written bundle where the API will try to load one.
+    staging = save_path.with_name(f".{save_path.name}.{os.getpid()}.tmp")
+    try:
+        joblib.dump(bundle, staging)
+        os.replace(staging, save_path)
+    finally:
+        staging.unlink(missing_ok=True)
 
     if log_mlflow:
         with mlflow.start_run(run_name="prospectivity_v1_final"):
@@ -183,7 +193,15 @@ def train_final(dataset: Dataset, save_path: Path = MODEL_PATH, log_mlflow: bool
     return {"model": model, "c": c, "importance": importance, "path": save_path}
 
 
-def main() -> None:
+def main(argv: Sequence[str] | None = None, save_path: Path | None = None) -> Path:
+    """Train and save the model, returning the path written.
+
+    `argv` defaults to the process command line for CLI use. Anything calling
+    this in-process - the Celery worker does - must pass its own list, or
+    argparse reads that process's arguments and exits. `save_path` overrides
+    where the bundle lands, which is how the worker stages a run before
+    promoting it.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--version",
@@ -191,7 +209,7 @@ def main() -> None:
         choices=("v1", "v2"),
         help="v1: Phase 2 baseline. v2: Phase 2.5 cleaner data (re-composed mosaic + cluster-tile foreign positives).",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     is_v2 = args.version == "v2"
 
     experiment = "phase_2_5_cleaner_data" if is_v2 else EXPERIMENT
@@ -200,7 +218,7 @@ def main() -> None:
 
     s2_path = SAUSAR_V2_PATH if is_v2 else None
     foreign_path = FOREIGN_FEATURES_V3 if is_v2 else None
-    model_path = MODEL_PATH_V2 if is_v2 else MODEL_PATH
+    model_path = save_path or (MODEL_PATH_V2 if is_v2 else MODEL_PATH)
 
     if is_v2:
         for required in (s2_path, foreign_path):
@@ -254,6 +272,7 @@ def main() -> None:
     metrics_path = settings.DATA_PROCESSED / f"lobo_results{suffix}.json"
     metrics_path.write_text(json.dumps(results.to_dict(orient="records"), indent=2), encoding="utf-8")
     print(f"  fold metrics : {metrics_path}")
+    return Path(final["path"])
 
 
 if __name__ == "__main__":

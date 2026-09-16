@@ -74,10 +74,19 @@ def client(factory: sessionmaker[Session], api_headers: dict[str, str]) -> Itera
 
 
 @pytest.fixture()
-def trains(monkeypatch: pytest.MonkeyPatch) -> list[str]:
-    """Replaces the real training run; each call appends to the list."""
+def trains(model_path: Path, monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Replaces the real training run, writing to the staging path it is handed."""
     calls: list[str] = []
-    monkeypatch.setattr(train_module, "main", lambda: calls.append("trained"))
+
+    def fake_main(argv: Any = None, save_path: Path | None = None) -> Path:
+        # The worker passes its own argv and a staging path; the process argv
+        # belongs to Celery, and the served path is only written by a rename.
+        assert argv == [] and save_path is not None
+        save_path.write_bytes(b"a freshly trained model")
+        calls.append("trained")
+        return save_path
+
+    monkeypatch.setattr(train_module, "main", fake_main)
     return calls
 
 
@@ -264,9 +273,9 @@ def test_the_worker_trains_and_records_success(
 
 def test_the_worker_records_a_training_failure(
     client: TestClient, factory: sessionmaker[Session], published: list[dict[str, Any]],
-    monkeypatch: pytest.MonkeyPatch,
+    model_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def broken() -> None:
+    def broken(*_args: Any, **_kwargs: Any) -> None:
         raise RuntimeError("raster missing")
 
     monkeypatch.setattr(train_module, "main", broken)
@@ -339,7 +348,7 @@ def test_a_worker_that_lost_its_job_cannot_overwrite_it(factory: sessionmaker[Se
 
 
 def test_the_lease_is_renewed_while_training(
-    factory: sessionmaker[Session], monkeypatch: pytest.MonkeyPatch
+    factory: sessionmaker[Session], model_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(settings, "TRAINING_HEARTBEAT_SECONDS", 0.05)
     renewals: list[bool] = []
@@ -351,13 +360,86 @@ def test_the_lease_is_renewed_while_training(
         return renewed
 
     monkeypatch.setattr(jobs, "renew_lease", spy)
-    monkeypatch.setattr(train_module, "main", lambda: time.sleep(0.3))
+
+    def slow_training(argv: Any = None, save_path: Path | None = None) -> Path:
+        time.sleep(0.3)
+        assert save_path is not None
+        save_path.write_bytes(b"a freshly trained model")
+        return save_path
+
+    monkeypatch.setattr(train_module, "main", slow_training)
     _insert(factory, job_id="slow", status="queued")
 
     train_prospectivity_model.apply(args=("slow",)).get()
 
     assert len(renewals) >= 2 and all(renewals)
     assert _row(factory, "slow").status == "completed"
+
+
+# --- the model artifact --------------------------------------------------
+
+
+@pytest.fixture()
+def model_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Stand in for models/prospectivity_v1.pkl, with a model already in place."""
+    import src.models.prospectivity.pu_xgboost as pu_xgboost
+
+    path = tmp_path / "prospectivity_v1.pkl"
+    path.write_bytes(b"the model in production")
+    monkeypatch.setattr(pu_xgboost, "MODEL_PATH", path)
+    return path
+
+
+def _stub_training(monkeypatch: pytest.MonkeyPatch, during: Any = None) -> list[Path]:
+    """Replace training with a write to whatever path it is handed."""
+    staged: list[Path] = []
+
+    def fake_main(argv: Any = None, save_path: Path | None = None) -> Path:
+        # The worker must pass its own argv; the process's belongs to Celery.
+        assert argv == [] and save_path is not None
+        save_path.write_bytes(b"a freshly trained model")
+        staged.append(save_path)
+        if during is not None:
+            during()
+        return save_path
+
+    monkeypatch.setattr(train_module, "main", fake_main)
+    return staged
+
+
+def test_a_finished_run_promotes_its_staged_model(
+    factory: sessionmaker[Session], model_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    staged = _stub_training(monkeypatch)
+    _insert(factory, job_id="promotes", status="queued")
+
+    assert train_prospectivity_model.apply(args=("promotes",)).get() == "claimed"
+
+    assert model_path.read_bytes() == b"a freshly trained model"
+    assert staged and staged[0] != model_path, "training wrote straight to the served path"
+    assert not staged[0].exists(), "the staging file was left behind"
+    job = _row(factory, "promotes")
+    assert job.status == "completed"
+    assert job.result_data == {"detail": "model retrained and saved", "model_path": str(model_path)}
+
+
+def test_a_worker_that_lost_its_lease_does_not_overwrite_the_model(
+    factory: sessionmaker[Session], model_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two runs can overlap; the one that lost the job must not land its model."""
+    def taken_over() -> None:
+        later = jobs.utcnow() + timedelta(seconds=settings.TRAINING_LEASE_SECONDS + 60)
+        assert jobs.claim_job("handed-over", later).token is not None
+
+    staged = _stub_training(monkeypatch, during=taken_over)
+    _insert(factory, job_id="handed-over", status="queued")
+
+    train_prospectivity_model.apply(args=("handed-over",)).get()
+
+    assert model_path.read_bytes() == b"the model in production"
+    assert not staged[0].exists()
+    # The new owner still holds the job, so the loser's failure is discarded too.
+    assert _row(factory, "handed-over").status == "running"
 
 
 # --- Celery wiring -------------------------------------------------------

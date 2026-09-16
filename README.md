@@ -99,10 +99,13 @@ On startup the API warms the forecasts, the shortfall model, the point model and
 ```bash
 brew install redis && redis-server --appendonly yes    # durable queue across restarts
 cd backend
-celery -A src.worker.celery_app worker --queues training --concurrency 1 --loglevel INFO
+# On macOS the OBJC_ flag is required: without it the prefork pool's children
+# abort with an Objective-C fork error after the first task. Not needed on Linux.
+OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES \
+  celery -A src.worker.celery_app worker --queues training --concurrency 1 --loglevel INFO
 ```
 
-Run exactly one worker process: two concurrent trainings would write the same model file. `CELERY_BROKER_URL` in `backend/.env` points at Redis (default `redis://127.0.0.1:6379/0`).
+Run exactly one worker process: two runs can still overlap when one loses its lease, but each trains into a file of its own and only the run that still holds the lease promotes it, by rename. `CELERY_BROKER_URL` in `backend/.env` points at Redis (default `redis://127.0.0.1:6379/0`).
 
 ### Frontend
 

@@ -14,11 +14,22 @@ Start the worker from backend/, with Redis running:
 
 from __future__ import annotations
 
+import logging
+import sys
+
 from celery import Celery
-from celery.signals import worker_process_init
+from celery.signals import worker_init, worker_process_init
 from kombu import Exchange, Queue
 
 from src.config.settings import settings
+
+logger = logging.getLogger("worker")
+
+#: Native libraries that must not be imported before the pool forks. torch,
+#: XGBoost and GDAL all start threads or register state that a fork copies into
+#: an unusable condition; on macOS the children then die with SIGSEGV on every
+#: task, which reads like a broken queue rather than a bad import.
+FORK_UNSAFE_MODULES = ("torch", "xgboost", "rasterio", "shap", "mlflow")
 
 #: The queue POST /train publishes to. Run one worker process on it: two
 #: trainings at once would write the same model file.
@@ -74,6 +85,19 @@ celery_app.conf.update(
     enable_utc=True,
     timezone="UTC",
 )
+
+
+@worker_init.connect
+def _warn_about_fork_unsafe_imports(**_kwargs: object) -> None:
+    """Say so loudly if the parent already imported a library the fork breaks."""
+    loaded = [name for name in FORK_UNSAFE_MODULES if name in sys.modules]
+    if loaded:
+        logger.error(
+            "%s already imported in the worker parent: with the prefork pool its children can "
+            "die with SIGSEGV on every task. Import these inside the task instead, or run "
+            "--pool solo.",
+            ", ".join(loaded),
+        )
 
 
 @worker_process_init.connect
