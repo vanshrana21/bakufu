@@ -84,6 +84,12 @@ class Settings(BaseSettings):
     #: refuses to start when it is missing.
     API_KEY: SecretStr | None = None
 
+    #: Extra browser origins allowed to call the API directly, comma separated.
+    #: The local dev servers are always allowed; a deployed frontend origin has
+    #: to be named here, or its browser calls are refused by CORS - which is
+    #: why a production deployment behaves differently from a local one.
+    CORS_EXTRA_ORIGINS: str = ""
+
     #: Broker for the Celery worker that runs POST /train (src/worker).
     CELERY_BROKER_URL: str = "redis://127.0.0.1:6379/0"
     #: A training worker renews its job's lease this often...

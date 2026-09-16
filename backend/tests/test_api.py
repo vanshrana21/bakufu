@@ -18,12 +18,17 @@ def test_health_check(api_client: TestClient) -> None:
     # Assert against the constant rather than a literal: adding Phase 4
     # endpoints bumped the version, and the health *shape* is what matters.
     body = response.json()
-    assert set(body) == {"status", "version", "model_version", "model_source", "degraded"}
+    assert set(body) == {
+        "status", "version", "model_version", "model_source", "encoder_version", "degraded",
+    }
     assert body["status"] == "ok" and body["version"] == API_VERSION
     assert body["degraded"] == []
     # Says which bundle is being scored with, and where that decision came from.
     assert body["model_source"] in {"registry", "env", "shipped"}
     assert body["model_version"]
+    # The encoder defines the feature space the model scores, so it is reported
+    # alongside it rather than folded into the model version.
+    assert body["encoder_version"]
 
 
 @requires_db

@@ -123,6 +123,9 @@ class HealthOut(BaseModel):
     version: str
     model_version: str
     model_source: str
+    #: The encoder that produced the 64 embedding features the model scores.
+    #: Versioned separately from the bundle, so it is reported separately.
+    encoder_version: str
     degraded: list[str] = []
 
 
@@ -220,6 +223,12 @@ class PredictionRecordOut(BaseModel):
     uncertainty: float | None = None
     model_version: str
     created_at: datetime
+    #: What the scoring request actually returned. Without these a stored row
+    #: could not reproduce its own response: the mask that was applied, the
+    #: score before it, and the score after it.
+    mask_applied: str | None = None
+    raw_score: float | None = None
+    final_score: float | None = None
 
 
 class TrainTaskOut(BaseModel):

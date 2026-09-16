@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import joblib
+from cachetools import LRUCache
 
 from src.config.settings import settings
 
@@ -15,6 +16,9 @@ SHIPPED_DIGESTS: dict[str, str] = {
     "prospectivity_v6.pkl": "267c2de36697b18b4618e33ee6b1caed39e7c0a3a7f5d039bf5540de270c7c1f",
     "prophet_baseline_v1_0_shipped.pkl": "f4b04db998c5e94111781c2f18b5f3d4fb5923c43c3a1200b940c552b21407fd",
     "shortfall_classifier_v1.pkl": "b3f4997bc97612d1a266ef9383afc2d74eff22e9fd56c4f6afc2918e55e97fce",
+    # The encoder defines the 64 dimensions every bundle was trained against, so
+    # it is pinned like the models that consume it.
+    "autoencoder_v1.pt": "24c39a1c97f150b1e2e6d80cf69d65c5a75f1351a6bfe44643998d7b832bb9ff",
 }
 
 
@@ -89,3 +93,30 @@ def load_joblib(path: Path, **kwargs: Any) -> Any:
     """Verify and then load a trusted production joblib artifact."""
     verify_model_path(path, **kwargs)
     return joblib.load(path)
+
+
+def load_torch_checkpoint(path: Path, **kwargs: Any) -> Any:
+    """Verify and then load a trusted PyTorch checkpoint.
+
+    Two locks, not one. The digest check says the file is the artifact this
+    build expects, and weights_only=True keeps the loader to tensors and plain
+    data, so a swapped checkpoint cannot execute code inside the API process
+    even if it somehow passed the first check.
+    """
+    import torch
+
+    verify_model_path(path, **kwargs)
+    return torch.load(path, map_location="cpu", weights_only=True)
+
+
+def fingerprint(path: Path) -> str:
+    """A short digest for cache keys and health output, by path and mtime."""
+    key = (str(path.resolve()), path.stat().st_mtime_ns)
+    cached = _FINGERPRINTS.get(key)
+    if cached is None:
+        cached = _FINGERPRINTS[key] = digest(path)[:12]
+    return cached
+
+
+#: Bounded: one entry per artifact version this process has seen.
+_FINGERPRINTS: LRUCache[tuple[str, int], str] = LRUCache(maxsize=16)

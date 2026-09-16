@@ -17,6 +17,7 @@ from torch import nn
 from torch.utils.data import Dataset
 
 from src.config.settings import settings
+from src.models.artifact_security import fingerprint, load_torch_checkpoint
 
 #: Sentinel-2 L2A reflectance scale factor (DN -> [0, 1] reflectance).
 S2_SCALE: float = 10000.0
@@ -153,6 +154,19 @@ def extract_features(patch: np.ndarray | torch.Tensor, model: MnAutoencoder) -> 
     return embedding[0] if single else embedding
 
 
+def encoder_fingerprint(model_path: Path = MODEL_PATH) -> str:
+    """Short digest of the encoder in use, for cache keys and health output.
+
+    The bundle is versioned by the registry; the encoder defines the feature
+    space that bundle was trained against. Anything that caches scores has to
+    key on both, or a swapped encoder silently changes what a cached score means.
+    """
+    try:
+        return fingerprint(model_path)
+    except OSError:
+        return "missing"
+
+
 def load_autoencoder(model_path: Path = MODEL_PATH) -> MnAutoencoder:
     """Load a trained autoencoder in eval mode."""
     if not model_path.exists():
@@ -160,7 +174,10 @@ def load_autoencoder(model_path: Path = MODEL_PATH) -> MnAutoencoder:
             f"no trained autoencoder at {model_path} - "
             "run python -m src.models.prospectivity.train_autoencoder"
         )
-    checkpoint = torch.load(model_path, map_location="cpu", weights_only=False)
+    # Verified against the pinned digest and loaded weights-only: this file is
+    # deserialised inside the API process, so a replaced checkpoint must not be
+    # able to run code here.
+    checkpoint = load_torch_checkpoint(model_path)
     model = MnAutoencoder(
         n_bands=checkpoint.get("n_bands", N_BANDS),
         bottleneck=checkpoint.get("bottleneck", BOTTLENECK_DIM),

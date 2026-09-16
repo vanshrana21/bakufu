@@ -336,9 +336,12 @@ def compute_heatmap(
     the four mask variants cost one model pass rather than four.
     """
     from src.data.masks.registry import apply_mask
+    from src.models.prospectivity.autoencoder import encoder_fingerprint
     from src.models.prospectivity.predict import active_model_version, heatmap_grid
 
-    version = active_model_version()
+    # Both halves of the pipeline: a promoted bundle and a replaced encoder each
+    # change what a score means, so a tile from either is a different tile.
+    version = f"{active_model_version()}+ae{encoder_fingerprint()}"
     key = _cache_key((min_lon, min_lat, max_lon, max_lat), grid_size, mask, version)
     hit = _memory_read(key)
     if hit is not None:

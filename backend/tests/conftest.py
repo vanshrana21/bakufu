@@ -80,7 +80,7 @@ def dummy_features() -> "pd.DataFrame":
 
 
 @pytest.fixture(scope="session")
-def trained_model_path(tmp_path_factory: pytest.TempPathFactory, dummy_features) -> "Path":
+def trained_model_path(tmp_path_factory: pytest.TempPathFactory, dummy_features) -> "Iterator[Path]":
     """A real XGBoost bundle trained on synthetic data.
 
     Genuinely fitted rather than mocked, so SHAP and the prediction path
@@ -115,4 +115,20 @@ def trained_model_path(tmp_path_factory: pytest.TempPathFactory, dummy_features)
         },
         path,
     )
-    return path
+    # Production refuses to deserialise a model from outside a trusted
+    # directory, so the fixture publishes itself the way the registry does:
+    # inside the versions root, with a manifest carrying its digest.
+    import json
+
+    from src.models import registry
+    from src.models.artifact_security import digest
+
+    (path.parent / "manifest.json").write_text(
+        json.dumps({"version": path.stem, "sha256": digest(path)}), encoding="utf-8"
+    )
+    previous = registry.VERSIONS_DIR
+    registry.VERSIONS_DIR = path.parent
+    try:
+        yield path
+    finally:
+        registry.VERSIONS_DIR = previous

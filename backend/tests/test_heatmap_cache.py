@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import threading
 import time
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -71,11 +72,14 @@ def test_payloads_are_evicted_by_size_and_by_age(monkeypatch: pytest.MonkeyPatch
 
 
 def test_the_lock_table_empties_itself() -> None:
+    # Relative to whatever the startup warmer may be holding on its own thread:
+    # what matters is that this test's keys are gone afterwards.
+    baseline = set(reference._KEY_LOCKS)
     with reference._key_guard("one"):
-        assert set(reference._KEY_LOCKS) == {"one"}
+        assert set(reference._KEY_LOCKS) - baseline == {"one"}
         with reference._key_guard("two"):
-            assert set(reference._KEY_LOCKS) == {"one", "two"}
-    assert reference._KEY_LOCKS == {}
+            assert set(reference._KEY_LOCKS) - baseline == {"one", "two"}
+    assert set(reference._KEY_LOCKS) - baseline == set()
 
 
 def test_a_lock_in_use_is_never_replaced() -> None:
@@ -112,14 +116,15 @@ def test_a_lock_in_use_is_never_replaced() -> None:
     holder.join(5)
     follower.join(5)
     assert second_entered.is_set()
-    assert reference._KEY_LOCKS == {}
+    assert "busy" not in reference._KEY_LOCKS
 
 
 def test_the_lock_table_is_bounded_by_work_in_flight() -> None:
+    baseline = len(reference._KEY_LOCKS)
     for index in range(2_000):
         with reference._key_guard(f"key-{index}"):
-            assert len(reference._KEY_LOCKS) == 1
-    assert reference._KEY_LOCKS == {}
+            assert len(reference._KEY_LOCKS) <= baseline + 1
+    assert len(reference._KEY_LOCKS) <= baseline
 
 
 # --- concurrent scoring --------------------------------------------------
@@ -243,14 +248,27 @@ def test_one_cold_computation_per_key_under_concurrency(
     calls: list[float] = []
 
     def slow_grid(*_args: Any, grid_size: int = 4, **_kwargs: Any) -> dict[str, Any]:
-        calls.append(time.monotonic())
-        time.sleep(0.2)  # a real cold grid is ~38s
+        # The startup warmer may be scoring its own viewports on another thread;
+        # only this test's grid size counts towards single-flight.
+        if grid_size == 4:
+            calls.append(time.monotonic())
+            time.sleep(0.2)  # a real cold grid is ~38s
         return _payload(grid_size)
 
     monkeypatch.setattr(predict, "heatmap_grid", slow_grid)
 
     results: list[dict[str, Any]] = []
+    keys_taken: set[str] = set()
     barrier = threading.Barrier(8)
+    real_guard = reference._key_guard
+
+    @contextmanager
+    def watched(key: str):
+        keys_taken.add(key)
+        with real_guard(key):
+            yield
+
+    monkeypatch.setattr(reference, "_key_guard", watched)
 
     def ask() -> None:
         barrier.wait()
@@ -268,4 +286,4 @@ def test_one_cold_computation_per_key_under_concurrency(
     assert all(result["scores"] == _payload(4)["scores"] for result in results)
     # One disk tile, not eight.
     assert len(list((tmp_path / "cache").glob("heatmap_*.json"))) == 1
-    assert reference._KEY_LOCKS == {}
+    assert not any(key in reference._KEY_LOCKS for key in keys_taken), "a lock was left behind"

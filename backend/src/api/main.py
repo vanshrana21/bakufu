@@ -101,7 +101,7 @@ ALLOWED_ORIGINS = [
     f"http://{host}:{port}"
     for port in (3000, 3001, 3002, 3100, 5173, 8080)
     for host in ("localhost", "127.0.0.1")
-]
+] + [origin.strip() for origin in settings.CORS_EXTRA_ORIGINS.split(",") if origin.strip()]
 
 #: Exactly what the frontend sends. No cookies or browser credentials are used,
 #: so credentials stay off; the API key travels in its own header.
@@ -228,6 +228,7 @@ def _reconcile_registry() -> list[str]:
 
 @app.get("/", response_model=HealthOut, tags=["health"], summary="Health check")
 def health(request: Request) -> HealthOut:
+    from src.models.prospectivity.autoencoder import encoder_fingerprint
     from src.models.registry import active_model
 
     problems: list[str] = list(getattr(request.app.state, "registry_problems", []) or [])
@@ -237,6 +238,7 @@ def health(request: Request) -> HealthOut:
         version=API_VERSION,
         model_version=serving.version,
         model_source=serving.source,
+        encoder_version=encoder_fingerprint(),
         degraded=problems,
     )
 
