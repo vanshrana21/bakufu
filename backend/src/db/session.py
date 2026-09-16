@@ -61,3 +61,14 @@ def SessionLocal() -> Session:  # noqa: N802 - conventional factory name
     return get_session_factory()()
 
 
+def dispose_engine_after_fork() -> None:
+    """Drop pooled connections inherited from a parent process.
+
+    Celery's prefork pool forks its worker processes, and a connection shared
+    across a fork would carry two processes' traffic. close=False leaves the
+    parent's sockets alone and starts this process on an empty pool.
+    """
+    if _engine is not None:
+        _engine.dispose(close=False)
+
+

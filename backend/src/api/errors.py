@@ -49,6 +49,16 @@ class NotImplementedInDemo(ApiError):
     error_code = "not_implemented"
 
 
+class TrainingInProgress(ApiError):
+    status_code = 409
+    error_code = "training_in_progress"
+
+
+class BrokerUnavailable(ApiError):
+    status_code = 503
+    error_code = "broker_unavailable"
+
+
 async def api_error_handler(_request: Request, exc: ApiError) -> JSONResponse:
     body: dict[str, str] = {"error_code": exc.error_code, "detail": exc.detail}
     if exc.remedy:

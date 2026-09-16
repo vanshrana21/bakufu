@@ -68,10 +68,18 @@ returns `series: []` with `coverage.months_present: 0`.
 
 **Months are `YYYY-MM` strings** throughout. Tonnages are floats in tonnes.
 
-**Authentication is optional.** When the server sets `API_KEY`, every route
-except `GET /` requires that value in the `X-API-Key` header. A missing or wrong
-key is `401` with the usual flat body:
+**Authentication is required.** The server refuses to start without `API_KEY`,
+and every route - `GET /` included - requires that value in the `X-API-Key`
+header. A missing or wrong key is `401` with the usual flat body:
 `{"error_code": "unauthorized", "detail": "missing or invalid API key", "remedy": "..."}`.
+Only the OpenAPI document and `/docs` stay reachable without it, so the schema
+can be read in a browser; they expose no data.
+
+**`POST /train` queues one job for the Celery worker.** `202` with the job id,
+`409 training_in_progress` while a job is queued or running, `503
+broker_unavailable` when the broker cannot be reached (nothing is left queued).
+`GET /train/{task_id}` reports `queued`, `running`, `completed` or `failed`; a
+job whose worker died reads as `failed` once its lease lapses.
 
 ### Model path split
 

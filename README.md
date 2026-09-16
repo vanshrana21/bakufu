@@ -92,7 +92,17 @@ uvicorn src.api.main:app --host 127.0.0.1 --port 8000
 
 On startup the API warms the forecasts, the shortfall model, the point model and the Explorer surfaces on a background thread.
 
-**API key (optional).** Set `API_KEY` in `backend/.env` and every route except the health check requires it in the `X-API-Key` header. Put the same value in `frontend/.env.local` as `BAKUFU_API_KEY`. It stays on the server: pages fetch the API from the server, and the browser reaches its two live routes through the app's own `/api/backend` proxy. Leave both blank for local development.
+**API key (required).** The API refuses to start without `API_KEY` in `backend/.env`, and every route — the health check included — answers `401` without that value in the `X-API-Key` header. Generate one with `python -c "import secrets; print(secrets.token_urlsafe(32))"` and put the same value in `frontend/.env.local` as `BAKUFU_API_KEY`. It stays on the server: pages fetch the API from the server, and the browser reaches its two live routes through the app's own `/api/backend` proxy.
+
+**Training worker (Redis + Celery).** `POST /train` queues a job for a Celery worker instead of training inside the API process, so a restart no longer kills a run. One job may be queued or running at a time; a second start gets `409`, and a start with no reachable broker gets `503` rather than a job nothing will ever pick up.
+
+```bash
+brew install redis && redis-server --appendonly yes    # durable queue across restarts
+cd backend
+celery -A src.worker.celery_app worker --queues training --concurrency 1 --loglevel INFO
+```
+
+Run exactly one worker process: two concurrent trainings would write the same model file. `CELERY_BROKER_URL` in `backend/.env` points at Redis (default `redis://127.0.0.1:6379/0`).
 
 ### Frontend
 
@@ -117,6 +127,7 @@ bakufu/
 │   │   ├── data/          ingest, preprocessing, screening masks
 │   │   ├── db/            SQLAlchemy session and models
 │   │   ├── config/        settings and constants
+│   │   ├── worker/        Celery app, training task, background_jobs state
 │   │   └── reference/     MOIL mine reference data
 │   ├── tests/             pytest suite
 │   ├── scripts/           run_api.py, migrations, diagnostics

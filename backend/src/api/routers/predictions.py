@@ -3,19 +3,17 @@
 from __future__ import annotations
 
 import logging
-import traceback
 import uuid
-from datetime import UTC, datetime
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from geoalchemy2.shape import from_shape
 from shapely.geometry import box
 from sqlalchemy import select
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from src.api.deps import get_db, get_optional_db
-from src.api.errors import DataNotLoaded
+from src.api.errors import BrokerUnavailable, DataNotLoaded, TrainingInProgress
 from src.api.schemas import (
     MaskInfoOut,
     PredictBboxIn,
@@ -27,15 +25,14 @@ from src.api.schemas import (
     TrainTaskOut,
 )
 from src.data.masks.registry import VALID_MASKS, apply_mask, describe as describe_masks
-from src.db import session as db_session
 from src.db.models import BackgroundJob, Prediction
+from src.worker import jobs
+from src.worker.jobs import TRAIN_TASK_NAME
+from src.worker.tasks import train_prospectivity_model
 
 logger = logging.getLogger("api.predictions")
 
 router = APIRouter(tags=["predictions"])
-
-#: BackgroundJob.task_name for POST /train.
-TRAIN_TASK_NAME = "train_pu_xgboost"
 
 #: Half-width of the cell polygon stored for a point prediction, in degrees
 #: (~30 m, half of the 60 m grid the model reasons at).
@@ -190,74 +187,113 @@ def get_prediction(prediction_id: int, db: Session = Depends(get_db)) -> Predict
     return PredictionRecordOut.model_validate(row)
 
 
-def _update_job(job_id: str, **fields: object) -> None:
-    """Write fields onto one job in a short transaction of its own.
+def _training_in_progress(job_id: str | None, status: str | None) -> TrainingInProgress:
+    if job_id is None:
+        return TrainingInProgress(
+            detail="a training job is already in progress",
+            remedy="poll GET /train/{task_id} for it, then POST /train again once it has finished",
+        )
+    return TrainingInProgress(
+        detail=f"a training job is already in progress: {job_id} is {status}",
+        remedy=f"poll GET /train/{job_id}, then POST /train again once it has finished",
+    )
 
-    Training runs for minutes; holding one session across it would pin a pooled
-    connection for the whole run. Each state change gets its own session.
+
+@router.post(
+    "/train",
+    response_model=TrainTaskOut,
+    status_code=202,
+    summary="Queue a retraining job for the Celery worker",
+    responses={
+        409: {"description": "A training job is already queued or running"},
+        503: {"description": "The task broker is unreachable, so nothing was queued"},
+    },
+)
+def start_training(db: Session = Depends(get_db)) -> TrainTaskOut:
+    """Queue one training run.
+
+    Training happens in a Celery worker, not in this process: an API restart,
+    or the request itself going away, no longer takes the run with it. At most
+    one job may be queued or running at a time - a second concurrent training
+    would fight the first for the model file - so this answers 409 while one is
+    active.
     """
-    with db_session.SessionLocal() as db:
-        job = db.scalars(select(BackgroundJob).where(BackgroundJob.job_id == job_id)).first()
-        if job is None:
-            logger.warning("background job %s vanished before %s", job_id, sorted(fields))
-            return
-        for name, value in fields.items():
-            setattr(job, name, value)
-        db.commit()
-
-
-def _run_training(job_id: str) -> None:
-    """Background training job. Every state change is recorded on the job row."""
-    try:
-        _update_job(job_id, status="running", progress=0.0, started_at=datetime.now(UTC))
-    except SQLAlchemyError:
-        logger.exception("could not mark training job %s as running", job_id)
-        return
-
-    try:
-        from src.models.prospectivity.train_pu_xgboost import main as train_main
-
-        train_main()
-    except Exception as exc:  # noqa: BLE001 - surfaced through the status endpoint
-        outcome: dict[str, object] = {
-            "status": "failed",
-            "error_message": f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}",
-        }
-    else:
-        outcome = {
-            "status": "completed",
-            "progress": 100.0,
-            "result_data": {"detail": "model retrained and saved"},
-        }
-    try:
-        _update_job(job_id, finished_at=datetime.now(UTC), **outcome)
-    except SQLAlchemyError:
-        logger.exception("could not record the outcome of training job %s", job_id)
-
-
-@router.post("/train", response_model=TrainTaskOut, status_code=202, summary="Retrain in background")
-def start_training(background_tasks: BackgroundTasks, db: Session = Depends(get_db)) -> TrainTaskOut:
     job_id = uuid.uuid4().hex
-    db.add(BackgroundJob(job_id=job_id, task_name=TRAIN_TASK_NAME, status="queued"))
+    now = jobs.utcnow()
     try:
+        # One transaction from the lock to the insert: the advisory lock makes
+        # the count below and the insert atomic against every other POST /train.
+        jobs.lock_task_starts(db, TRAIN_TASK_NAME)
+        jobs.expire_stale_jobs(db, TRAIN_TASK_NAME, now)
+        if jobs.count_active_jobs(db, TRAIN_TASK_NAME) > 0:
+            active = jobs.active_job(db, TRAIN_TASK_NAME)
+            conflict = _training_in_progress(
+                active.job_id if active else None, active.status if active else None
+            )
+            db.commit()  # keep the expiries; the lock is released with them
+            raise conflict
+        db.add(
+            BackgroundJob(
+                job_id=job_id,
+                task_name=TRAIN_TASK_NAME,
+                status="queued",
+                created_at=now,
+                updated_at=now,
+            )
+        )
         db.commit()
+    except IntegrityError as exc:
+        # The partial unique index caught a start the advisory lock did not.
+        db.rollback()
+        raise _training_in_progress(None, None) from exc
     except SQLAlchemyError as exc:
         db.rollback()
         raise DataNotLoaded(
             detail=f"could not record the training job: {type(exc).__name__}",
-            remedy="run python -m scripts.migrations.add_background_jobs to create the background_jobs table",
+            remedy=(
+                "run python -m scripts.migrations.add_background_jobs to bring "
+                "background_jobs up to date"
+            ),
         ) from exc
 
-    background_tasks.add_task(_run_training, job_id)
+    try:
+        train_prospectivity_model.apply_async(args=(job_id,), task_id=job_id)
+    except Exception as exc:  # noqa: BLE001 - any publish failure strands the job
+        logger.exception("could not publish training job %s", job_id)
+        try:
+            jobs.fail_queued_job(
+                db, job_id, f"never reached the task broker: {type(exc).__name__}: {exc}", jobs.utcnow()
+            )
+            db.commit()
+        except SQLAlchemyError:
+            db.rollback()
+            logger.exception("could not fail the unpublished training job %s", job_id)
+        raise BrokerUnavailable(
+            detail=f"the task broker is unreachable, so no job was queued: {type(exc).__name__}",
+            remedy=(
+                "start Redis and a worker (celery -A src.worker.celery_app worker "
+                "--queues training --concurrency 1), check CELERY_BROKER_URL, then POST /train again"
+            ),
+        ) from exc
+
     return TrainTaskOut(
         task_id=job_id,
-        status="started",
-        detail="training runs in-process; poll GET /train/{task_id}",
+        status="queued",
+        detail="queued for the Celery training worker; poll GET /train/{task_id}",
     )
 
 
 @router.get("/train/{task_id}", response_model=TrainStatusOut, summary="Background training status")
 def training_status(task_id: str, db: Session = Depends(get_db)) -> TrainStatusOut:
+    # Expire first, so a job whose worker died reads as failed here instead of
+    # running for ever.
+    try:
+        jobs.expire_stale_jobs(db, TRAIN_TASK_NAME, jobs.utcnow())
+        db.commit()
+    except SQLAlchemyError:
+        db.rollback()
+        logger.warning("could not expire stale training jobs", exc_info=True)
+
     job = db.scalars(
         select(BackgroundJob).where(
             BackgroundJob.job_id == task_id, BackgroundJob.task_name == TRAIN_TASK_NAME

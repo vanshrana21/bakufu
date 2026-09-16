@@ -8,7 +8,19 @@ from __future__ import annotations
 from datetime import date, datetime
 
 from geoalchemy2 import Geometry
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    JSON,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 SRID: int = 4326
@@ -228,10 +240,22 @@ class BackgroundJob(Base):
     """A long-running task started through the API, e.g. POST /train.
 
     Persisted so a job's outcome survives the request that started it and can be
-    polled from any worker. `status` moves queued -> running -> completed|failed.
+    polled from any worker. `status` moves queued -> running -> completed|failed;
+    src/worker/jobs.py owns every transition.
     """
 
     __tablename__ = "background_jobs"
+    __table_args__ = (
+        # At most one queued or running job per task, enforced by the database
+        # itself behind the advisory-locked count in POST /train.
+        Index(
+            "uq_background_jobs_one_active_per_task",
+            "task_name",
+            unique=True,
+            postgresql_where=text("status IN ('queued', 'running')"),
+            sqlite_where=text("status IN ('queued', 'running')"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     job_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
