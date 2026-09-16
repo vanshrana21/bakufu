@@ -16,9 +16,9 @@ from src.api.state import Artifact, load_all
 
 
 @pytest.fixture(scope="module")
-def client() -> TestClient:
+def client(api_headers: dict[str, str]) -> TestClient:
     # The context manager runs the lifespan handler, so artifacts are loaded.
-    with TestClient(app) as test_client:
+    with TestClient(app, headers=api_headers) as test_client:
         yield test_client
 
 

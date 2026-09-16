@@ -148,12 +148,12 @@ def test_shortfall_classifier_bundle_is_well_formed() -> None:
     assert importance["rainfall_lag2_mm"] > importance["rainfall_concurrent_mm"]
 
 
-def test_forecast_endpoint_returns_valid_response() -> None:
+def test_forecast_endpoint_returns_valid_response(api_headers: dict[str, str]) -> None:
     from fastapi.testclient import TestClient
 
     from src.api.main import app
 
-    with TestClient(app) as client:
+    with TestClient(app, headers=api_headers) as client:
         bad = client.get("/forecast", params={"horizon": 7})
         assert bad.status_code == 422
 
@@ -167,12 +167,12 @@ def test_forecast_endpoint_returns_valid_response() -> None:
         assert body["predicted_lower_ci"] <= body["predicted_tonnes"] <= body["predicted_upper_ci"]
 
 
-def test_shortfall_endpoint_returns_risk_score() -> None:
+def test_shortfall_endpoint_returns_risk_score(api_headers: dict[str, str]) -> None:
     from fastapi.testclient import TestClient
 
     from src.api.main import app
 
-    with TestClient(app) as client:
+    with TestClient(app, headers=api_headers) as client:
         response = client.get("/shortfall/risk")
         if response.status_code == 500:
             pytest.skip("shortfall model not trained yet")
@@ -186,12 +186,12 @@ def test_shortfall_endpoint_returns_risk_score() -> None:
         assert body["risk_level"] in {"low", "medium", "high"}
 
 
-def test_production_history_endpoint() -> None:
+def test_production_history_endpoint(api_headers: dict[str, str]) -> None:
     from fastapi.testclient import TestClient
 
     from src.api.main import app
 
-    with TestClient(app) as client:
+    with TestClient(app, headers=api_headers) as client:
         response = client.get("/production/history")
         assert response.status_code == 200
         body = response.json()

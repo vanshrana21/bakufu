@@ -16,9 +16,9 @@ from src.api.routers import (
     shortfall,
 )
 from src.api.schemas import HealthOut
-from src.api.security import API_KEY_HEADER, api_key_required, require_api_key
+from src.api.security import API_KEY_HEADER, require_api_key
 from src.api.state import load_all
-from src.config.settings import settings
+from src.config.settings import get_server_settings, settings
 
 API_VERSION = "0.2"
 
@@ -27,6 +27,10 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
 logger = logging.getLogger("api")
+
+# Fail closed: without API_KEY this raises before the app object exists, so
+# uvicorn cannot import `src.api.main:app` and the server never starts.
+get_server_settings()
 
 
 @asynccontextmanager
@@ -55,10 +59,7 @@ async def lifespan(app: FastAPI):
     failed = app.state.artifacts.degraded
     logger.info("startup: %d artifacts loaded%s", len(loaded),
                 f", {len(failed)} failed: {', '.join(failed)}" if failed else "")
-    if api_key_required():
-        logger.info("startup: %s required on every route except /", API_KEY_HEADER)
-    else:
-        logger.warning("startup: API_KEY is not set - the API is open; set it before exposing this server")
+    logger.info("startup: %s required on every route", API_KEY_HEADER)
     stop_warming = _start_heatmap_warming()
     yield
     stop_warming.set()

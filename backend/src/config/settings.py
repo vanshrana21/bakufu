@@ -5,6 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Repository root: src/config/settings.py -> src/config -> src -> <root>
@@ -77,9 +78,24 @@ class Settings(BaseSettings):
     DATABASE_URL: str = ""
     SUPABASE_URL: str = ""
     SUPABASE_KEY: str = ""
-    #: When set, every route except the health check requires this value in the
-    #: X-API-Key header (src/api/security.py). Blank keeps the API open.
-    API_KEY: str = ""
+    #: Shared key every API request must carry in the X-API-Key header
+    #: (src/api/security.py). Optional here so scripts and the Celery worker can
+    #: load settings without it; the API server loads ServerSettings, which
+    #: refuses to start when it is missing.
+    API_KEY: SecretStr | None = None
+
+    #: Broker for the Celery worker that runs POST /train (src/worker).
+    CELERY_BROKER_URL: str = "redis://127.0.0.1:6379/0"
+    #: A training worker renews its job's lease this often...
+    TRAINING_HEARTBEAT_SECONDS: int = 30
+    #: ...and a running job whose lease is older than this has lost its worker.
+    TRAINING_LEASE_SECONDS: int = 150
+    #: A queued job that no worker has claimed within this long is failed.
+    TRAINING_QUEUE_TIMEOUT_SECONDS: int = 30 * 60
+    #: Celery time limits for one training run: the soft limit raises inside the
+    #: task so the failure is recorded, the hard limit kills the process.
+    TRAINING_SOFT_TIME_LIMIT_SECONDS: int = 2 * 3600
+    TRAINING_TIME_LIMIT_SECONDS: int = 2 * 3600 + 300
 
     # Re-exported so callers only need to import Settings.
     PROJECT_ROOT: Path = PROJECT_ROOT
@@ -101,6 +117,20 @@ class Settings(BaseSettings):
     def dem_smoke_test(self) -> Path:
         return self.DATA_RAW / "dem" / "dem_nagpur_smoke_test.tif"
 
+    @model_validator(mode="after")
+    def _training_timings_are_consistent(self) -> Settings:
+        if self.TRAINING_HEARTBEAT_SECONDS <= 0:
+            raise ValueError("TRAINING_HEARTBEAT_SECONDS must be positive")
+        # Three missed heartbeats before a lease lapses, so one slow database
+        # round trip never hands a live job to a second worker.
+        if self.TRAINING_LEASE_SECONDS < 3 * self.TRAINING_HEARTBEAT_SECONDS:
+            raise ValueError("TRAINING_LEASE_SECONDS must be at least 3x TRAINING_HEARTBEAT_SECONDS")
+        if not 0 < self.TRAINING_SOFT_TIME_LIMIT_SECONDS < self.TRAINING_TIME_LIMIT_SECONDS:
+            raise ValueError(
+                "TRAINING_SOFT_TIME_LIMIT_SECONDS must be positive and below TRAINING_TIME_LIMIT_SECONDS"
+            )
+        return self
+
     def require_database_url(self) -> str:
         """Return DATABASE_URL or raise a clear error if it is not configured."""
         if not self.DATABASE_URL:
@@ -111,10 +141,36 @@ class Settings(BaseSettings):
         return self.DATABASE_URL
 
 
+class ServerSettings(Settings):
+    """Settings the API server boots with. Fails closed without an API key."""
+
+    @field_validator("API_KEY", mode="after")
+    @classmethod
+    def _api_key_is_required(cls, value: SecretStr | None) -> SecretStr:
+        if value is None or not value.get_secret_value().strip():
+            raise ValueError(
+                "API_KEY is missing or empty, and the API refuses to start without it. "
+                "Set API_KEY in backend/.env - generate one with "
+                "python -c \"import secrets; print(secrets.token_urlsafe(32))\" - "
+                "and put the same value in frontend/.env.local as BAKUFU_API_KEY."
+            )
+        return value
+
+
 @lru_cache
 def get_settings() -> Settings:
     """Cached settings singleton."""
     return Settings()
+
+
+@lru_cache
+def get_server_settings() -> ServerSettings:
+    """Validated settings for the API process.
+
+    Raises pydantic's ValidationError, a ValueError, when API_KEY is missing or
+    empty. src/api/main.py calls this before it creates the app.
+    """
+    return ServerSettings()
 
 
 settings: Settings = get_settings()

@@ -85,3 +85,24 @@ def test_wgs84_bounds_match_a_direct_read(tmp_path: Path) -> None:
     with rasterio.open(path) as src:
         expected = transform_bounds(src.crs, "EPSG:4326", *src.bounds)
     assert raster_pool.wgs84_bounds(path) == pytest.approx(expected)
+
+
+def test_the_bounds_cache_is_bounded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every rewrite of a raster adds a key, so the cache evicts instead of growing."""
+    from cachetools import LRUCache
+
+    monkeypatch.setattr(raster_pool, "_BOUNDS", LRUCache(maxsize=2))
+    paths = [_write_raster(tmp_path / f"{i}.tif", i) for i in range(3)]
+    bounds = [raster_pool.wgs84_bounds(path) for path in paths]
+
+    assert len(raster_pool._BOUNDS) == 2
+    # Evicted keys are recomputed, not lost.
+    assert raster_pool.wgs84_bounds(paths[0]) == pytest.approx(bounds[0])
+    assert raster_pool._BOUNDS.maxsize == 2
+
+
+def test_the_shipped_bounds_cache_has_a_ceiling() -> None:
+    from cachetools import LRUCache
+
+    assert isinstance(raster_pool._BOUNDS, LRUCache)
+    assert raster_pool._BOUNDS.maxsize == raster_pool.MAX_BOUNDS_ENTRIES

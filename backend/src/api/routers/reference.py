@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from cachetools import TTLCache
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from src.api.errors import ModelNotLoaded
@@ -124,35 +125,55 @@ CACHE_TTL_SECONDS = 24 * 3600
 #: In-memory tier in front of the disk cache. It holds only payloads the model
 #: actually computed; the startup warmer refreshes it on this interval.
 MEMORY_TTL_SECONDS = 10 * 60
+#: Heatmap payloads held in memory. The warmer keeps 12 (3 viewports x 4 masks);
+#: arbitrary client bboxes share the rest, least recently used out first.
+MEMORY_MAX_ENTRIES = 256
+#: Per-key computation locks. An entry idle for KEY_LOCK_TTL_SECONDS is dropped.
+KEY_LOCK_MAX_ENTRIES = 1000
+KEY_LOCK_TTL_SECONDS = 3600
 MIN_GRID, MAX_GRID = 8, 128
 
-_MEMORY: dict[str, tuple[float, dict[str, Any]]] = {}
-_KEY_LOCKS: dict[str, threading.Lock] = {}
+# cachetools caches are not thread-safe - a read reorders and expires entries -
+# so every access to either cache happens under its guard.
+_MEMORY: TTLCache[str, dict[str, Any]] = TTLCache(
+    maxsize=MEMORY_MAX_ENTRIES, ttl=MEMORY_TTL_SECONDS, timer=time.monotonic
+)
+_MEMORY_GUARD = threading.Lock()
+_KEY_LOCKS: TTLCache[str, threading.Lock] = TTLCache(
+    maxsize=KEY_LOCK_MAX_ENTRIES, ttl=KEY_LOCK_TTL_SECONDS, timer=time.monotonic
+)
 _KEY_LOCKS_GUARD = threading.Lock()
 
 
 def clear_heatmap_memory() -> None:
-    _MEMORY.clear()
+    with _MEMORY_GUARD:
+        _MEMORY.clear()
 
 
 def _memory_read(key: str) -> dict[str, Any] | None:
-    entry = _MEMORY.get(key)
-    if entry is None:
-        return None
-    stored_at, payload = entry
-    if time.monotonic() - stored_at > MEMORY_TTL_SECONDS:
-        _MEMORY.pop(key, None)
-        return None
-    return payload
+    with _MEMORY_GUARD:
+        return _MEMORY.get(key)
 
 
 def _memory_write(key: str, payload: dict[str, Any]) -> None:
-    _MEMORY[key] = (time.monotonic(), payload)
+    with _MEMORY_GUARD:
+        _MEMORY[key] = payload
 
 
 def _key_lock(key: str) -> threading.Lock:
+    """The lock that serialises computing `key`.
+
+    Re-inserting on every call restarts the entry's TTL, so a key in use never
+    expires. Should 1,000 newer keys push out a lock that is still held, the
+    next caller gets a fresh lock and computes the same payload a second time:
+    duplicated work, never a wrong or corrupted result.
+    """
     with _KEY_LOCKS_GUARD:
-        return _KEY_LOCKS.setdefault(key, threading.Lock())
+        lock = _KEY_LOCKS.get(key)
+        if lock is None:
+            lock = threading.Lock()
+        _KEY_LOCKS[key] = lock
+        return lock
 
 
 def _cache_key(bbox: tuple[float, ...], grid_size: int, mask: str, version: str) -> str:

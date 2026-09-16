@@ -152,7 +152,7 @@ def test_frontend_metadata_matches_registry() -> None:
     assert {m["id"] for m in payload["masks"]} == set(VALID_MASKS)
 
 
-def test_predict_endpoint_with_mask_param() -> None:
+def test_predict_endpoint_with_mask_param(api_headers: dict[str, str]) -> None:
     """/predict/point accepts ?mask= and reports what it did."""
     from fastapi.testclient import TestClient
 
@@ -161,7 +161,7 @@ def test_predict_endpoint_with_mask_param() -> None:
     if not (settings.MODELS_DIR / "prospectivity_v1.pkl").exists():
         pytest.skip("no trained model available")
 
-    with TestClient(app) as client:
+    with TestClient(app, headers=api_headers) as client:
         response = client.get("/masks")
         assert response.status_code == 200
         assert {entry["id"] for entry in response.json()} == set(VALID_MASKS)

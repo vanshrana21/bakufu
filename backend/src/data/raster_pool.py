@@ -20,17 +20,23 @@ from collections import OrderedDict
 from pathlib import Path
 
 import rasterio
+from cachetools import LRUCache
 from pyproj import Transformer
 from rasterio.io import DatasetReader
 from rasterio.warp import transform_bounds
 
 #: Bounds the file descriptors one worker thread can hold open.
 MAX_OPEN_PER_THREAD = 8
+#: Raster footprints kept, keyed by (path, mtime): a rewritten file adds a key.
+MAX_BOUNDS_ENTRIES = 500
 
 _local = threading.local()
 
+# LRUCache reorders on every read, so reads take the lock as well as writes.
 _BOUNDS_LOCK = threading.Lock()
-_BOUNDS: dict[tuple[str, int], tuple[float, float, float, float]] = {}
+_BOUNDS: LRUCache[tuple[str, int], tuple[float, float, float, float]] = LRUCache(
+    maxsize=MAX_BOUNDS_ENTRIES
+)
 
 
 def _key(path: Path | str) -> tuple[str, int]:
@@ -78,9 +84,12 @@ def transformer(source: object, target: object) -> Transformer:
 def wgs84_bounds(path: Path | str) -> tuple[float, float, float, float]:
     """(left, bottom, right, top) of a raster in EPSG:4326, computed once per file version."""
     key = _key(path)
-    found = _BOUNDS.get(key)
+    with _BOUNDS_LOCK:
+        found = _BOUNDS.get(key)
     if found is not None:
         return found
+    # Read outside the lock: opening a raster is I/O, and two threads computing
+    # the same footprint at once both arrive at the same answer.
     with rasterio.open(key[0]) as src:
         bounds = transform_bounds(src.crs, "EPSG:4326", *src.bounds)
     with _BOUNDS_LOCK:

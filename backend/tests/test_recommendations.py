@@ -23,8 +23,8 @@ from src.reference.moil_mines import OPENCAST_FLEET_VOCAB, UNDERGROUND_FLEET_VOC
 
 
 @pytest.fixture(scope="module")
-def client() -> TestClient:
-    with TestClient(app) as test_client:
+def client(api_headers: dict[str, str]) -> TestClient:
+    with TestClient(app, headers=api_headers) as test_client:
         yield test_client
 
 

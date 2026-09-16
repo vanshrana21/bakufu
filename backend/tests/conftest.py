@@ -6,6 +6,7 @@ that needs one is skipped when DATABASE_URL is unset.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -13,7 +14,13 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from src.config.settings import settings
+#: The API refuses to start without API_KEY, so pin a test key before anything
+#: imports the settings. An environment variable outranks backend/.env, so the
+#: suite never depends on - or sends - the real key.
+TEST_API_KEY = "pytest-api-key"
+os.environ["API_KEY"] = TEST_API_KEY
+
+from src.config.settings import settings  # noqa: E402 - must follow the key above
 
 requires_db = pytest.mark.skipif(
     not settings.DATABASE_URL, reason="DATABASE_URL not configured in .env"
@@ -36,11 +43,17 @@ def db_session() -> Iterator[Session]:
 
 
 @pytest.fixture(scope="session")
-def api_client() -> Iterator[TestClient]:
-    """TestClient bound to the real app."""
+def api_headers() -> dict[str, str]:
+    """What every request needs: the gate in src/api/security.py rejects the rest."""
+    return {"X-API-Key": TEST_API_KEY}
+
+
+@pytest.fixture(scope="session")
+def api_client(api_headers: dict[str, str]) -> Iterator[TestClient]:
+    """TestClient bound to the real app, carrying the API key."""
     from src.api.main import app
 
-    with TestClient(app) as client:
+    with TestClient(app, headers=api_headers) as client:
         yield client
 
 
