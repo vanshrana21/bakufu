@@ -7,6 +7,7 @@
 
 import type { WireDashboardSummary } from "./wire";
 import { apiGet } from "./client";
+import { parseWire, WireDashboardSummarySchema } from "./wire-schemas";
 
 export interface VitalSign {
   label: string;
@@ -97,5 +98,6 @@ export function adaptDashboardSummary(wire: WireDashboardSummary, pendingReviews
 }
 
 export const fetchDashboardSummary = (pendingReviews: number | null, signal?: AbortSignal) =>
-  apiGet<WireDashboardSummary>("/dashboard/summary", { signal })
+  apiGet<unknown>("/dashboard/summary", { signal })
+    .then((raw) => parseWire(WireDashboardSummarySchema, raw, "/dashboard/summary"))
     .then((wire) => adaptDashboardSummary(wire, pendingReviews));

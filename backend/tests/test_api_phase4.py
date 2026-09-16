@@ -670,8 +670,13 @@ def test_dashboard_summary_shape_matches_contract(client: TestClient) -> None:
     body = client.get("/dashboard/summary").json()
     assert set(body) == {
         "generated_at", "latest_actual", "next_forecast", "shortfall",
-        "series_health", "model_health", "mines", "degraded",
+        "series_health", "model_health", "mines", "degraded", "data_provenance",
     }
+    # Always present: the frontend labels the screen from this, and an absent
+    # field would read as "these are the production models".
+    provenance = body["data_provenance"]
+    assert set(provenance) >= {"origin", "synthetic", "prospectivity_model", "encoder"}
+    assert isinstance(provenance["synthetic"], bool)
     assert set(body["latest_actual"]) == {"month", "mh_plus_mp_tonnes", "all_india_tonnes"}
     assert set(body["next_forecast"]) == {
         "month", "predicted_tonnes", "lower_ci", "upper_ci", "ci_level"

@@ -14,6 +14,7 @@ import type { WireForecast, WireProductionHistory } from "./wire";
 import {
   ContractMismatchError, apiGet, addMonths, monthToIso, toIsoTimestamp,
 } from "./client";
+import { parseWire, WireForecastSchema, WireProductionHistorySchema } from "./wire-schemas";
 
 export type ForecastHorizon = 1 | 3 | 6 | 12;
 
@@ -129,13 +130,17 @@ export function adaptProductionHistory(wire: WireProductionHistory): {
 // --- fetchers -------------------------------------------------------------
 
 export const fetchProductionHistory = (options?: { start?: string; end?: string; signal?: AbortSignal }) =>
-  apiGet<WireProductionHistory>("/production/history", {
+  apiGet<unknown>("/production/history", {
     query: { start: options?.start, end: options?.end },
     signal: options?.signal,
-  }).then(adaptProductionHistory);
+  })
+    .then((raw) => parseWire(WireProductionHistorySchema, raw, "/production/history"))
+    .then(adaptProductionHistory);
 
 export const fetchForecast = (horizon: ForecastHorizon, lastObservedMonth: string, signal?: AbortSignal) =>
-  apiGet<WireForecast>("/forecast", { query: { horizon }, signal }).then((wire) => ({
+  apiGet<unknown>("/forecast", { query: { horizon }, signal })
+    .then((raw) => parseWire(WireForecastSchema, raw, "/forecast"))
+    .then((wire) => ({
     forecast: adaptForecast(wire, lastObservedMonth),
     accuracy: wire.accuracy_at_horizon,
     model: wire.model,

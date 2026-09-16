@@ -15,3 +15,10 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+# The runtime dependencies live in requirements.txt, which is what the project
+# installs from. `uv run pytest` needs those too, so run either:
+#   python -m pytest -q                       (an environment built from requirements.txt)
+#   uv pip install -r requirements.txt && uv run pytest -q
+[dependency-groups]
+dev = ["pytest>=7.4.0", "ruff>=0.1.0", "httpx>=0.25.0"]

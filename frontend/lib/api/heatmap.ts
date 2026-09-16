@@ -17,6 +17,7 @@ import type { MaskMode } from "@/lib/contracts";
 import type { CellProperties } from "@/fixtures/prospectivity-surface";
 import type { WireHeatmap } from "./wire";
 import { HEATMAP_TIMEOUT_MS, apiGet } from "./client";
+import { parseWire, WireHeatmapSchema } from "./wire-schemas";
 
 export interface HeatmapResult {
   surface: FeatureCollection<Polygon, CellProperties>;
@@ -128,7 +129,7 @@ export interface HeatmapQuery {
 }
 
 export const fetchHeatmap = (query: HeatmapQuery) =>
-  apiGet<WireHeatmap>("/prospectivity/heatmap", {
+  apiGet<unknown>("/prospectivity/heatmap", {
     query: {
       min_lon: query.minLon, min_lat: query.minLat,
       max_lon: query.maxLon, max_lat: query.maxLat,
@@ -138,7 +139,9 @@ export const fetchHeatmap = (query: HeatmapQuery) =>
     // The backend documents 5s warm / 45s cold for this route alone; the shared
     // 15s default would abort a cold call that was going to succeed.
     timeoutMs: HEATMAP_TIMEOUT_MS,
-  }).then(adaptHeatmap);
+  })
+    .then((raw) => parseWire(WireHeatmapSchema, raw, "/prospectivity/heatmap"))
+    .then(adaptHeatmap);
 
 /** The three viewports the backend pre-warms at startup. Requesting one of
  * these first makes the demo's first paint a cache hit rather than a ~38s wait. */

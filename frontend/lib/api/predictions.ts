@@ -3,6 +3,7 @@ import { PredictionResponseSchema } from "@/lib/contracts";
 import { DEMO_SITES, buildPredictionFixture, type SiteFixture } from "@/fixtures/predictions";
 import type { WirePredictPoint } from "./wire";
 import { ApiRequestError, ContractMismatchError, LIVE_MODE, PREDICT_POINT_TIMEOUT_MS, apiPost } from "./client";
+import { parseWire, WirePredictPointSchema } from "./wire-schemas";
 
 export interface PredictionClient {
   predict(siteId: string, mask: MaskMode, signal: AbortSignal): Promise<PredictionResponse>;
@@ -156,11 +157,12 @@ export const predictionClient: PredictionClient = {
     try {
       // `mask` is a QUERY parameter on the backend; PredictPointIn carries only
       // lat/lon, so a mask in the body is silently dropped and "none" applied.
-      const wire = await apiPost<WirePredictPoint>(
+      const rawPrediction = await apiPost<unknown>(
         "/predict/point",
         { lat: site.location.latitude, lon: site.location.longitude },
         { signal, query: { mask }, timeoutMs: PREDICT_POINT_TIMEOUT_MS },
       );
+    const wire = parseWire(WirePredictPointSchema, rawPrediction, "/predict/point");
       return composeLive(site, wire, mask);
     } catch (error) {
       // A 404 here is the backend's honest "outside the imagery footprint"

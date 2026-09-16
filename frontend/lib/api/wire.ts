@@ -129,7 +129,8 @@ export interface WireDashboardSummary {
   degraded: string[];
   /** Added in contract v1.7 alongside the dev-artifact bundle. When
    * `synthetic` is true the served models are NOT the shipped trained ones. */
-  data_provenance?: { origin: string; synthetic: boolean; note?: string };
+  // `note` is null when nothing is degraded; the backend emits the key either way.
+  data_provenance?: { origin: string; synthetic: boolean; note?: string | null };
 }
 
 export interface WireHeatmap {

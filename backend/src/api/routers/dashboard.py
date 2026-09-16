@@ -31,6 +31,32 @@ def _validate_recommendation_params(mine_name: str | None, limit: int) -> str | 
     return MOIL_MINES[mine_name]["mine_type"] if mine_name else None
 
 
+def _provenance(request: Request) -> dict[str, object]:
+    """Whether the artifacts behind this response are the shipped trained ones."""
+    from src.models.prospectivity.autoencoder import encoder_fingerprint
+    from src.models.registry import active_model
+
+    artifacts = getattr(getattr(request.app, "state", None), "artifacts", None)
+    degraded = list(getattr(artifacts, "degraded", []) or [])
+    serving = active_model()
+    synthetic = bool(degraded)
+    return {
+        "origin": "development artifacts" if synthetic else "shipped trained models",
+        "synthetic": synthetic,
+        "note": (
+            "Artifacts failed to load and the affected sections are degraded: "
+            + ", ".join(degraded)
+            if synthetic
+            else None
+        ),
+        "prospectivity_model": serving.version,
+        "prospectivity_model_source": serving.source,
+        "encoder": encoder_fingerprint(),
+        "forecast_model": FORECAST_MODEL_VERSION,
+        "shortfall_model": SHORTFALL_MODEL_VERSION,
+    }
+
+
 @router.get("/dashboard/summary", summary="Aggregated landing-view data")
 def get_dashboard_summary(request: Request) -> dict[str, Any]:
     """One call for the landing page, composed from the other endpoints.
@@ -129,6 +155,10 @@ def get_dashboard_summary(request: Request) -> dict[str, Any]:
             "opencast": sum(1 for m in MOIL_MINES.values() if m["mine_type"] == "opencast"),
         },
         "degraded": degraded,
+        # Always emitted. The frontend decides whether to label the screen as
+        # development data from this, and a missing field would read as
+        # "production" - the one thing it must never say by accident.
+        "data_provenance": _provenance(request),
     }
 
 

@@ -12,6 +12,7 @@ import type { PredictionResponse, RiskResponse } from "@/lib/contracts";
 import { RiskResponseSchema } from "@/lib/contracts";
 import type { WireForecast, WireShortfallRisk } from "./wire";
 import { ContractMismatchError, apiGet, monthToIso } from "./client";
+import { parseWire, WireShortfallRiskSchema } from "./wire-schemas";
 
 /** The backend's own threshold, as a fraction. Cross-checked against the
  * absolute tonnage it sends so a backend policy change cannot pass silently. */
@@ -99,7 +100,9 @@ export function adaptShortfallShap(wire: WireShortfallRisk): NonNullable<Predict
 }
 
 export const fetchShortfallRisk = (referenceForecastId: string, signal?: AbortSignal) =>
-  apiGet<WireShortfallRisk>("/shortfall/risk", { signal }).then((wire) => ({
+  apiGet<unknown>("/shortfall/risk", { signal })
+    .then((raw) => parseWire(WireShortfallRiskSchema, raw, "/shortfall/risk"))
+    .then((wire) => ({
     risk: adaptShortfallRisk(wire, referenceForecastId),
     shap: adaptShortfallShap(wire),
     raw: wire,
