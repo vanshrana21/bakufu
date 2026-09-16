@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import mapboxgl, { type MapMouseEvent } from "mapbox-gl";
 import type { SiteFixture } from "@/fixtures/predictions";
 import { MAP_IDS, SITE_LABEL_MARKER, siteLabelElement } from "@/lib/map/sites";
 
 /** The only layers a click can resolve to a site. */
 const CLICKABLE_LAYERS = [MAP_IDS.diagnosticLayer, MAP_IDS.wasteLayer];
+
+/** How long to wait before reapplying a selection a style change interrupted. */
+const SELECTION_RETRY_MS = 120;
 
 export interface MapboxSelection {
   sites: readonly SiteFixture[];
@@ -27,6 +30,7 @@ export function useMapboxSelection(
   layersRevision: number,
   { sites, selectedSiteId, onSelect, onUnmappedClick }: MapboxSelection,
 ): void {
+  const [attempt, setAttempt] = useState(0);
   const markerRef = useRef<mapboxgl.Marker | null>(null);
   const previousSelection = useRef<string | null>(null);
   const handlers = useRef({ onSelect, onUnmappedClick });
@@ -87,8 +91,14 @@ export function useMapboxSelection(
         map.setFeatureState({ source: MAP_IDS.sites, id: selectedSiteId }, { selected: true });
       }
     } catch {
-      // Style changes can race this effect; the next style revision retries.
-      return () => { active = false; };
+      // A style swap can pull the source out from under this. Retry shortly
+      // rather than leaving the selection invisible until something else
+      // happens to change: the user's choice is still the current one.
+      const retry = setTimeout(() => setAttempt((count) => count + 1), SELECTION_RETRY_MS);
+      return () => {
+        active = false;
+        clearTimeout(retry);
+      };
     }
     previousSelection.current = selectedSiteId;
     markerRef.current?.remove();
@@ -100,10 +110,16 @@ export function useMapboxSelection(
           .setLngLat([site.location.longitude, site.location.latitude])
           .addTo(map);
       } catch {
-        // A style/container teardown can race marker installation.
+        // A style or container teardown can race marker installation; the same
+        // retry brings the name tag back.
         markerRef.current = null;
+        const retry = setTimeout(() => setAttempt((count) => count + 1), SELECTION_RETRY_MS);
+        return () => {
+          active = false;
+          clearTimeout(retry);
+        };
       }
     }
     return () => { active = false; };
-  }, [map, layersRevision, selectedSiteId, sites]);
+  }, [map, layersRevision, selectedSiteId, sites, attempt]);
 }

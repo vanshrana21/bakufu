@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type mapboxgl from "mapbox-gl";
 import type { GeoJSONSource } from "mapbox-gl";
 import type { FeatureCollection, Polygon } from "geojson";
 import type { SiteFixture } from "@/fixtures/predictions";
@@ -8,6 +9,10 @@ import type { CellProperties } from "@/fixtures/prospectivity-surface";
 import { installMapboxLayers } from "@/lib/map/mapbox-layers";
 import { MAP_IDS, renderedCounts, sameCounts, siteFeatures } from "@/lib/map/sites";
 import type { MapboxEngine } from "./use-mapbox-engine";
+
+/** How long after a source settles the counts are re-read. Long enough that a
+ * burst of source events costs one read, short enough to feel immediate. */
+const COUNT_SETTLE_MS = 250;
 
 export interface MapboxSurfaces {
   sites: readonly SiteFixture[];
@@ -40,6 +45,7 @@ export function useMapboxSync(
   const [rendered, setRendered] = useState({ cells: 0, excluded: 0, waste: 0 });
   const [failure, setFailure] = useState<string | null>(null);
   const latest = useRef({ sites, surface });
+  const pending = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     latest.current = { sites, surface };
@@ -49,6 +55,14 @@ export function useMapboxSync(
   // Subscribed before any layer exists, so no idle pass is missed.
   useEffect(() => {
     if (!map) return;
+    const onSourceSettled = (event: mapboxgl.MapSourceDataEvent) => {
+      if (!event.isSourceLoaded) return;
+      if (pending.current !== null) clearTimeout(pending.current);
+      pending.current = setTimeout(() => {
+        pending.current = null;
+        onIdle();
+      }, COUNT_SETTLE_MS);
+    };
     const onIdle = () => {
       const next = renderedCounts(
         (layers) => map.queryRenderedFeatures({ layers }),
@@ -57,8 +71,14 @@ export function useMapboxSync(
       setRendered((previous) => (sameCounts(previous, next) ? previous : next));
     };
     map.on("idle", onIdle);
+    // `idle` is the cheap path, but a map that never settles - a style swap
+    // interrupted by a pan - would leave the counts stale, so a data push also
+    // schedules one read.
+    map.on("sourcedata", onSourceSettled);
     return () => {
       map.off("idle", onIdle);
+      map.off("sourcedata", onSourceSettled);
+      if (pending.current !== null) clearTimeout(pending.current);
     };
   }, [map]);
 
@@ -82,12 +102,18 @@ export function useMapboxSync(
   // Data: replace source contents without recreating the map.
   useEffect(() => {
     if (!map || layersRevision === 0) return;
+    // Guarded like the engine's callbacks: setData can race a teardown, and a
+    // failure reported after unmount is a stale update, not information.
+    let active = true;
     try {
       (map.getSource(MAP_IDS.sites) as GeoJSONSource | undefined)?.setData(siteFeatures(sites));
       (map.getSource(MAP_IDS.surface) as GeoJSONSource | undefined)?.setData(surface);
     } catch {
-      setFailure("Map data could not be updated. The site list remains available.");
+      if (active) setFailure("Map data could not be updated. The site list remains available.");
     }
+    return () => {
+      active = false;
+    };
   }, [map, layersRevision, sites, surface]);
 
   return { layersRevision, rendered, failure };

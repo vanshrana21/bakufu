@@ -75,11 +75,23 @@ async function forward(request: NextRequest, { params }: { params: { path: strin
     );
   }
 
+  const key = process.env.BAKUFU_API_KEY;
+  if (!key) {
+    // Forwarding without it would reach the API as an anonymous request and
+    // come back 401, which reads like a broken backend rather than a missing
+    // setting on this server. Say which it is.
+    return refuse(
+      503,
+      "api_key_not_configured",
+      "BAKUFU_API_KEY is not set on this server, so the API cannot be called.",
+      "Add BAKUFU_API_KEY to frontend/.env.local, matching API_KEY in backend/.env, and restart.",
+    );
+  }
+
   const headers = new Headers({ Accept: "application/json" });
   const contentType = request.headers.get("content-type");
   if (contentType) headers.set("Content-Type", contentType);
-  const key = process.env.BAKUFU_API_KEY;
-  if (key) headers.set(API_KEY_HEADER, key);
+  headers.set(API_KEY_HEADER, key);
 
   inFlight += 1;
   try {

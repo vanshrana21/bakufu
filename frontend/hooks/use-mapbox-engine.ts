@@ -14,6 +14,11 @@ export const MAPBOX_PUBLIC_TOKEN = (
 /** How long tiles may take before the fallback plot says so. */
 const TILE_TIMEOUT_MS = 15_000;
 
+/** Whether anything reads pixels back from the canvas - screenshots, printed
+ * briefings, image export. Off by default: keeping the WebGL frame buffer alive
+ * costs memory and a readback on every frame. */
+export const MAP_CAPTURE_ENABLED = process.env.NEXT_PUBLIC_MAP_CAPTURE === "true";
+
 export interface MapboxEngine {
   /** Attach to the element the map draws into. */
   containerRef: RefObject<HTMLDivElement>;
@@ -69,7 +74,9 @@ export function useMapboxEngine(token: string = MAPBOX_PUBLIC_TOKEN): MapboxEngi
         zoom: 9.4,
         // This camera is navigation only—not a Sausar validation boundary.
         attributionControl: true,
-        preserveDrawingBuffer: true,
+        // Retaining the frame buffer costs GPU memory on every remount and is
+        // only needed when something reads pixels back out of the canvas.
+        preserveDrawingBuffer: MAP_CAPTURE_ENABLED,
       });
     } catch {
       guarded(() => setFailure("The map could not initialize. Use the site list below."));
