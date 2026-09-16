@@ -28,7 +28,7 @@ import logging
 import os
 import shutil
 import threading
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -339,6 +339,34 @@ def activate_version(version: str) -> ActiveModel:
             fence = int(current["fence"]) + 1
         _write_pointer(version, fence, str(manifest.get("job_id", "")))
     return active_model()
+
+
+def reconcile(recorded: Iterable[tuple[str, str | None]]) -> list[str]:
+    """Compare what the database says was published with what is on disk.
+
+    Three sources have to agree: the job rows that name an artifact, the version
+    directories, and the active pointer. Divergence is reported rather than
+    repaired - deleting or rewriting a model artifact is never something this
+    should decide on its own - and the API surfaces it on the health endpoint.
+    """
+    problems: list[str] = []
+    for version, digest in recorded:
+        model_file = version_dir(version) / MODEL_FILENAME
+        if not model_file.is_file():
+            problems.append(f"{version}: recorded in the database, missing from the registry")
+        elif digest and sha256(model_file) != digest:
+            problems.append(f"{version}: the artifact on disk no longer matches its recorded digest")
+
+    pointer = read_pointer()
+    if pointer is None and POINTER_PATH.exists():
+        problems.append(f"{POINTER_PATH.name}: unreadable, so the shipped model is being served")
+    elif pointer is not None:
+        active_file = version_dir(pointer["version"]) / pointer.get("model", MODEL_FILENAME)
+        if not active_file.is_file():
+            problems.append(
+                f"{pointer['version']}: the active pointer names a version that is not in the registry"
+            )
+    return problems
 
 
 def versions() -> list[str]:

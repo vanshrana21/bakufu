@@ -115,7 +115,26 @@ python -m scripts.promote_model --list        # published versions, and the acti
 python -m scripts.promote_model <version>     # point serving at one
 ```
 
-Set `TRAINING_ACTIVATE_ON_SUCCESS=true` in `backend/.env` if a successful job should activate its own artifact instead.
+Set `TRAINING_ACTIVATE_ON_SUCCESS=true` in `backend/.env` if a successful job should activate its own artifact instead. Each job records what it published — version, digest, timestamps — on its own row, and `GET /` reports the model being served plus anything the registry and the database disagree about:
+
+```json
+{"status": "ok", "version": "0.2", "model_version": "prospectivity_v6", "model_source": "shipped", "degraded": []}
+```
+
+### Running the tests
+
+```bash
+cd backend
+python -m pytest -q                  # 337 tests; uses the interpreter that installed requirements.txt
+```
+
+`uv run pytest` only works once the runtime dependencies are in that environment (`uv pip install -r requirements.txt`); the project pins its dependencies in `requirements.txt`, not in `pyproject.toml`.
+
+```bash
+cd frontend
+npm test && npm run typecheck && npm run build
+npx playwright test                  # add PLAYWRIGHT_CHANNEL=chrome to use system Chrome
+```
 
 ### Frontend
 

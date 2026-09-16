@@ -15,7 +15,12 @@ import pytest
 from sqlalchemy import Engine, create_engine, inspect, text
 from sqlalchemy.exc import IntegrityError
 
-from scripts.migrations.add_background_jobs import ACTIVE_JOB_INDEX, migrate, reconcile_active_jobs
+from scripts.migrations.add_background_jobs import (
+    ACTIVE_JOB_INDEX,
+    FENCE_INDEX,
+    migrate,
+    reconcile_active_jobs,
+)
 from src.db.models import BackgroundJob
 from src.worker import jobs
 
@@ -148,6 +153,76 @@ def test_migrating_a_table_from_an_older_release(engine: Engine) -> None:
     assert report["missing_columns"] == []
     assert ACTIVE_JOB_INDEX in report["indexes"]
     assert _statuses(engine) == {"legacy": "running"}
+
+
+def test_duplicate_fences_from_the_old_allocator_are_cleared(engine: Engine) -> None:
+    """A database written by MAX(claim_fence) + 1 can hold collisions."""
+    _legacy_table(engine)
+    with engine.begin() as conn:
+        conn.execute(text(f"DROP INDEX IF EXISTS {FENCE_INDEX}"))
+        for job_id, task in (("a", "task-a"), ("b", "task-b")):
+            conn.execute(
+                text(
+                    "INSERT INTO background_jobs (job_id, task_name, status, claim_fence, created_at, updated_at) "
+                    "VALUES (:job_id, :task, 'completed', 5, :stamp, :stamp)"
+                ),
+                {"job_id": job_id, "task": task, "stamp": jobs.utcnow()},
+            )
+
+    report = migrate(engine)
+
+    assert report["duplicate_fences"] == []
+    assert report["fence_index_present"]
+    with engine.connect() as conn:
+        fences = dict(conn.execute(text("SELECT job_id, claim_fence FROM background_jobs")).all())
+    # One row keeps the fence; the other is zeroed, and both rows survive.
+    assert sorted(fences.values()) == [0, 5]
+
+
+def test_the_artifact_ledger_columns_are_added(engine: Engine) -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE TABLE background_jobs ("
+                " id INTEGER PRIMARY KEY, job_id VARCHAR(64), task_name VARCHAR(64),"
+                " status VARCHAR(16) DEFAULT 'queued', created_at DATETIME)"
+            )
+        )
+
+    report = migrate(engine)
+
+    assert {"artifact_version", "artifact_sha256", "artifact_published_at", "artifact_activated_at"} <= set(
+        report["columns"]
+    )
+
+
+def test_verification_catches_a_missing_index(engine: Engine) -> None:
+    """verify() checks the model's indexes, not a list kept in the migration."""
+    from scripts.migrations.add_background_jobs import verify
+
+    migrate(engine)
+    with engine.begin() as conn:
+        conn.execute(text(f"DROP INDEX {FENCE_INDEX}"))
+
+    with pytest.raises(RuntimeError, match="not in the expected shape"):
+        verify(engine)
+
+
+def test_verification_checks_every_column_the_model_declares(engine: Engine) -> None:
+    from scripts.migrations import add_background_jobs
+
+    _legacy_table(engine)
+    # A column the migration does not know about, but the model does.
+    monkey = dict(add_background_jobs.JOB_COLUMNS)
+    monkey.pop("artifact_sha256")
+    original, add_background_jobs.JOB_COLUMNS = add_background_jobs.JOB_COLUMNS, monkey
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE background_jobs DROP COLUMN artifact_sha256"))
+        with pytest.raises(RuntimeError, match="artifact_sha256"):
+            migrate(engine)
+    finally:
+        add_background_jobs.JOB_COLUMNS = original
 
 
 def test_the_migration_is_idempotent(engine: Engine) -> None:

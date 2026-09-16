@@ -263,6 +263,71 @@ def test_a_pointer_to_a_missing_version_falls_back(store: Path, monkeypatch: pyt
     assert registry.active_model().source == "shipped"
 
 
+# --- the database, the registry and the pointer must agree ---------------
+
+
+def test_reconcile_is_quiet_when_everything_matches(store: Path) -> None:
+    published = _publish("job-one", 1, marker="first")
+    digest = registry.sha256(published.path)
+    assert registry.reconcile([(published.version, digest)]) == []
+
+
+def test_reconcile_reports_a_version_the_database_names_but_the_registry_lost(store: Path) -> None:
+    import shutil
+
+    published = _publish("job-one", 1)
+    digest = registry.sha256(published.path)
+    shutil.rmtree(published.path.parent)
+    registry.clear_pointer_cache()
+
+    problems = registry.reconcile([(published.version, digest)])
+    assert any("missing from the registry" in problem for problem in problems)
+    assert any("active pointer names a version that is not" in problem for problem in problems)
+
+
+def test_reconcile_reports_an_artifact_that_changed_under_the_database(store: Path) -> None:
+    published = _publish("job-one", 1, marker="first")
+    digest = registry.sha256(published.path)
+    joblib.dump({"model": "swapped", "features": ["b11"], "elkan_noto_c": 0.8}, published.path)
+
+    problems = registry.reconcile([(published.version, digest)])
+    assert any("no longer matches its recorded digest" in problem for problem in problems)
+
+
+def test_reconcile_reports_an_unreadable_pointer(store: Path) -> None:
+    _publish("job-one", 1)
+    registry.POINTER_PATH.write_text("{ not json", encoding="utf-8")
+    registry.clear_pointer_cache()
+
+    assert any("unreadable" in problem for problem in registry.reconcile([]))
+
+
+def test_health_reports_a_degraded_registry(store: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fail-soft serving is fine; staying quiet about it is not."""
+    from fastapi.testclient import TestClient
+
+    from src.api.main import app
+    from src.api.security import API_KEY_HEADER
+    from src.config.settings import get_server_settings
+
+    monkeypatch.delenv("PROSPECTIVITY_MODEL", raising=False)
+    key = get_server_settings().API_KEY
+    assert key is not None
+    headers = {API_KEY_HEADER: key.get_secret_value()}
+    client = TestClient(app, headers=headers)
+
+    app.state.registry_problems = []
+    healthy = client.get("/").json()
+    assert healthy["status"] == "ok" and healthy["degraded"] == []
+    assert healthy["model_source"] == "shipped"
+
+    app.state.registry_problems = ["job-one-00000001: recorded in the database, missing from the registry"]
+    degraded = client.get("/").json()
+    assert degraded["status"] == "degraded"
+    assert degraded["degraded"] == app.state.registry_problems
+    app.state.registry_problems = []
+
+
 def test_a_published_job_is_found_again_after_a_crash(store: Path) -> None:
     """Mandatory 5 at the registry level: the artifact identifies its job."""
     published = _publish("job-one", 1)

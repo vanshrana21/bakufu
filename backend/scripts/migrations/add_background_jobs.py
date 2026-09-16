@@ -4,6 +4,9 @@ prediction lookups.
 
   background_jobs                created, or upgraded column by column
   background_jobs.claim_fence    the fence model promotion is judged against
+  background_jobs_fence_seq      issues those fences on PostgreSQL
+  uq_background_jobs_claim_fence no two claims may hold the same fence
+  artifact_version etc.          what each job published, the recovery ledger
   uq_background_jobs_one_...     partial unique index: at most one queued or
                                  running job per task name
   predictions.mask_applied etc.  re-ensured, for databases older than
@@ -47,12 +50,28 @@ JOB_COLUMNS: dict[str, tuple[str, str]] = {
     "started_at": ("TIMESTAMPTZ", "DATETIME"),
     "finished_at": ("TIMESTAMPTZ", "DATETIME"),
     "updated_at": ("TIMESTAMPTZ DEFAULT NOW()", "DATETIME"),
+    "artifact_version": ("VARCHAR(128)", "VARCHAR(128)"),
+    "artifact_sha256": ("VARCHAR(64)", "VARCHAR(64)"),
+    "artifact_published_at": ("TIMESTAMPTZ", "DATETIME"),
+    "artifact_activated_at": ("TIMESTAMPTZ", "DATETIME"),
 }
+
+#: A column added to a live table arrives nullable whatever the model says, so
+#: the ones the model declares NOT NULL are backfilled and tightened. Only
+#: PostgreSQL can do that in place; SQLite would need the table rebuilt, and it
+#: is the tests' database, so verify() reports nullability there without failing.
+JOB_NOT_NULL = ("job_id", "task_name", "status", "claim_fence", "created_at", "updated_at")
+
+JOB_BACKFILL = {"claim_fence": "0"}
 
 JOB_INDEXES = (
     ("ix_background_jobs_job_id", "job_id"),
     ("ix_background_jobs_status", "status"),
 )
+
+#: Hands out claim fences on PostgreSQL (src/db/models.py FENCE_SEQUENCE).
+FENCE_SEQUENCE = "background_jobs_fence_seq"
+FENCE_INDEX = "uq_background_jobs_claim_fence"
 
 PREDICTION_COLUMNS = (
     ("mask_applied", "VARCHAR(50)"),
@@ -85,6 +104,74 @@ def _add_missing_job_columns(engine: Engine) -> list[str]:
             conn.execute(text(f"ALTER TABLE background_jobs ADD COLUMN {name} {column_type};"))
             added.append(name)
     return added
+
+
+def _tighten_not_null(engine: Engine) -> list[str]:
+    """Backfill and enforce NOT NULL where the model declares it."""
+    if engine.dialect.name != "postgresql":
+        return []
+    live = {column["name"]: column for column in inspect(engine).get_columns("background_jobs")}
+    tightened: list[str] = []
+    with engine.begin() as conn:
+        for name in JOB_NOT_NULL:
+            column = live.get(name)
+            if column is None or not column["nullable"]:
+                continue
+            default = JOB_BACKFILL.get(name)
+            if default is not None:
+                conn.execute(text(f"UPDATE background_jobs SET {name} = {default} WHERE {name} IS NULL;"))
+            conn.execute(text(f"ALTER TABLE background_jobs ALTER COLUMN {name} SET NOT NULL;"))
+            tightened.append(name)
+    return tightened
+
+
+def _ensure_fence_sequence(engine: Engine) -> None:
+    """Create the fence sequence and move it past every fence already issued."""
+    if engine.dialect.name != "postgresql":
+        return
+    with engine.begin() as conn:
+        conn.execute(text(f"CREATE SEQUENCE IF NOT EXISTS {FENCE_SEQUENCE};"))
+        conn.execute(
+            text(
+                f"SELECT setval('{FENCE_SEQUENCE}', "
+                "GREATEST((SELECT COALESCE(MAX(claim_fence), 0) FROM background_jobs), 1));"
+            )
+        )
+
+
+def reconcile_duplicate_fences(engine: Engine) -> int:
+    """Clear fences shared by more than one row, so the unique index can be built.
+
+    Only a database written by the previous MAX(claim_fence) + 1 allocator can
+    hold duplicates. The rows are finished jobs by then, so their fences are
+    history; zeroing them keeps the row and its artifact record intact.
+    """
+    with engine.begin() as conn:
+        duplicates = [
+            row[0]
+            for row in conn.execute(
+                text(
+                    "SELECT claim_fence FROM background_jobs WHERE claim_fence > 0 "
+                    "GROUP BY claim_fence HAVING COUNT(*) > 1"
+                )
+            )
+        ]
+        cleared = 0
+        for fence in duplicates:
+            rows = conn.execute(
+                text(
+                    "SELECT job_id FROM background_jobs WHERE claim_fence = :fence "
+                    "ORDER BY updated_at DESC, job_id DESC"
+                ),
+                {"fence": fence},
+            ).all()
+            for (job_id,) in rows[1:]:
+                conn.execute(
+                    text("UPDATE background_jobs SET claim_fence = 0 WHERE job_id = :job_id"),
+                    {"job_id": job_id},
+                )
+                cleared += 1
+    return cleared
 
 
 def reconcile_active_jobs(engine: Engine) -> dict[str, int]:
@@ -141,26 +228,77 @@ def reconcile_active_jobs(engine: Engine) -> dict[str, int]:
 
 
 def verify(engine: Engine) -> dict[str, object]:
-    """Read the live schema back and prove the migration achieved its goal."""
+    """Read the live schema back and check it against src/db/models.py.
+
+    Columns, nullability, index names and index uniqueness all come from the
+    model rather than a list maintained here, so a column added to the model
+    without a migration step shows up as a failure instead of passing quietly.
+    Nullability is only enforced on PostgreSQL - SQLite cannot alter a column in
+    place - so it is reported, not fatal, elsewhere.
+    """
     inspector = inspect(engine)
-    columns = [column["name"] for column in inspector.get_columns("background_jobs")]
-    indexes = sorted(index["name"] for index in inspector.get_indexes("background_jobs"))
+    live_columns = {column["name"]: column for column in inspector.get_columns("background_jobs")}
+    live_indexes = {index["name"]: index for index in inspector.get_indexes("background_jobs")}
+    model = BackgroundJob.__table__
+
+    missing = sorted({column.name for column in model.columns} - set(live_columns))
+    nullability = sorted(
+        column.name
+        for column in model.columns
+        if column.name in live_columns
+        and bool(live_columns[column.name]["nullable"]) != bool(column.nullable)
+    )
+    expected_indexes = {index.name: index for index in model.indexes}
+    expected_indexes.update({name: None for name, _column in JOB_INDEXES})
+    missing_indexes = sorted(set(expected_indexes) - set(live_indexes))
+    not_unique = sorted(
+        name
+        for name, index in expected_indexes.items()
+        if index is not None and index.unique and name in live_indexes
+        and not live_indexes[name]["unique"]
+    )
+
     with engine.connect() as conn:
-        duplicates = conn.execute(
-            text(
-                "SELECT task_name, COUNT(*) FROM background_jobs "
-                "WHERE status IN ('queued', 'running') GROUP BY task_name HAVING COUNT(*) > 1"
+        duplicate_tasks = [
+            row[0]
+            for row in conn.execute(
+                text(
+                    "SELECT task_name, COUNT(*) FROM background_jobs "
+                    "WHERE status IN ('queued', 'running') GROUP BY task_name HAVING COUNT(*) > 1"
+                )
             )
-        ).all()
-    missing = [name for name in (*JOB_COLUMNS, "id", "job_id") if name not in columns]
+        ]
+        duplicate_fences = [
+            row[0]
+            for row in conn.execute(
+                text(
+                    "SELECT claim_fence FROM background_jobs WHERE claim_fence > 0 "
+                    "GROUP BY claim_fence HAVING COUNT(*) > 1"
+                )
+            )
+        ]
+
     report = {
-        "columns": columns,
-        "indexes": indexes,
+        "columns": sorted(live_columns),
+        "indexes": sorted(live_indexes),
         "missing_columns": missing,
-        "duplicate_active_tasks": [row[0] for row in duplicates],
-        "active_index_present": ACTIVE_JOB_INDEX in indexes,
+        "nullability_mismatch": nullability,
+        "missing_indexes": missing_indexes,
+        "indexes_not_unique": not_unique,
+        "duplicate_active_tasks": duplicate_tasks,
+        "duplicate_fences": duplicate_fences,
+        "active_index_present": ACTIVE_JOB_INDEX in live_indexes,
+        "fence_index_present": FENCE_INDEX in live_indexes,
     }
-    if missing or report["duplicate_active_tasks"] or not report["active_index_present"]:
+    fatal = (
+        missing
+        or missing_indexes
+        or not_unique
+        or duplicate_tasks
+        or duplicate_fences
+        or (nullability if engine.dialect.name == "postgresql" else [])
+    )
+    if fatal:
         raise RuntimeError(f"background_jobs is not in the expected shape: {report}")
     return report
 
@@ -174,8 +312,17 @@ def migrate(engine: Engine | None = None) -> dict[str, object]:
     added = _add_missing_job_columns(engine)
     print(f"  added missing columns: {added or 'none'}")
 
+    tightened = _tighten_not_null(engine)
+    print(f"  tightened to NOT NULL: {tightened or 'none'}")
+
+    _ensure_fence_sequence(engine)
+    print(f"  ensured {FENCE_SEQUENCE}" if engine.dialect.name == "postgresql" else "  fence sequence: n/a")
+
     failed = reconcile_active_jobs(engine)
     print(f"  reconciled duplicate active jobs: {failed or 'none'}")
+
+    cleared = reconcile_duplicate_fences(engine)
+    print(f"  cleared duplicate claim fences: {cleared}")
 
     with engine.begin() as conn:
         conn.execute(
@@ -185,6 +332,13 @@ def migrate(engine: Engine | None = None) -> dict[str, object]:
             )
         )
         print(f"  ensured {ACTIVE_JOB_INDEX}")
+        conn.execute(
+            text(
+                f"CREATE UNIQUE INDEX IF NOT EXISTS {FENCE_INDEX} ON background_jobs "
+                "(claim_fence) WHERE claim_fence > 0;"
+            )
+        )
+        print(f"  ensured {FENCE_INDEX}")
         for index, column in JOB_INDEXES:
             unique = "UNIQUE " if column == "job_id" else ""
             conn.execute(

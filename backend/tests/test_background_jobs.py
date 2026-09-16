@@ -100,6 +100,7 @@ def _insert(factory: sessionmaker[Session], **fields: Any) -> str:
         "job_id": uuid.uuid4().hex,
         "task_name": TASK,
         "status": "queued",
+        "claim_fence": 0,
         "created_at": jobs.utcnow(),
         "updated_at": jobs.utcnow(),
     }
@@ -529,6 +530,98 @@ def test_a_worker_that_lost_its_job_publishes_nothing(
     assert not staged[0].parent.exists()
     # The new owner still holds the job, so the loser's failure is discarded too.
     assert _row(factory, "handed-over").status == "running"
+
+
+def test_every_claim_takes_a_fence_of_its_own(factory: sessionmaker[Session]) -> None:
+    """The allocator must not hand two claims the same fence, even in parallel."""
+    import threading
+
+    job_ids = [_insert(factory, job_id=f"job-{index}", status="queued", task_name=f"task-{index}")
+               for index in range(12)]
+    fences: list[int] = []
+    guard = threading.Lock()
+    barrier = threading.Barrier(len(job_ids))
+
+    def claim(job_id: str) -> None:
+        barrier.wait()
+        claimed = jobs.claim_job(job_id, jobs.utcnow())
+        with guard:
+            fences.append(claimed.fence)
+
+    threads = [threading.Thread(target=claim, args=(job_id,)) for job_id in job_ids]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert len(fences) == len(job_ids)
+    assert all(fence > 0 for fence in fences)
+    assert len(set(fences)) == len(fences), f"two claims shared a fence: {sorted(fences)}"
+
+
+def test_the_database_refuses_two_rows_holding_one_fence(factory: sessionmaker[Session]) -> None:
+    _insert(factory, job_id="one", status="completed", task_name="task-a", claim_fence=7)
+    with pytest.raises(IntegrityError):
+        _insert(factory, job_id="two", status="completed", task_name="task-b", claim_fence=7)
+    # Unclaimed rows all sit at 0, which the constraint deliberately ignores.
+    _insert(factory, job_id="three", status="completed", task_name="task-c", claim_fence=0)
+    _insert(factory, job_id="four", status="completed", task_name="task-d", claim_fence=0)
+
+
+def test_publication_is_recorded_in_the_database(
+    factory: sessionmaker[Session], store: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The ledger, not a directory scan, is what says a job published."""
+    from src.models import registry
+
+    monkeypatch.setattr(settings, "TRAINING_ACTIVATE_ON_SUCCESS", True)
+    _stub_training(monkeypatch)
+    _insert(factory, job_id="ledger", status="queued")
+
+    train_prospectivity_model.apply(args=("ledger",)).get()
+
+    job = _row(factory, "ledger")
+    recorded = jobs.published_artifact("ledger")
+    assert recorded is not None
+    assert recorded.version == job.result_data["version"]
+    assert recorded.sha256 == registry.sha256(Path(job.result_data["model_path"]))
+    assert recorded.published_at is not None and recorded.activated_at is not None
+    assert jobs.published_artifacts(TASK)[0].version == recorded.version
+
+
+def test_recovery_refuses_an_artifact_the_registry_no_longer_has(
+    factory: sessionmaker[Session], store: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A registry restored from a stale backup must not read as a healthy job."""
+    import shutil
+
+    from src.worker.tasks import RegistryMismatch, _train_and_publish
+
+    _stub_training(monkeypatch)
+    _insert(factory, job_id="lost", status="queued")
+    claim = jobs.claim_job("lost", jobs.utcnow())
+    assert claim.token is not None
+    published = _train_and_publish("lost", claim.token, claim.fence)
+    shutil.rmtree(published.path.parent)
+
+    with pytest.raises(RegistryMismatch, match="missing from"):
+        _train_and_publish("lost", claim.token, claim.fence)
+
+
+def test_recovery_refuses_an_artifact_that_changed_on_disk(
+    factory: sessionmaker[Session], store: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from src.worker.tasks import RegistryMismatch, _train_and_publish
+
+    _stub_training(monkeypatch)
+    _insert(factory, job_id="tampered", status="queued")
+    claim = jobs.claim_job("tampered", jobs.utcnow())
+    assert claim.token is not None
+    published = _train_and_publish("tampered", claim.token, claim.fence)
+    joblib.dump({"model": "swapped", "features": ["b11"], "elkan_noto_c": 0.8}, published.path)
+
+    with pytest.raises(RegistryMismatch, match="digest"):
+        _train_and_publish("tampered", claim.token, claim.fence)
 
 
 def test_a_crash_after_publishing_is_recovered_without_retraining(

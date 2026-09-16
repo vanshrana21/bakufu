@@ -15,6 +15,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Sequence,
     String,
     Text,
     UniqueConstraint,
@@ -236,6 +237,12 @@ class ShortfallRisk(Base):
     model_version: Mapped[str] = mapped_column(String(32), default="shortfall_v1")
 
 
+#: Issues claim fences on PostgreSQL. A sequence hands out each number once,
+#: with no read-modify-write for two concurrent claims to collide on; SQLite,
+#: which has no sequences, serialises writers instead (src/worker/jobs.py).
+FENCE_SEQUENCE = Sequence("background_jobs_fence_seq", metadata=Base.metadata)
+
+
 class BackgroundJob(Base):
     """A long-running task started through the API, e.g. POST /train.
 
@@ -254,6 +261,15 @@ class BackgroundJob(Base):
             unique=True,
             postgresql_where=text("status IN ('queued', 'running')"),
             sqlite_where=text("status IN ('queued', 'running')"),
+        ),
+        # No two claims may hold the same fence. Unclaimed rows all sit at 0,
+        # so the constraint starts above it.
+        Index(
+            "uq_background_jobs_claim_fence",
+            "claim_fence",
+            unique=True,
+            postgresql_where=text("claim_fence > 0"),
+            sqlite_where=text("claim_fence > 0"),
         ),
     )
 
@@ -275,6 +291,21 @@ class BackgroundJob(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    #: What this job published, recorded by the worker as soon as the artifact
+    #: is in the registry. The database, not a directory scan, is what says a
+    #: job has published: a redelivery reads it back, checks the artifact still
+    #: matches its digest, and records the outcome instead of retraining.
+    artifact_version: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    artifact_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    artifact_published_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    #: Set when this job's artifact was made the active one, by the job itself
+    #: or by a later promotion of the same version.
+    artifact_activated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
 
 

@@ -26,7 +26,7 @@ from sqlalchemy.orm import Session
 
 from src.config.settings import settings
 from src.db import session as db_session
-from src.db.models import BackgroundJob
+from src.db.models import FENCE_SEQUENCE, BackgroundJob
 
 #: BackgroundJob.task_name for POST /train.
 TRAIN_TASK_NAME = "train_pu_xgboost"
@@ -154,6 +154,24 @@ class Claim:
     fence: int = 0
 
 
+def _next_fence(db: Session) -> Any:
+    """An expression yielding a fence no earlier claim has held.
+
+    PostgreSQL takes it from a sequence, which hands out each number once even
+    under concurrent claims. SQLite has no sequences, but it serialises writers,
+    so reading the maximum inside the claim's own write transaction is safe
+    there; the partial unique index on claim_fence rejects a collision either
+    way rather than letting two claims share a fence.
+    """
+    if db.get_bind().dialect.name == "postgresql":
+        return FENCE_SEQUENCE.next_value()
+    return (
+        select(func.coalesce(func.max(BackgroundJob.claim_fence), 0) + 1)
+        .select_from(BackgroundJob)
+        .scalar_subquery()
+    )
+
+
 def claim_job(job_id: str, now: datetime) -> Claim:
     """Take a queued job, or a running one whose lease has lapsed."""
     lease_cutoff = now - timedelta(seconds=settings.TRAINING_LEASE_SECONDS)
@@ -174,11 +192,8 @@ def claim_job(job_id: str, now: datetime) -> Claim:
                 updated_at=now,
                 finished_at=None,
                 error_message=None,
-                # One counter for every job: the database, not a clock, decides
-                # which claim is newer.
-                claim_fence=select(func.coalesce(func.max(BackgroundJob.claim_fence), 0) + 1)
-                .select_from(BackgroundJob)
-                .scalar_subquery(),
+                # The database, not a clock, decides which claim is newer.
+                claim_fence=_next_fence(db),
             )
             .execution_options(synchronize_session=False)
         ).rowcount
@@ -223,6 +238,81 @@ def renew_lease(job_id: str, token: datetime, now: datetime) -> bool:
             .execution_options(synchronize_session=False)
         )
         return result.rowcount == 1
+
+
+@dataclass(frozen=True)
+class PublishedArtifact:
+    """What the database says a job published."""
+
+    version: str
+    sha256: str | None
+    published_at: datetime | None
+    activated_at: datetime | None
+
+
+def record_publication(
+    job_id: str,
+    token: datetime,
+    version: str,
+    sha256: str,
+    now: datetime,
+    activated: bool,
+) -> bool:
+    """Write what this job published, fenced by the claim that published it.
+
+    Called the moment the artifact is in the registry, so the database - not a
+    scan of the versions directory - is what says the job has published.
+    """
+    with db_session.SessionLocal() as db, db.begin():
+        result = db.execute(
+            update(BackgroundJob)
+            .where(BackgroundJob.job_id == job_id, BackgroundJob.started_at == token)
+            .values(
+                artifact_version=version,
+                artifact_sha256=sha256,
+                artifact_published_at=now,
+                artifact_activated_at=now if activated else None,
+                updated_at=now,
+            )
+            .execution_options(synchronize_session=False)
+        )
+        return result.rowcount == 1
+
+
+def published_artifact(job_id: str) -> PublishedArtifact | None:
+    """What this job published, if anything. The recovery path's source of truth."""
+    with db_session.SessionLocal() as db:
+        row = db.execute(
+            select(
+                BackgroundJob.artifact_version,
+                BackgroundJob.artifact_sha256,
+                BackgroundJob.artifact_published_at,
+                BackgroundJob.artifact_activated_at,
+            ).where(BackgroundJob.job_id == job_id)
+        ).first()
+    if row is None or not row[0]:
+        return None
+    return PublishedArtifact(version=row[0], sha256=row[1], published_at=row[2], activated_at=row[3])
+
+
+def published_artifacts(task_name: str, limit: int = 20) -> list[PublishedArtifact]:
+    """The most recent publications on record, newest first."""
+    with db_session.SessionLocal() as db:
+        rows = db.execute(
+            select(
+                BackgroundJob.artifact_version,
+                BackgroundJob.artifact_sha256,
+                BackgroundJob.artifact_published_at,
+                BackgroundJob.artifact_activated_at,
+            )
+            .where(BackgroundJob.task_name == task_name, BackgroundJob.artifact_version.is_not(None))
+            .order_by(BackgroundJob.artifact_published_at.desc())
+            .limit(limit)
+        ).all()
+    return [
+        PublishedArtifact(version=row[0], sha256=row[1], published_at=row[2], activated_at=row[3])
+        for row in rows
+    ]
 
 
 def record_outcome(job_id: str, token: datetime, **fields: Any) -> bool:

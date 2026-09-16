@@ -63,6 +63,12 @@ Entity, and one shape means the frontend needs one handler.
 
 Error codes: `model_not_loaded`, `data_not_loaded`, `prediction_failed`.
 
+**`GET /` carries the served model.** `{status, version, model_version,
+model_source, degraded}`. `status` is `"degraded"` - and `degraded` lists what -
+when the database and the model registry disagree about a published artifact,
+or the active pointer cannot be followed; the API keeps serving the shipped
+model rather than going down.
+
 **An empty result is `200`, never an error.** A date filter matching no months
 returns `series: []` with `coverage.months_present: 0`.
 

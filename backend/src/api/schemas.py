@@ -111,10 +111,19 @@ class FeatureOut(BaseModel):
 
 
 class HealthOut(BaseModel):
-    """Service liveness response."""
+    """Service liveness response.
+
+    `status` is "degraded" when the model registry and the database disagree
+    about what was published, or the active pointer cannot be followed: the API
+    keeps serving the shipped model rather than going down, and says so here so
+    a readiness check can catch it.
+    """
 
     status: str
     version: str
+    model_version: str
+    model_source: str
+    degraded: list[str] = []
 
 
 # --- Phase 2: prospectivity predictions ---------------------------------

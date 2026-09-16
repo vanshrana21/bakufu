@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.exc import SQLAlchemyError
 
 from src.api.errors import ApiError, api_error_handler
 from src.api.routers import (
@@ -68,6 +69,7 @@ async def lifespan(app: FastAPI):
     logger.info("startup: %s required on every route", API_KEY_HEADER)
     serving = active_model()
     logger.info("startup: scoring with %s (%s)", serving.version, serving.source)
+    app.state.registry_problems = _reconcile_registry()
     stop_warming = _start_heatmap_warming()
     yield
     stop_warming.set()
@@ -204,9 +206,37 @@ def _start_heatmap_warming() -> threading.Event:
     return stop
 
 
+def _reconcile_registry() -> list[str]:
+    """Check the database, the registry and the active pointer against each other."""
+    from src.models.registry import reconcile
+
+    recorded: list[tuple[str, str | None]] = []
+    if settings.DATABASE_URL:
+        try:
+            from src.worker.jobs import TRAIN_TASK_NAME, published_artifacts
+
+            recorded = [(a.version, a.sha256) for a in published_artifacts(TRAIN_TASK_NAME)]
+        except SQLAlchemyError as exc:
+            logger.warning("startup: could not read published artifacts: %s", exc)
+    problems = reconcile(recorded)
+    for problem in problems:
+        logger.error("startup: model registry mismatch - %s", problem)
+    return problems
+
+
 @app.get("/", response_model=HealthOut, tags=["health"], summary="Health check")
-def health() -> HealthOut:
-    return HealthOut(status="ok", version=API_VERSION)
+def health(request: Request) -> HealthOut:
+    from src.models.registry import active_model
+
+    problems: list[str] = list(getattr(request.app.state, "registry_problems", []) or [])
+    serving = active_model()
+    return HealthOut(
+        status="degraded" if problems else "ok",
+        version=API_VERSION,
+        model_version=serving.version,
+        model_source=serving.source,
+        degraded=problems,
+    )
 
 
 app.include_router(boreholes.router)

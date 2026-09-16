@@ -23,6 +23,10 @@ from src.worker.celery_app import TRAIN_TASK, celery_app
 
 logger = logging.getLogger("worker.training")
 
+
+class RegistryMismatch(RuntimeError):
+    """The database says a job published something the registry cannot produce."""
+
 #: Seen a live lease? Look again once it would have lapsed.
 LEASE_RECHECK_SECONDS = settings.TRAINING_LEASE_SECONDS + settings.TRAINING_HEARTBEAT_SECONDS
 #: Enough re-checks to outlast a run that goes all the way to the hard time limit.
@@ -104,19 +108,9 @@ def _train_and_publish(job_id: str, token: datetime, fence: int):
     from src.models import registry
     from src.models.prospectivity.train_pu_xgboost import main as train_main
 
-    already = registry.artifact_for_job(job_id)
-    if already is not None:
-        # This job published before the outcome could be recorded. Retraining
-        # would produce a second artifact for one job; recover instead.
-        logger.info("training job %s already published %s; recording that", job_id, already)
-        pointer = registry.read_pointer() or {}
-        return registry.PublishedVersion(
-            version=already,
-            path=registry.version_dir(already) / registry.MODEL_FILENAME,
-            fence=fence,
-            job_id=job_id,
-            activated=pointer.get("version") == already,
-        )
+    recovered = _recover_published(job_id, fence)
+    if recovered is not None:
+        return recovered
 
     staged = registry.staging_dir(job_id, fence)
     shutil.rmtree(staged, ignore_errors=True)
@@ -133,7 +127,7 @@ def _train_and_publish(job_id: str, token: datetime, fence: int):
         # inside publish() covers this host and the pointer write itself.
         with db_session.SessionLocal() as db, db.begin():
             jobs.lock_model_promotion(db, jobs.TRAIN_TASK_NAME)
-            return registry.publish(
+            published = registry.publish(
                 staged=staged,
                 job_id=job_id,
                 fence=fence,
@@ -142,6 +136,59 @@ def _train_and_publish(job_id: str, token: datetime, fence: int):
             )
     finally:
         shutil.rmtree(staged, ignore_errors=True)
+
+    # Recorded before the outcome, and fenced by the same claim: a worker that
+    # dies here leaves a row that names the artifact, which is what the next
+    # delivery reads instead of guessing from the versions directory.
+    if not jobs.record_publication(
+        job_id,
+        token,
+        published.version,
+        registry.sha256(published.path),
+        jobs.utcnow(),
+        activated=published.activated,
+    ):
+        logger.warning(
+            "job %s published %s but no longer owns its row; the outcome will be discarded",
+            job_id, published.version,
+        )
+    return published
+
+
+def _recover_published(job_id: str, fence: int):
+    """Return what this job already published, or None if it published nothing.
+
+    The database is the ledger. The artifact it names still has to be there and
+    still has to match its digest - a registry restored from a stale backup, or
+    a version deleted by hand, must not be reported as a healthy outcome.
+    """
+    from src.models import registry
+
+    recorded = jobs.published_artifact(job_id)
+    if recorded is None:
+        return None
+
+    model_file = registry.version_dir(recorded.version) / registry.MODEL_FILENAME
+    if not model_file.exists():
+        raise RegistryMismatch(
+            f"job {job_id} published {recorded.version}, but that version is missing from "
+            f"{registry.VERSIONS_DIR}; the registry and the database disagree"
+        )
+    if recorded.sha256 and registry.sha256(model_file) != recorded.sha256:
+        raise RegistryMismatch(
+            f"job {job_id} published {recorded.version}, but the artifact on disk no longer "
+            "matches the digest recorded for it"
+        )
+
+    pointer = registry.read_pointer() or {}
+    logger.info("training job %s already published %s; recording that", job_id, recorded.version)
+    return registry.PublishedVersion(
+        version=recorded.version,
+        path=model_file,
+        fence=fence,
+        job_id=job_id,
+        activated=pointer.get("version") == recorded.version,
+    )
 
 
 def _record_outcome(job_id: str, token: datetime, outcome: dict[str, Any]) -> None:
