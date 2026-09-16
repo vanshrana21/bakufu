@@ -32,7 +32,7 @@ from src.config.settings import settings
 from src.db import session as db_session
 from src.db.models import BackgroundJob, Base
 from src.worker import jobs
-from src.worker.celery_app import TRAINING_QUEUE, TRAIN_TASK, celery_app
+from src.worker.celery_app import TRAIN_TASK, TRAINING_QUEUE, celery_app
 from src.worker.tasks import train_prospectivity_model
 
 TASK = jobs.TRAIN_TASK_NAME
@@ -86,8 +86,8 @@ def trains(store: Path, monkeypatch: pytest.MonkeyPatch) -> list[str]:
         # The worker passes its own argv and a staging path; the process argv
         # belongs to Celery, and no published version is ever written over.
         assert argv == [] and save_path is not None and metrics_path is not None
-        joblib.dump({"model": "trained", "features": ["b11"], "elkan_noto_c": 0.8}, save_path)
-        metrics_path.write_text(json.dumps({"folds": []}), encoding="utf-8")
+        joblib.dump(_bundle("trained"), save_path)
+        metrics_path.write_text(json.dumps(GOOD_METRICS), encoding="utf-8")
         calls.append("trained")
         return save_path
 
@@ -211,7 +211,8 @@ def test_a_running_job_also_refuses_a_second_start(
 
 
 def test_a_broker_outage_fails_the_job_instead_of_stranding_it(
-    client: TestClient, factory: sessionmaker[Session], monkeypatch: pytest.MonkeyPatch
+    client: TestClient, factory: sessionmaker[Session], store: Path, trains: list[str],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def refuse(*_args: Any, **_kwargs: Any) -> None:
         raise OperationalError("Error 61 connecting to 127.0.0.1:6379. Connection refused.")
@@ -225,15 +226,39 @@ def test_a_broker_outage_fails_the_job_instead_of_stranding_it(
 
     with factory() as db:
         job = db.scalars(select(BackgroundJob)).one()
-    assert job.status == "failed"
-    assert "never reached the task broker" in (job.error_message or "")
-    assert job.finished_at is not None
+    # A broker can accept a message and still fail the acknowledgement, so the
+    # job stays claimable rather than being discarded on a maybe.
+    assert job.status == "queued"
+    assert "did not confirm the publish" in (job.error_message or "")
+    assert job.finished_at is None
+    assert job.job_id in body["detail"]
 
-    # The slot is free again: the next start is accepted.
-    sent: list[Any] = []
-    monkeypatch.setattr(train_prospectivity_model, "apply_async", lambda *a, **k: sent.append(a))
-    assert client.post("/train").status_code == 202
-    assert len(sent) == 1
+    # A worker that did receive the message runs it normally.
+    assert train_prospectivity_model.apply(args=(job.job_id,)).get() == "claimed"
+    assert _row(factory, job.job_id).status == "completed"
+
+
+def test_a_job_no_worker_received_is_failed_by_the_queue_timeout(
+    client: TestClient, factory: sessionmaker[Session], store: Path, trains: list[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The other half of an unconfirmed publish: nothing picked it up."""
+    def refuse(*_args: Any, **_kwargs: Any) -> None:
+        raise OperationalError("Error 61 connecting to 127.0.0.1:6379. Connection refused.")
+
+    monkeypatch.setattr(train_prospectivity_model, "apply_async", refuse)
+    refused = client.post("/train")
+    assert refused.status_code == 503
+
+    with factory() as db:
+        row = db.scalars(select(BackgroundJob)).one()
+        stranded = row.job_id
+        row.created_at = jobs.utcnow() - timedelta(seconds=settings.TRAINING_QUEUE_TIMEOUT_SECONDS + 60)
+        db.commit()
+
+    status = client.get(f"/train/{stranded}").json()
+    assert status["status"] == "failed"
+    assert "no worker claimed this job" in status["detail"]
 
 
 def test_a_job_no_worker_claimed_stops_blocking_new_ones(
@@ -396,12 +421,10 @@ def test_the_lease_is_renewed_while_training(
     monkeypatch.setattr(jobs, "renew_lease", spy)
 
     def slow_training(argv: Any = None, save_path: Path | None = None, metrics_path: Path | None = None) -> Path:
-        import joblib
-
         time.sleep(0.3)
         assert save_path is not None and metrics_path is not None
-        joblib.dump({"model": "slow", "features": ["b11"], "elkan_noto_c": 0.8}, save_path)
-        metrics_path.write_text("{}", encoding="utf-8")
+        joblib.dump(_bundle("slow"), save_path)
+        metrics_path.write_text(json.dumps(GOOD_METRICS), encoding="utf-8")
         return save_path
 
     monkeypatch.setattr(train_module, "main", slow_training)
@@ -432,8 +455,23 @@ def store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     registry.clear_pointer_cache()
 
 
+def _serving_features() -> list[str]:
+    """The feature list the active model takes, which a candidate has to match."""
+    from src.models.prospectivity import predict
+
+    if predict.SHIPPED_MODEL_PATH.exists():
+        return list(joblib.load(predict.SHIPPED_MODEL_PATH)["features"])
+    return ["b11", "b12"]
+
+
 def _bundle(marker: str) -> dict[str, Any]:
-    return {"model": marker, "features": ["b11", "b12"], "elkan_noto_c": 0.8}
+    return {"model": marker, "features": _serving_features(), "elkan_noto_c": 0.8}
+
+
+#: Fold metrics a candidate passes the acceptance checks with.
+GOOD_METRICS: dict[str, Any] = {
+    "folds": [{"auc": 0.71, "auc_pr": 0.24, "n_test": 100, "n_test_pos": 5}]
+}
 
 
 def _stub_training(monkeypatch: pytest.MonkeyPatch, during: Any = None, marker: str = "trained") -> list[Path]:
@@ -446,7 +484,9 @@ def _stub_training(monkeypatch: pytest.MonkeyPatch, during: Any = None, marker: 
         # The worker must pass its own argv; the process's belongs to Celery.
         assert argv == [] and save_path is not None and metrics_path is not None
         joblib.dump(_bundle(marker), save_path)
-        metrics_path.write_text(json.dumps({"version": save_path.parent.name, "folds": []}), encoding="utf-8")
+        metrics_path.write_text(
+            json.dumps({"version": save_path.parent.name, **GOOD_METRICS}), encoding="utf-8"
+        )
         staged.append(save_path)
         if during is not None:
             during()
@@ -504,6 +544,175 @@ def test_a_finished_run_changes_what_is_served_when_activation_is_on(
     assert explain.load_bundle(predict.active_model_path())["model"] == "the-new-model"
     after_key = reference._cache_key((79.0, 21.3, 80.6, 22.1), 32, "none", predict.active_model_version())
     assert before_key != after_key, "cached tiles would survive a promotion"
+
+
+def _metrics(auc: float, auc_pr: float, base: float = 0.05) -> dict[str, Any]:
+    positives = max(1, round(base * 100))
+    return {"folds": [{"auc": auc, "auc_pr": auc_pr, "n_test": 100, "n_test_pos": positives}]}
+
+
+def _stub_training_with(monkeypatch: pytest.MonkeyPatch, bundle: dict[str, Any], metrics: dict[str, Any]) -> None:
+    def fake_main(argv: Any = None, save_path: Path | None = None, metrics_path: Path | None = None) -> Path:
+        assert save_path is not None and metrics_path is not None
+        joblib.dump(bundle, save_path)
+        metrics_path.write_text(json.dumps(metrics), encoding="utf-8")
+        return save_path
+
+    monkeypatch.setattr(train_module, "main", fake_main)
+
+
+def test_a_model_that_passes_the_checks_takes_over_serving(
+    factory: sessionmaker[Session], store: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The default path: train, pass, serve. No human step in between."""
+    from src.models.prospectivity import predict
+
+    monkeypatch.delenv("PROSPECTIVITY_MODEL", raising=False)
+    assert settings.TRAINING_ACTIVATE_ON_SUCCESS is True
+    _stub_training_with(
+        monkeypatch,
+        {"model": "candidate", "features": _serving_features(), "elkan_noto_c": 0.8},
+        _metrics(auc=0.72, auc_pr=0.30),
+    )
+    _insert(factory, job_id="good", status="queued")
+
+    train_prospectivity_model.apply(args=("good",)).get()
+
+    job = _row(factory, "good")
+    assert job.result_data["activated"] is True, job.result_data["detail"]
+    assert job.result_data["activation_blocked_by"] == []
+    assert predict.active_model_path() == Path(job.result_data["model_path"])
+    assert "serving now uses it" in job.result_data["detail"]
+
+
+def test_a_model_no_better_than_chance_is_published_but_not_served(
+    factory: sessionmaker[Session], store: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """What the v1 promotion would have needed: refuse to serve a bad model."""
+    from src.models import registry
+    from src.models.prospectivity import predict
+
+    monkeypatch.delenv("PROSPECTIVITY_MODEL", raising=False)
+    _stub_training_with(
+        monkeypatch,
+        {"model": "hopeless", "features": _serving_features(), "elkan_noto_c": 0.8},
+        _metrics(auc=0.41, auc_pr=0.01),
+    )
+    _insert(factory, job_id="weak", status="queued")
+
+    train_prospectivity_model.apply(args=("weak",)).get()
+
+    job = _row(factory, "weak")
+    assert job.status == "completed"
+    assert job.result_data["activated"] is False
+    assert any("chance" in reason for reason in job.result_data["activation_blocked_by"])
+    # Published as evidence, but serving is untouched.
+    assert job.result_data["version"] in registry.versions()
+    assert predict.active_model_path() == predict.SHIPPED_MODEL_PATH
+
+
+def test_a_model_with_a_different_feature_schema_is_not_served(
+    factory: sessionmaker[Session], store: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from src.models.prospectivity import predict
+
+    monkeypatch.delenv("PROSPECTIVITY_MODEL", raising=False)
+    _stub_training_with(
+        monkeypatch,
+        {"model": "wrong-schema", "features": ["only", "three", "features"], "elkan_noto_c": 0.8},
+        _metrics(auc=0.90, auc_pr=0.80),
+    )
+    _insert(factory, job_id="schema", status="queued")
+
+    train_prospectivity_model.apply(args=("schema",)).get()
+
+    job = _row(factory, "schema")
+    assert job.result_data["activated"] is False
+    assert any("features differ" in reason for reason in job.result_data["activation_blocked_by"])
+    assert predict.active_model_path() == predict.SHIPPED_MODEL_PATH
+
+
+def test_activation_can_still_be_switched_off(
+    factory: sessionmaker[Session], store: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from src.models.prospectivity import predict
+
+    monkeypatch.delenv("PROSPECTIVITY_MODEL", raising=False)
+    monkeypatch.setattr(settings, "TRAINING_ACTIVATE_ON_SUCCESS", False)
+    _stub_training(monkeypatch)
+    _insert(factory, job_id="manual", status="queued")
+
+    train_prospectivity_model.apply(args=("manual",)).get()
+
+    job = _row(factory, "manual")
+    assert job.result_data["activated"] is False
+    assert "activation is switched off" in job.result_data["detail"]
+    assert predict.active_model_path() == predict.SHIPPED_MODEL_PATH
+
+
+def test_an_artifact_with_no_ledger_entry_is_adopted_not_retrained(
+    factory: sessionmaker[Session], store: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The window between the file landing and the row being written."""
+    from sqlalchemy import update as sql_update
+
+    from src.models import registry
+    from src.worker.tasks import _train_and_publish
+
+    trained = _stub_training(monkeypatch)
+    _insert(factory, job_id="orphan", status="queued")
+    claim = jobs.claim_job("orphan", jobs.utcnow())
+    assert claim.token is not None
+    published = _train_and_publish("orphan", claim.token, claim.fence)
+    # The database write that follows the publish never happened.
+    with factory() as db:
+        db.execute(
+            sql_update(BackgroundJob).where(BackgroundJob.job_id == "orphan").values(
+                artifact_version=None, artifact_sha256=None, artifact_published_at=None
+            )
+        )
+        db.commit()
+
+    recovered = _train_and_publish("orphan", claim.token, claim.fence)
+
+    assert len(trained) == 1, "the artifact was retrained instead of adopted"
+    assert recovered.version == published.version
+    assert registry.versions() == [published.version]
+    # And the ledger now has it, so the next recovery needs no search.
+    assert jobs.published_artifact("orphan").version == published.version
+
+
+def test_orphan_recovery_fails_if_the_claim_was_lost(
+    factory: sessionmaker[Session], store: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sqlalchemy import update as sql_update
+
+    from src.models import registry
+    from src.worker.tasks import RegistryMismatch, _train_and_publish
+
+    _stub_training(monkeypatch)
+    _insert(factory, job_id="orphan-lost", status="queued")
+    claim = jobs.claim_job("orphan-lost", jobs.utcnow())
+    assert claim.token is not None
+    published = _train_and_publish("orphan-lost", claim.token, claim.fence)
+
+    with factory() as db:
+        db.execute(
+            sql_update(BackgroundJob)
+            .where(BackgroundJob.job_id == "orphan-lost")
+            .values(
+                artifact_version=None,
+                artifact_sha256=None,
+                artifact_published_at=None,
+                started_at=jobs.utcnow() + timedelta(seconds=1),
+            )
+        )
+        db.commit()
+
+    monkeypatch.setattr(jobs, "record_publication", lambda *args, **kwargs: False)
+    with pytest.raises(RegistryMismatch, match="no longer owns"):
+        _train_and_publish("orphan-lost", claim.token, claim.fence)
+    assert registry.version_dir(published.version).is_dir()
 
 
 def test_a_worker_that_lost_its_job_publishes_nothing(

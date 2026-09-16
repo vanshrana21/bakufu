@@ -127,6 +127,23 @@ def active_job(db: Session, task_name: str) -> BackgroundJob | None:
     ).first()
 
 
+def note_publish_failure(db: Session, job_id: str, reason: str, now: datetime) -> bool:
+    """Record that a job's enqueue was not confirmed, leaving it queued.
+
+    The job keeps its slot on purpose: a broker that accepted the message but
+    lost the acknowledgement will still deliver it, and failing the row here
+    would mean a worker finds nothing to claim. If no worker takes it, the
+    queue timeout in expire_stale_jobs ends it.
+    """
+    result = db.execute(
+        update(BackgroundJob)
+        .where(BackgroundJob.job_id == job_id, BackgroundJob.status == "queued")
+        .values(error_message=reason, updated_at=now)
+        .execution_options(synchronize_session=False)
+    )
+    return result.rowcount == 1
+
+
 def fail_queued_job(db: Session, job_id: str, reason: str, now: datetime) -> bool:
     """Fail a job that has not started, e.g. one whose message never reached the broker."""
     result = db.execute(

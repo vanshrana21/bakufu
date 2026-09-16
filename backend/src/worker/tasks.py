@@ -11,7 +11,7 @@ import threading
 import time
 import traceback
 from datetime import datetime
-from typing import Any
+from typing import Any, Self
 
 from celery import Task
 from sqlalchemy.exc import SQLAlchemyError
@@ -77,17 +77,29 @@ def run_training_job(job_id: str, token: datetime, fence: int) -> None:
                 "error_message": f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}",
             }
         else:
+            blocked = published.acceptance.reasons if published.acceptance else []
+            if published.activated:
+                detail = f"model retrained and published as {published.version}; serving now uses it"
+            elif blocked:
+                detail = (
+                    f"model retrained and published as {published.version}, but it was not "
+                    f"activated: {'; '.join(blocked)}"
+                )
+            else:
+                detail = (
+                    f"model retrained and published as {published.version}; activation is "
+                    "switched off, so serving is unchanged"
+                )
             outcome = {
                 "status": "completed",
                 "progress": 100.0,
                 "result_data": {
-                    "detail": (
-                        f"model retrained and published as {published.version}"
-                        + ("; serving now uses it" if published.activated else "; not yet activated")
-                    ),
+                    "detail": detail,
                     "version": published.version,
                     "model_path": str(published.path),
                     "activated": published.activated,
+                    "activation_blocked_by": blocked,
+                    "metrics": published.acceptance.metrics if published.acceptance else {},
                 },
             }
     _record_outcome(job_id, token, outcome)
@@ -108,7 +120,7 @@ def _train_and_publish(job_id: str, token: datetime, fence: int):
     from src.models import registry
     from src.models.prospectivity.train_pu_xgboost import main as train_main
 
-    recovered = _recover_published(job_id, fence)
+    recovered = _recover_published(job_id, token, fence)
     if recovered is not None:
         return recovered
 
@@ -124,7 +136,9 @@ def _train_and_publish(job_id: str, token: datetime, fence: int):
             metrics_path=staged / registry.METRICS_FILENAME,
         )
         # The advisory lock serialises promotion across hosts; the registry lock
-        # inside publish() covers this host and the pointer write itself.
+        # inside publish() covers this host, the acceptance comparison, and the
+        # pointer write itself. The candidate is therefore judged against the
+        # model that is still serving when promotion is committed.
         with db_session.SessionLocal() as db, db.begin():
             jobs.lock_model_promotion(db, jobs.TRAIN_TASK_NAME)
             published = registry.publish(
@@ -133,6 +147,12 @@ def _train_and_publish(job_id: str, token: datetime, fence: int):
                 fence=fence,
                 activate=settings.TRAINING_ACTIVATE_ON_SUCCESS,
                 still_owns_job=lambda: jobs.owns_job(job_id, token),
+                acceptance_check=registry.acceptance_report,
+            )
+        if published.acceptance and not published.acceptance.accepted:
+            logger.warning(
+                "training job %s will publish but not activate: %s",
+                job_id, "; ".join(published.acceptance.reasons),
             )
     finally:
         shutil.rmtree(staged, ignore_errors=True)
@@ -155,7 +175,7 @@ def _train_and_publish(job_id: str, token: datetime, fence: int):
     return published
 
 
-def _recover_published(job_id: str, fence: int):
+def _recover_published(job_id: str, token: datetime, fence: int):
     """Return what this job already published, or None if it published nothing.
 
     The database is the ledger. The artifact it names still has to be there and
@@ -166,7 +186,24 @@ def _recover_published(job_id: str, fence: int):
 
     recorded = jobs.published_artifact(job_id)
     if recorded is None:
-        return None
+        # The database is the ledger, but a crash between the artifact landing
+        # and that row being written leaves a version with no record. The
+        # registry's own manifest names the job that made it, so the artifact is
+        # adopted - after the same digest check - and written back to the ledger
+        # rather than retrained from scratch.
+        orphan = registry.artifact_for_job(job_id)
+        if orphan is None:
+            return None
+        logger.warning(
+            "job %s published %s with no ledger entry; adopting it and recording it now",
+            job_id, orphan,
+        )
+        recorded = jobs.PublishedArtifact(
+            version=orphan,
+            sha256=registry.sha256(registry.version_dir(orphan) / registry.MODEL_FILENAME),
+            published_at=None,
+            activated_at=None,
+        )
 
     model_file = registry.version_dir(recorded.version) / registry.MODEL_FILENAME
     if not model_file.exists():
@@ -181,13 +218,22 @@ def _recover_published(job_id: str, fence: int):
         )
 
     pointer = registry.read_pointer() or {}
+    activated = pointer.get("version") == recorded.version
+    if recorded.published_at is None and not jobs.record_publication(
+        job_id, token, recorded.version, recorded.sha256 or "", jobs.utcnow(), activated=activated
+    ):
+        # Adopted from the registry: put it in the ledger so the next recovery
+        # does not have to go looking again.
+        raise RegistryMismatch(
+            f"job {job_id} no longer owns its claim while adopting published {recorded.version}"
+        )
     logger.info("training job %s already published %s; recording that", job_id, recorded.version)
     return registry.PublishedVersion(
         version=recorded.version,
         path=model_file,
         fence=fence,
         job_id=job_id,
-        activated=pointer.get("version") == recorded.version,
+        activated=activated,
     )
 
 
@@ -225,7 +271,7 @@ class _LeaseHeartbeat:
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._beat, name=f"lease-{job_id}", daemon=True)
 
-    def __enter__(self) -> _LeaseHeartbeat:
+    def __enter__(self) -> Self:
         self._thread.start()
         return self
 

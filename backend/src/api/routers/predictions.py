@@ -24,6 +24,7 @@ from src.api.schemas import (
     TrainStatusOut,
     TrainTaskOut,
 )
+from src.config.settings import settings
 from src.data.masks.registry import VALID_MASKS, apply_mask, describe as describe_masks
 from src.db.models import BackgroundJob, Prediction
 from src.worker import jobs
@@ -258,21 +259,31 @@ def start_training(db: Session = Depends(get_db)) -> TrainTaskOut:
 
     try:
         train_prospectivity_model.apply_async(args=(job_id,), task_id=job_id)
-    except Exception as exc:  # noqa: BLE001 - any publish failure strands the job
-        logger.exception("could not publish training job %s", job_id)
+    except Exception as exc:  # noqa: BLE001 - the publish may or may not have landed
+        # A broker can accept a message and still fail the client's
+        # acknowledgement, so this cannot tell "not queued" from "queued, ack
+        # lost". Failing the row here would discard a job a worker may be about
+        # to run, so it stays queued with the error recorded: a worker that does
+        # receive it proceeds, and if none does, the queue timeout fails it.
+        logger.exception("could not confirm the publish of training job %s", job_id)
         try:
-            jobs.fail_queued_job(
-                db, job_id, f"never reached the task broker: {type(exc).__name__}: {exc}", jobs.utcnow()
+            jobs.note_publish_failure(
+                db, job_id, f"the broker did not confirm the publish: {type(exc).__name__}: {exc}", jobs.utcnow()
             )
             db.commit()
         except SQLAlchemyError:
             db.rollback()
-            logger.exception("could not fail the unpublished training job %s", job_id)
+            logger.exception("could not record the publish failure for training job %s", job_id)
         raise BrokerUnavailable(
-            detail=f"the task broker is unreachable, so no job was queued: {type(exc).__name__}",
+            detail=(
+                f"the task broker did not confirm the job: {type(exc).__name__}. "
+                f"Job {job_id} is still queued in case the message did arrive"
+            ),
             remedy=(
-                "start Redis and a worker (celery -A src.worker.celery_app worker "
-                "--queues training --concurrency 1), check CELERY_BROKER_URL, then POST /train again"
+                f"poll GET /train/{job_id}: it runs if a worker received it, and fails after "
+                f"{settings.TRAINING_QUEUE_TIMEOUT_SECONDS}s if none did. Start Redis and a worker "
+                "(celery -A src.worker.celery_app worker --queues training --concurrency 1) and check "
+                "CELERY_BROKER_URL"
             ),
         ) from exc
 

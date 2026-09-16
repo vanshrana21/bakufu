@@ -92,12 +92,14 @@ class Settings(BaseSettings):
     TRAINING_LEASE_SECONDS: int = 150
     #: A queued job that no worker has claimed within this long is failed.
     TRAINING_QUEUE_TIMEOUT_SECONDS: int = 30 * 60
-    #: Whether a finished training job points serving at its own artifact.
-    #: Off by default: promotion is a deliberate act here, after a run in 3.2c
-    #: silently replaced a shipped model with a rejected variant. The artifact
-    #: is always published to the registry; `python -m scripts.promote_model`
-    #: activates it.
-    TRAINING_ACTIVATE_ON_SUCCESS: bool = False
+    #: Whether a finished training job may point serving at its own artifact.
+    #: On, but never unconditionally: the candidate has to take the same
+    #: features as the model it would replace, beat chance and the base rate,
+    #: and not fall materially below what is serving (src/models/registry.py
+    #: acceptance_report). A candidate that fails is still published, and the
+    #: job says why it was not activated. Turn this off to require
+    #: `python -m scripts.promote_model` for every promotion.
+    TRAINING_ACTIVATE_ON_SUCCESS: bool = True
     #: Celery time limits for one training run: the soft limit raises inside the
     #: task so the failure is recorded, the hard limit kills the process.
     TRAINING_SOFT_TIME_LIMIT_SECONDS: int = 2 * 3600

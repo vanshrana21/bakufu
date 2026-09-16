@@ -21,14 +21,24 @@ function delay(ms: number, signal: AbortSignal): Promise<void> {
 const activeMasks = (mask: MaskMode): Array<"geological" | "occurrence_buffer"> =>
   mask === "both" ? ["geological", "occurrence_buffer"] : mask === "none" ? [] : [mask];
 
-/** The backend returns ONE combined `mask_decision` string, even for
- * `mask=both`, and the frontend contract requires one result per active mask.
- * When the combined decision is an exclusion under `both`, it is not knowable
- * from the response WHICH of the two masks excluded the point — the registry
- * evaluates `in_basement AND in_buffer` and reports the conjunction. Rather than
- * guess an attribution, both entries report the exclusion and say plainly that
- * the backend does not attribute it. The outcome is correct; only the blame is
- * unavailable, and the text says so.
+/** Which masks the backend's decision blames for an exclusion.
+ *
+ * Under `mask=both` the backend evaluates basement and buffer separately and
+ * names the test that failed, so the exclusion is attributed rather than
+ * duplicated across both masks. An older backend that still reports the
+ * conjunction lands in `null`, and both masks then carry the exclusion with the
+ * text saying the attribution was not available.
+ */
+function blamedBy(decision: string): Array<"geological" | "occurrence_buffer"> | null {
+  if (decision === "masked_out_not_in_basement") return ["geological"];
+  if (decision === "masked_out_not_in_buffer") return ["occurrence_buffer"];
+  if (decision === "masked_out_neither_basement_nor_buffer") return ["geological", "occurrence_buffer"];
+  return null;
+}
+
+/** The backend returns ONE `mask_decision` string and the frontend contract
+ * requires one result per active mask, so the decision is mapped back onto the
+ * masks it names.
  */
 function maskResultsFrom(wire: WirePredictPoint, mask: MaskMode): PredictionResponse["mask_results"] {
   const masks = activeMasks(mask);
@@ -36,14 +46,18 @@ function maskResultsFrom(wire: WirePredictPoint, mask: MaskMode): PredictionResp
   const raw = wire.raw_score;
   const final = wire.final_score;
   const excluded = final === 0 && raw !== null && raw > 0;
-  const combined = wire.mask_decision && wire.mask_decision !== "n/a" ? wire.mask_decision.replaceAll("_", " ") : "no decision reported";
-  const unattributed = masks.length > 1 && excluded;
+  const decision = wire.mask_decision ?? "";
+  const combined = decision && decision !== "n/a" ? decision.replaceAll("_", " ") : "no decision reported";
+  const blamed = excluded && masks.length > 1 ? blamedBy(decision) : null;
+  const unattributed = masks.length > 1 && excluded && blamed === null;
 
   return masks.map((name) => ({
     mask: name,
-    outcome: excluded ? ("excluded" as const) : ("passed" as const),
+    outcome: excluded && (blamed === null || blamed.includes(name)) ? ("excluded" as const) : ("passed" as const),
     reason: unattributed
       ? `Excluded under the combined geological ∩ occurrence-buffer policy. The backend reports one decision for both masks ("${combined}") and does not attribute the exclusion to either one individually.`
+      : excluded && blamed !== null && !blamed.includes(name)
+        ? `Passed this mask; the exclusion came from the other one. Backend decision: "${combined}".`
       : excluded
         ? `Excluded by this mask. Backend decision: "${combined}".`
         : `Passed this mask; the screened score equals the raw score. Backend decision: "${combined}".`,

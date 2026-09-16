@@ -43,7 +43,9 @@ export const ShapSchema = z.object({
   explains: z.literal("underlying_classifier_before_pu_adjustment_and_masks"),
   base_value: Finite,
   contributions: z.array(z.object({
-    feature: Nonempty, label: Nonempty, value: z.union([Finite, Nonempty]), contribution: Finite,
+    // Null where the feature had no value at this point. Displayed as such:
+    // substituting zero would show a measurement that was never taken.
+    feature: Nonempty, label: Nonempty, value: z.union([Finite, Nonempty]).nullable(), contribution: Finite,
   })).min(1),
 });
 

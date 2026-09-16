@@ -85,18 +85,30 @@ def cap_score(value):
     """Clamp a score (scalar or array) into [0.0, SCORE_CAP]."""
     return np.clip(value, 0.0, SCORE_CAP)
 
+#: Encoders in memory, keyed by the path they were loaded from. Keyed rather
+#: than a single slot so a run pointed at a different encoder cannot be served
+#: the previous one, and cleared at startup with the bundle cache.
 _AE_CACHE: dict[str, Any] = {}
 _AE_LOCK = threading.Lock()
 
 
 def _autoencoder():
-    if "model" not in _AE_CACHE:
-        with _AE_LOCK:
-            if "model" not in _AE_CACHE:
-                _AE_CACHE["model"] = (
-                    load_autoencoder(ACTIVE_AE_PATH) if ACTIVE_AE_PATH else load_autoencoder()
-                )
-    return _AE_CACHE["model"]
+    key = str(ACTIVE_AE_PATH) if ACTIVE_AE_PATH else "default"
+    cached = _AE_CACHE.get(key)
+    if cached is not None:
+        return cached
+    with _AE_LOCK:
+        if key not in _AE_CACHE:
+            _AE_CACHE[key] = (
+                load_autoencoder(ACTIVE_AE_PATH) if ACTIVE_AE_PATH else load_autoencoder()
+            )
+    return _AE_CACHE[key]
+
+
+def clear_encoder_cache() -> None:
+    """Drop every loaded encoder. Called at startup, beside the bundle cache."""
+    with _AE_LOCK:
+        _AE_CACHE.clear()
 
 
 def _covering_tile(lon: float, lat: float) -> Path | None:
@@ -207,7 +219,10 @@ def predict_point(
         "uncertainty": float(uncertainty_from_probability(score)),
         "features_extracted": extracted,
         "shap_top5": shap_top5,
-        "model_version": active_model_version(),
+        # The version scored with, not the active one: predict_point can be
+        # handed an explicit bundle, and reporting the pointer's version then
+        # would attribute the score to a model that never saw the point.
+        "model_version": Path(model_path).stem,
         "lat": lat,
         "lon": lon,
     }

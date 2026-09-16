@@ -51,6 +51,7 @@ async def lifespan(app: FastAPI):
     from src.api.routers.reference import clear_heatmap_memory
     from src.models.explainers import clear_explainers
     from src.models.prospectivity.explain import clear_bundle_cache
+    from src.models.prospectivity.predict import clear_encoder_cache
     from src.models.registry import active_model, clear_pointer_cache
 
     clear_forecast_cache()
@@ -61,6 +62,7 @@ async def lifespan(app: FastAPI):
     # promotion that happened while this process was down is picked up.
     clear_pointer_cache()
     clear_bundle_cache()
+    clear_encoder_cache()
     app.state.artifacts = load_all()
     loaded = [name for name, a in app.state.artifacts.artifacts.items() if a.ok]
     failed = app.state.artifacts.degraded

@@ -82,6 +82,8 @@ class PublishedVersion:
     fence: int
     job_id: str
     activated: bool
+    #: Why the artifact was or was not allowed to take over serving.
+    acceptance: AcceptanceReport | None = None
 
 
 def version_id(job_id: str, fence: int) -> str:
@@ -111,13 +113,12 @@ def registry_lock() -> Iterator[None]:
     lock; this one covers the file moves and the pointer write.
     """
     REGISTRY_DIR.mkdir(parents=True, exist_ok=True)
-    with _LOCAL_LOCK:
-        with LOCK_PATH.open("a+") as handle:
-            fcntl.flock(handle, fcntl.LOCK_EX)
-            try:
-                yield
-            finally:
-                fcntl.flock(handle, fcntl.LOCK_UN)
+    with _LOCAL_LOCK, LOCK_PATH.open("a+") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
 
 
 # --- reading the pointer --------------------------------------------------
@@ -204,7 +205,7 @@ def validate_artifact(model_file: Path) -> dict[str, Any]:
 
     try:
         bundle = joblib.load(model_file)
-    except Exception as exc:  # noqa: BLE001 - any unpickling failure is a rejection
+    except Exception as exc:
         raise RegistryError(f"staged bundle at {model_file} could not be loaded: {exc}") from exc
     if not isinstance(bundle, dict):
         raise RegistryError(f"staged bundle at {model_file} is {type(bundle).__name__}, not a dict")
@@ -215,6 +216,98 @@ def validate_artifact(model_file: Path) -> dict[str, Any]:
     if not isinstance(features, (list, tuple)) or not features:
         raise RegistryError(f"staged bundle at {model_file} carries no feature list")
     return {"n_features": len(features), "features": list(features)[:5], "bytes": model_file.stat().st_size}
+
+
+#: A model must beat chance, and beat the base rate, before it is allowed to
+#: serve. v1 - which scored MOIL's two flagship mines at ~0 and two
+#: null-feature points at 0.99 - is what these exist to stop.
+MIN_MEAN_AUC = 0.5
+MIN_LIFT_OVER_BASE = 1.0
+#: How much worse than the model it would replace a candidate may be. Training
+#: runs vary; a collapse does not.
+MAX_AUC_PR_REGRESSION = 0.10
+
+
+@dataclass(frozen=True)
+class AcceptanceReport:
+    """Whether a freshly trained artifact may take over serving."""
+
+    accepted: bool
+    reasons: list[str]
+    metrics: dict[str, float]
+
+
+def _fold_metrics(metrics_file: Path) -> dict[str, float] | None:
+    """Mean AUC, mean AUC-PR and the mean base rate from a run's fold metrics."""
+    try:
+        payload = json.loads(metrics_file.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    folds = payload.get("folds") if isinstance(payload, dict) else payload
+    if not isinstance(folds, list) or not folds:
+        return None
+    def mean(key: str) -> float | None:
+        values = [float(f[key]) for f in folds if isinstance(f, dict) and f.get(key) is not None]
+        return sum(values) / len(values) if values else None
+
+    auc, auc_pr = mean("auc"), mean("auc_pr")
+    rates = [
+        float(f["n_test_pos"]) / float(f["n_test"])
+        for f in folds
+        if isinstance(f, dict) and f.get("n_test")
+    ]
+    if auc is None or auc_pr is None or not rates:
+        return None
+    base = sum(rates) / len(rates)
+    return {"mean_auc": auc, "mean_auc_pr": auc_pr, "base_rate": base,
+            "lift": auc_pr / base if base else 0.0}
+
+
+def acceptance_report(staged: Path, active: ActiveModel) -> AcceptanceReport:
+    """Decide whether a candidate artifact is fit to serve.
+
+    Three questions, all answerable from what the run itself produced: does it
+    take the same features as the model it would replace, did it beat chance and
+    the base rate, and is it not materially worse than what is serving now. A
+    candidate that fails is still published - it is evidence - but the pointer
+    stays where it is and the job says why.
+    """
+    import joblib
+
+    reasons: list[str] = []
+    metrics = _fold_metrics(staged / METRICS_FILENAME) or {}
+
+    try:
+        candidate_features = list(joblib.load(staged / MODEL_FILENAME)["features"])
+    except Exception as exc:  # noqa: BLE001 - validate_artifact reports the detail
+        return AcceptanceReport(False, [f"the candidate bundle could not be read: {exc}"], metrics)
+    try:
+        serving_features = list(joblib.load(active.path)["features"])
+    except Exception:  # noqa: BLE001 - nothing to compare against; the floors still apply
+        serving_features = []
+    if serving_features and candidate_features != serving_features:
+        reasons.append(
+            f"its {len(candidate_features)} features differ from the {len(serving_features)} "
+            f"the active model ({active.version}) takes"
+        )
+
+    if not metrics:
+        reasons.append("the run recorded no fold metrics to judge it by")
+    else:
+        if metrics["mean_auc"] < MIN_MEAN_AUC:
+            reasons.append(f"mean AUC {metrics['mean_auc']:.3f} is not better than chance")
+        if metrics["lift"] < MIN_LIFT_OVER_BASE:
+            reasons.append(
+                f"mean AUC-PR {metrics['mean_auc_pr']:.4f} does not beat the base rate "
+                f"{metrics['base_rate']:.4f}"
+            )
+        previous = _fold_metrics(version_dir(active.version) / METRICS_FILENAME)
+        if previous and metrics["mean_auc_pr"] < previous["mean_auc_pr"] * (1 - MAX_AUC_PR_REGRESSION):
+            reasons.append(
+                f"mean AUC-PR {metrics['mean_auc_pr']:.4f} is more than "
+                f"{MAX_AUC_PR_REGRESSION:.0%} below the active model's {previous['mean_auc_pr']:.4f}"
+            )
+    return AcceptanceReport(not reasons, reasons, metrics)
 
 
 def artifact_for_job(job_id: str) -> str | None:
@@ -257,6 +350,7 @@ def publish(
     fence: int,
     activate: bool,
     still_owns_job: Callable[[], bool],
+    acceptance_check: Callable[[Path, ActiveModel], AcceptanceReport] | None = None,
 ) -> PublishedVersion:
     """Move a staged artifact into the registry, optionally activating it.
 
@@ -272,6 +366,8 @@ def publish(
 
     with registry_lock():
         current = read_pointer()
+        acceptance = acceptance_check(staged, active_model()) if acceptance_check else None
+        should_activate = activate and (acceptance is None or acceptance.accepted)
         # A redelivery of the run that already published this exact version:
         # nothing to decide, and nothing to overwrite. Checking the fence here
         # would refuse a job its own artifact.
@@ -310,14 +406,15 @@ def publish(
             )
             os.replace(staged, target)  # atomic within the registry directory
 
-        if activate and not already_active:
+        if should_activate and not already_active:
             _write_pointer(version, fence, job_id)
     return PublishedVersion(
         version=version,
         path=version_dir(version) / MODEL_FILENAME,
         fence=fence,
         job_id=job_id,
-        activated=activate or already_active,
+        activated=should_activate or already_active,
+        acceptance=acceptance,
     )
 
 

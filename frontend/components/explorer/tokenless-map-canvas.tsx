@@ -61,7 +61,10 @@ export default function TokenlessMapCanvas(props: MapCanvasProps) {
       setReady(true); // Local data is ready independently of the basemap network.
       addNasaContext(map);
     };
-    const onRender = () => {
+    // Counted when the map settles, not on every frame: queryRenderedFeatures
+    // on each render turns a pan into continuous query work for a number that
+    // only matters once drawing has stopped.
+    const onIdle = () => {
       if (!map.getLayer(MAP_IDS.wasteLayer)) return;
       const next = renderedCounts(
         (layers) => map.queryRenderedFeatures({ layers }),
@@ -97,7 +100,7 @@ export default function TokenlessMapCanvas(props: MapCanvasProps) {
     };
 
     map.on("load", onLoad);
-    map.on("render", onRender);
+    map.on("idle", onIdle);
     map.on("sourcedata", onSourceData);
     map.on("error", onError);
     map.on("click", onClick);
@@ -110,7 +113,7 @@ export default function TokenlessMapCanvas(props: MapCanvasProps) {
       markerRef.current?.remove();
       markerRef.current = null;
       map.off("load", onLoad);
-      map.off("render", onRender);
+      map.off("idle", onIdle);
       map.off("sourcedata", onSourceData);
       map.off("error", onError);
       map.off("click", onClick);

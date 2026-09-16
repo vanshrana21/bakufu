@@ -144,6 +144,29 @@ def test_publishing_the_same_version_twice_is_idempotent(store: Path) -> None:
     assert joblib.load(first.path)["model"] == "first"
 
 
+def test_acceptance_is_evaluated_under_the_registry_lock(store: Path) -> None:
+    """The promotion decision must use the pointer visible at commit time."""
+    first = _publish("job-one", 1, marker="first")
+    observed: list[str] = []
+
+    def accept(_staged: Path, active: registry.ActiveModel) -> registry.AcceptanceReport:
+        observed.append(active.version)
+        return registry.AcceptanceReport(True, [], {})
+
+    second = registry.publish(
+        staged=_stage("job-two", 2, marker="second"),
+        job_id="job-two",
+        fence=2,
+        activate=True,
+        still_owns_job=lambda: True,
+        acceptance_check=accept,
+    )
+
+    assert observed == [first.version]
+    assert second.acceptance is not None and second.acceptance.accepted
+    assert registry.active_model().version == second.version
+
+
 # --- what inference loads: mandatory tests 6 and 7 -----------------------
 
 

@@ -58,7 +58,14 @@ def apply_mask(lat: float, lon: float, score: float, mask: str = "none") -> tupl
     in_buffer = _buffer().is_in_buffer(lat, lon)
     if in_basement and in_buffer:
         return score, "kept_in_basement_and_buffer"
-    return 0.0, "masked_out_both"
+    # Both tests were evaluated, so the decision names the one that failed
+    # rather than collapsing to "excluded somehow": a caller cannot recover the
+    # attribution from a conjunction after the fact.
+    if in_basement:
+        return 0.0, "masked_out_not_in_buffer"
+    if in_buffer:
+        return 0.0, "masked_out_not_in_basement"
+    return 0.0, "masked_out_neither_basement_nor_buffer"
 
 
 def describe() -> list[dict[str, Any]]:

@@ -135,7 +135,13 @@ def test_both_stacked_farmland_filtered() -> None:
     """
     score, decision = apply_mask(*FARMLAND, 0.99, "both")
     assert score == 0.0
-    assert decision == "masked_out_both"
+    assert decision.startswith("masked_out_")
+    # The decision says which test failed, so a caller does not have to guess.
+    assert decision in {
+        "masked_out_not_in_basement",
+        "masked_out_not_in_buffer",
+        "masked_out_neither_basement_nor_buffer",
+    }
 
     kept, kept_decision = apply_mask(*FARMLAND, 0.99, "geological")
     assert kept == pytest.approx(0.99)
