@@ -9,7 +9,7 @@ import argparse
 import hashlib
 import json
 import os
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -214,10 +214,15 @@ def train_final(
     return {"model": model, "c": c, "importance": importance, "path": save_path}
 
 
+class TrainingCancelled(RuntimeError):
+    """`should_continue` said to stop at a phase boundary."""
+
+
 def main(
     argv: Sequence[str] | None = None,
     save_path: Path | None = None,
     metrics_path: Path | None = None,
+    should_continue: Callable[[], bool] | None = None,
 ) -> Path:
     """Train and save the model, returning the path written.
 
@@ -228,7 +233,13 @@ def main(
     is how the worker stages both in one directory and publishes them together:
     a shared metrics file would otherwise be overwritten by whichever run
     finished last, and could describe a model that was never promoted.
+
+    `should_continue` is checked at each phase boundary. Nothing can interrupt a
+    fit already running inside XGBoost, but a worker that has lost its job stops
+    at the next boundary instead of spending the rest of the run on work no one
+    will accept.
     """
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--version",
@@ -253,6 +264,11 @@ def main(
                 raise FileNotFoundError(f"Phase 2.5 input missing: {required}")
         print(f"Phase 2.5 run: raster={Path(s2_path).name}, foreign={Path(foreign_path).name}")
 
+    def checkpoint(phase: str) -> None:
+        if should_continue is not None and not should_continue():
+            raise TrainingCancelled(f"stopped before {phase}: this run no longer owns its job")
+
+    checkpoint("feature assembly")
     dataset = build_dataset(s2_path=s2_path, foreign_features_path=foreign_path)
     raster_path = Path(s2_path) if s2_path else settings.s2_smoke_test
     provenance = {
@@ -275,11 +291,13 @@ def main(
     print("\n" + "=" * 60)
     print("LEAVE-ONE-BLOCK-OUT CV")
     print("=" * 60)
+    checkpoint("cross-validation")
     results = run_lobo_cv(dataset)
 
     print("\n" + "=" * 60)
     print("FINAL MODEL")
     print("=" * 60)
+    checkpoint("the final fit")
     final = train_final(dataset, save_path=model_path, provenance=provenance)
 
     print("\nPer-fold results:")

@@ -27,12 +27,22 @@ logger = logging.getLogger("worker.training")
 class RegistryMismatch(RuntimeError):
     """The database says a job published something the registry cannot produce."""
 
+
+class LedgerUnavailable(RuntimeError):
+    """The artifact ledger could not be read, so publication state is unknown."""
+
+
+class TrainingAbandoned(RuntimeError):
+    """The job was taken away from this worker while it was training."""
+
 #: Seen a live lease? Look again once it would have lapsed.
 LEASE_RECHECK_SECONDS = settings.TRAINING_LEASE_SECONDS + settings.TRAINING_HEARTBEAT_SECONDS
 #: Enough re-checks to outlast a run that goes all the way to the hard time limit.
 MAX_RETRIES = settings.TRAINING_TIME_LIMIT_SECONDS // LEASE_RECHECK_SECONDS + 5
 #: Attempts at writing the outcome before the database is given up on.
 OUTCOME_WRITE_ATTEMPTS = 5
+#: Attempts at reading the artifact ledger before a recovery gives up.
+LEDGER_READ_ATTEMPTS = 4
 
 
 def dispatch_outbox(limit: int = 50) -> int:
@@ -166,6 +176,9 @@ def _train_and_publish(job_id: str, token: datetime, fence: int):
             [],
             save_path=staged / registry.MODEL_FILENAME,
             metrics_path=staged / registry.METRICS_FILENAME,
+            # Checked between phases: a worker that lost its lease stops there
+            # rather than finishing a run whose result would be refused anyway.
+            should_continue=lambda: jobs.owns_job(job_id, token),
         )
         # The advisory lock serialises promotion across hosts; the registry lock
         # inside publish() covers this host, the acceptance comparison, and the
@@ -207,6 +220,30 @@ def _train_and_publish(job_id: str, token: datetime, fence: int):
     return published
 
 
+def _published_artifact_with_retries(job_id: str):
+    """Read the ledger, retrying a flaky database rather than retraining.
+
+    A transient failure here would otherwise look like "this job published
+    nothing", and the answer to that is a second training run.
+    """
+    last: Exception | None = None
+    for attempt in range(1, LEDGER_READ_ATTEMPTS + 1):
+        try:
+            return jobs.published_artifact(job_id)
+        except SQLAlchemyError as exc:
+            last = exc
+            logger.warning(
+                "could not read the artifact ledger for %s (attempt %d of %d)",
+                job_id, attempt, LEDGER_READ_ATTEMPTS, exc_info=True,
+            )
+            if attempt < LEDGER_READ_ATTEMPTS:
+                time.sleep(min(2**attempt, 10))
+    raise LedgerUnavailable(
+        f"the artifact ledger for job {job_id} could not be read after "
+        f"{LEDGER_READ_ATTEMPTS} attempts; refusing to retrain on an unknown state"
+    ) from last
+
+
 def _recover_published(job_id: str, token: datetime, fence: int):
     """Return what this job already published, or None if it published nothing.
 
@@ -216,7 +253,7 @@ def _recover_published(job_id: str, token: datetime, fence: int):
     """
     from src.models import registry
 
-    recorded = jobs.published_artifact(job_id)
+    recorded = _published_artifact_with_retries(job_id)
     if recorded is None:
         # The database is the ledger, but a crash between the artifact landing
         # and that row being written leaves a version with no record. The
@@ -283,10 +320,18 @@ def _record_outcome(job_id: str, token: datetime, outcome: dict[str, Any]) -> No
                 time.sleep(min(2**attempt, 30))
             continue
         if not recorded:
-            logger.warning(
-                "training job %s was claimed by another worker; discarding this %s outcome",
-                job_id, outcome["status"],
+            # The row is no longer running: the sweeper failed it, or another
+            # claim owns it. Its state stands; the note says what this run
+            # reached so the evidence is not lost.
+            summary = (
+                f"late outcome from a worker that no longer owned the job: {outcome['status']}"
+                + (f" ({outcome['result_data']['version']})" if outcome.get("result_data") else "")
             )
+            logger.warning("training job %s: %s", job_id, summary)
+            try:
+                jobs.note_late_outcome(job_id, token, summary, jobs.utcnow())
+            except SQLAlchemyError:
+                logger.warning("could not note the late outcome for %s", job_id, exc_info=True)
         return
     logger.error(
         "gave up recording the outcome of training job %s; its lease will lapse and it will read as failed",

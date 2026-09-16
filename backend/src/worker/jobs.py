@@ -406,16 +406,44 @@ def published_artifacts(task_name: str, limit: int = 20) -> list[PublishedArtifa
 
 
 def record_outcome(job_id: str, token: datetime, **fields: Any) -> bool:
-    """Write a final state unless another worker has claimed the job since.
+    """Move a job this worker still owns from running to its final state.
 
-    Not conditional on status: if the API expired this job while its worker was
-    cut off from the database, the outcome the worker actually reached wins.
+    Guarded on `running` as well as the fencing token: once the sweeper has
+    failed a job, or another claim has taken it, that is a terminal state and a
+    worker arriving late must not write over it. The late outcome is not thrown
+    away either - note_late_outcome records it beside the row.
     """
     with db_session.SessionLocal() as db, db.begin():
         result = db.execute(
             update(BackgroundJob)
-            .where(BackgroundJob.job_id == job_id, BackgroundJob.started_at == token)
+            .where(
+                BackgroundJob.job_id == job_id,
+                BackgroundJob.started_at == token,
+                BackgroundJob.status == "running",
+            )
             .values(**fields)
+            .execution_options(synchronize_session=False)
+        )
+        return result.rowcount == 1
+
+
+def note_late_outcome(job_id: str, token: datetime, summary: str, now: datetime) -> bool:
+    """Append what a late worker reached, without changing the job's state.
+
+    The row has already ended - failed by the sweeper, or handed to another
+    claim - so its status stays put. The note keeps the evidence: an operator
+    reading the row can see the run did finish, and what it produced.
+    """
+    with db_session.SessionLocal() as db, db.begin():
+        # Matched in SQL, like every other transition here: a timestamp read
+        # back from SQLite loses its timezone and would never compare equal.
+        result = db.execute(
+            update(BackgroundJob)
+            .where(BackgroundJob.job_id == job_id, BackgroundJob.started_at == token)
+            .values(
+                error_message=func.coalesce(BackgroundJob.error_message.concat("\n"), "").concat(summary),
+                updated_at=now,
+            )
             .execution_options(synchronize_session=False)
         )
         return result.rowcount == 1

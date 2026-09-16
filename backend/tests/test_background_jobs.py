@@ -83,7 +83,7 @@ def trains(store: Path, monkeypatch: pytest.MonkeyPatch) -> list[str]:
 
     calls: list[str] = []
 
-    def fake_main(argv: Any = None, save_path: Path | None = None, metrics_path: Path | None = None) -> Path:
+    def fake_main(argv: Any = None, save_path: Path | None = None, metrics_path: Path | None = None, should_continue: Any = None) -> Path:
         # The worker passes its own argv and a staging path; the process argv
         # belongs to Celery, and no published version is ever written over.
         assert argv == [] and save_path is not None and metrics_path is not None
@@ -462,7 +462,7 @@ def test_the_lease_is_renewed_while_training(
 
     monkeypatch.setattr(jobs, "renew_lease", spy)
 
-    def slow_training(argv: Any = None, save_path: Path | None = None, metrics_path: Path | None = None) -> Path:
+    def slow_training(argv: Any = None, save_path: Path | None = None, metrics_path: Path | None = None, should_continue: Any = None) -> Path:
         time.sleep(0.3)
         assert save_path is not None and metrics_path is not None
         joblib.dump(_bundle("slow"), save_path)
@@ -527,7 +527,7 @@ def _stub_training(monkeypatch: pytest.MonkeyPatch, during: Any = None, marker: 
 
     staged: list[Path] = []
 
-    def fake_main(argv: Any = None, save_path: Path | None = None, metrics_path: Path | None = None) -> Path:
+    def fake_main(argv: Any = None, save_path: Path | None = None, metrics_path: Path | None = None, should_continue: Any = None) -> Path:
         # The worker must pass its own argv; the process's belongs to Celery.
         assert argv == [] and save_path is not None and metrics_path is not None
         joblib.dump(_bundle(marker), save_path)
@@ -599,7 +599,7 @@ def _metrics(auc: float, auc_pr: float, base: float = 0.05) -> dict[str, Any]:
 
 
 def _stub_training_with(monkeypatch: pytest.MonkeyPatch, bundle: dict[str, Any], metrics: dict[str, Any]) -> None:
-    def fake_main(argv: Any = None, save_path: Path | None = None, metrics_path: Path | None = None) -> Path:
+    def fake_main(argv: Any = None, save_path: Path | None = None, metrics_path: Path | None = None, should_continue: Any = None) -> Path:
         assert save_path is not None and metrics_path is not None
         joblib.dump(bundle, save_path)
         metrics_path.write_text(json.dumps(metrics), encoding="utf-8")
@@ -909,6 +909,107 @@ def test_a_crash_after_publishing_is_recovered_without_retraining(
     job = _row(factory, "crashed")
     assert job.status == "completed"
     assert job.result_data["version"] == published.version
+
+
+# --- terminal states, late workers and cancellation ----------------------
+
+
+def test_a_swept_job_cannot_be_resurrected_by_a_late_worker(
+    factory: sessionmaker[Session], store: Path
+) -> None:
+    """A job the sweeper failed stays failed, however late its worker finishes."""
+    _insert(factory, job_id="swept", status="queued")
+    claim = jobs.claim_job("swept", jobs.utcnow())
+    assert claim.token is not None
+
+    # The lease lapses and the API fails the job while the worker is still busy.
+    with factory() as db:
+        row = db.scalars(select(BackgroundJob).where(BackgroundJob.job_id == "swept")).one()
+        row.updated_at = jobs.utcnow() - timedelta(seconds=settings.TRAINING_LEASE_SECONDS + 60)
+        db.commit()
+    with factory() as db:
+        assert jobs.expire_stale_jobs(db, TASK, jobs.utcnow()) == 1
+        db.commit()
+
+    # The worker comes back with a completed outcome. It must not take effect.
+    assert jobs.record_outcome("swept", claim.token, status="completed", progress=100.0) is False
+    job = _row(factory, "swept")
+    assert job.status == "failed"
+
+    # ...but the evidence is kept beside the row rather than dropped.
+    assert jobs.note_late_outcome("swept", claim.token, "late outcome: completed", jobs.utcnow()) is True
+    assert "late outcome: completed" in _row(factory, "swept").error_message
+
+
+def test_a_late_worker_note_never_changes_another_claims_row(
+    factory: sessionmaker[Session], store: Path
+) -> None:
+    _insert(factory, job_id="handed", status="queued")
+    first = jobs.claim_job("handed", jobs.utcnow())
+    assert first.token is not None
+    later = jobs.utcnow() + timedelta(seconds=settings.TRAINING_LEASE_SECONDS + 60)
+    assert jobs.claim_job("handed", later).token is not None
+
+    assert jobs.note_late_outcome("handed", first.token, "late", jobs.utcnow()) is False
+    assert _row(factory, "handed").error_message is None
+
+
+def test_training_stops_at_a_phase_boundary_once_the_job_is_gone(
+    factory: sessionmaker[Session], store: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The worker must not spend an hour on a run nothing will accept."""
+    from src.models.prospectivity.train_pu_xgboost import TrainingCancelled
+    from src.worker.tasks import _train_and_publish
+
+    phases: list[str] = []
+
+    def fake_main(argv: Any = None, save_path: Path | None = None, metrics_path: Path | None = None,
+                  should_continue: Any = None) -> Path:
+        # Stands in for the real phases: assemble, cross-validate, fit.
+        for phase in ("assembly", "cross-validation", "final fit"):
+            if should_continue is not None and not should_continue():
+                raise TrainingCancelled(f"stopped before {phase}")
+            phases.append(phase)
+        assert save_path is not None
+        joblib.dump(_bundle("late"), save_path)
+        return save_path
+
+    monkeypatch.setattr(train_module, "main", fake_main)
+    _insert(factory, job_id="cancelled", status="queued")
+    claim = jobs.claim_job("cancelled", jobs.utcnow())
+    assert claim.token is not None
+    # Another claim takes the job while the first is between phases.
+    later = jobs.utcnow() + timedelta(seconds=settings.TRAINING_LEASE_SECONDS + 60)
+    assert jobs.claim_job("cancelled", later).token is not None
+
+    with pytest.raises(TrainingCancelled):
+        _train_and_publish("cancelled", claim.token, claim.fence)
+    assert phases == [], "training continued after the job was taken away"
+
+
+def test_a_ledger_read_failure_does_not_cause_a_second_training_run(
+    factory: sessionmaker[Session], store: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An unreadable ledger is an unknown state, not an empty one."""
+    from sqlalchemy.exc import OperationalError as SqlOperationalError
+
+    from src.worker.tasks import LedgerUnavailable, _train_and_publish
+
+    trained = _stub_training(monkeypatch)
+    _insert(factory, job_id="flaky", status="queued")
+    claim = jobs.claim_job("flaky", jobs.utcnow())
+    assert claim.token is not None
+
+    def unavailable(_job_id: str) -> None:
+        raise SqlOperationalError("SELECT", {}, Exception("connection reset"))
+
+    monkeypatch.setattr(jobs, "published_artifact", unavailable)
+    monkeypatch.setattr("src.worker.tasks.LEDGER_READ_ATTEMPTS", 2)
+    monkeypatch.setattr("time.sleep", lambda _seconds: None)
+
+    with pytest.raises(LedgerUnavailable):
+        _train_and_publish("flaky", claim.token, claim.fence)
+    assert trained == [], "it retrained on an unknown publication state"
 
 
 # --- Celery wiring -------------------------------------------------------
