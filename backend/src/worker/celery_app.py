@@ -15,6 +15,7 @@ Start the worker from backend/, with Redis running:
 from __future__ import annotations
 
 import logging
+import os
 import sys
 
 from celery import Celery
@@ -87,17 +88,50 @@ celery_app.conf.update(
 )
 
 
-@worker_init.connect
-def _warn_about_fork_unsafe_imports(**_kwargs: object) -> None:
-    """Say so loudly if the parent already imported a library the fork breaks."""
+class UnsafeWorkerStart(RuntimeError):
+    """The worker would fork into children that cannot run. Refuse to start."""
+
+
+def _uses_prefork(sender: object) -> bool:
+    pool = getattr(sender, "pool_cls", None) or getattr(getattr(sender, "app", None), "conf", None)
+    name = getattr(pool, "__module__", "") + " " + str(getattr(pool, "__name__", pool))
+    if "prefork" in name:
+        return True
+    if "solo" in name or "thread" in name or "gevent" in name or "eventlet" in name:
+        return False
+    # Nothing conclusive: the default pool is prefork, so assume the risky one.
+    return True
+
+
+def check_fork_safety(sender: object | None = None) -> None:
+    """Fail closed on a prefork worker that cannot fork usable children.
+
+    Two ways that happens, both of which end as a crash loop of children that
+    die before running anything, which reads like a broken queue:
+      - a native library (torch, XGBoost, GDAL) was imported in the parent;
+      - macOS refuses to fork a process that touched the Objective-C runtime
+        unless OBJC_DISABLE_INITIALIZE_FORK_SAFETY is set.
+    """
+    if sender is not None and not _uses_prefork(sender):
+        return
     loaded = [name for name in FORK_UNSAFE_MODULES if name in sys.modules]
     if loaded:
-        logger.error(
-            "%s already imported in the worker parent: with the prefork pool its children can "
-            "die with SIGSEGV on every task. Import these inside the task instead, or run "
-            "--pool solo.",
-            ", ".join(loaded),
+        raise UnsafeWorkerStart(
+            f"{', '.join(loaded)} are imported in the worker parent; with the prefork pool its "
+            "children die before running a task. Import them inside the task, or start the "
+            "worker with --pool solo."
         )
+    if sys.platform == "darwin" and not os.environ.get("OBJC_DISABLE_INITIALIZE_FORK_SAFETY"):
+        raise UnsafeWorkerStart(
+            "macOS aborts forked children of a process that touched the Objective-C runtime. "
+            "Start the worker as: OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES celery -A "
+            "src.worker.celery_app worker --queues training --concurrency 1 (or use --pool solo)."
+        )
+
+
+@worker_init.connect
+def _refuse_unsafe_start(sender: object = None, **_kwargs: object) -> None:
+    check_fork_safety(sender)
 
 
 @worker_process_init.connect

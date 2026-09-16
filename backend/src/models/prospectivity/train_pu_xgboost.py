@@ -9,6 +9,7 @@ import argparse
 import json
 import os
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 
 import joblib
@@ -193,14 +194,20 @@ def train_final(dataset: Dataset, save_path: Path = MODEL_PATH, log_mlflow: bool
     return {"model": model, "c": c, "importance": importance, "path": save_path}
 
 
-def main(argv: Sequence[str] | None = None, save_path: Path | None = None) -> Path:
+def main(
+    argv: Sequence[str] | None = None,
+    save_path: Path | None = None,
+    metrics_path: Path | None = None,
+) -> Path:
     """Train and save the model, returning the path written.
 
     `argv` defaults to the process command line for CLI use. Anything calling
     this in-process - the Celery worker does - must pass its own list, or
-    argparse reads that process's arguments and exits. `save_path` overrides
-    where the bundle lands, which is how the worker stages a run before
-    promoting it.
+    argparse reads that process's arguments and exits. `save_path` and
+    `metrics_path` override where the bundle and its fold metrics land, which
+    is how the worker stages both in one directory and publishes them together:
+    a shared metrics file would otherwise be overwritten by whichever run
+    finished last, and could describe a model that was never promoted.
     """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -269,9 +276,22 @@ def main(argv: Sequence[str] | None = None, save_path: Path | None = None) -> Pa
     print(f"  model saved  : {final['path']}")
 
     suffix = "_v2" if is_v2 else ""
-    metrics_path = settings.DATA_PROCESSED / f"lobo_results{suffix}.json"
-    metrics_path.write_text(json.dumps(results.to_dict(orient="records"), indent=2), encoding="utf-8")
-    print(f"  fold metrics : {metrics_path}")
+    metrics_file = metrics_path or settings.DATA_PROCESSED / f"lobo_results{suffix}.json"
+    metrics_file.parent.mkdir(parents=True, exist_ok=True)
+    metrics_file.write_text(
+        json.dumps(
+            {
+                "model": str(model_path),
+                "version": model_path.stem,
+                "trained_at": datetime.now(UTC).isoformat(timespec="seconds"),
+                "elkan_noto_c": float(final["c"]),
+                "folds": results.to_dict(orient="records"),
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    print(f"  fold metrics : {metrics_file}")
     return Path(final["path"])
 
 

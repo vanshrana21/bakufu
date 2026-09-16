@@ -16,6 +16,7 @@ from typing import Any
 
 import joblib
 import matplotlib
+from cachetools import LRUCache
 
 matplotlib.use("Agg")  # headless; no display on the box this runs on
 import matplotlib.pyplot as plt  # noqa: E402
@@ -29,24 +30,46 @@ from src.models.prospectivity.pu_xgboost import MODEL_PATH  # noqa: E402
 
 SUMMARY_PLOT_PATH: Path = settings.DATA_PROCESSED / "shap_summary.png"
 
-_CACHE: dict[str, Any] = {}
+#: Bundles kept in memory, keyed by file identity. Bounded: a promotion adds a
+#: new key, and without a ceiling every promotion would leak a model.
+_CACHE: LRUCache[tuple[str, int, int], dict[str, Any]] = LRUCache(maxsize=3)
 _CACHE_LOCK = threading.Lock()
 
 
+def _identity(path: Path) -> tuple[str, int, int]:
+    """Path, modification time and size: a replaced file is a different key."""
+    stat = path.stat()
+    return (str(path.resolve()), stat.st_mtime_ns, stat.st_size)
+
+
 def load_bundle(model_path: Path | str = MODEL_PATH) -> dict[str, Any]:
-    """Load and memoise the trained model bundle."""
-    key = str(model_path)
-    if key not in _CACHE:
-        with _CACHE_LOCK:
-            if key not in _CACHE:
-                path = Path(model_path)
-                if not path.exists():
-                    raise FileNotFoundError(
-                        f"no trained model at {path} - "
-                        "run python -m src.models.prospectivity.train_pu_xgboost"
-                    )
-                _CACHE[key] = joblib.load(path)
-    return _CACHE[key]
+    """Load and memoise the trained model bundle.
+
+    Keyed by what is on disk, not just the path: promotion replaces the file
+    the pointer names, and a path-only cache would serve the previous model for
+    the life of the process.
+    """
+    path = Path(model_path)
+    if not path.exists():
+        raise FileNotFoundError(
+            f"no trained model at {path} - "
+            "run python -m src.models.prospectivity.train_pu_xgboost"
+        )
+    key = _identity(path)
+    with _CACHE_LOCK:
+        cached = _CACHE.get(key)
+    if cached is not None:
+        return cached
+    bundle = joblib.load(path)
+    with _CACHE_LOCK:
+        _CACHE[key] = bundle
+    return bundle
+
+
+def clear_bundle_cache() -> None:
+    """Drop every loaded bundle. Used at startup and after a promotion."""
+    with _CACHE_LOCK:
+        _CACHE.clear()
 
 
 def _explainer(bundle: dict[str, Any]) -> shap.TreeExplainer:

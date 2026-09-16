@@ -9,6 +9,7 @@ itself by a stub: these tests pin the job lifecycle, not the model.
 
 from __future__ import annotations
 
+import json
 import time
 import uuid
 from collections.abc import Iterator
@@ -16,6 +17,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
+import joblib
 import pytest
 from fastapi.testclient import TestClient
 from kombu.exceptions import OperationalError
@@ -39,7 +41,7 @@ TASK = jobs.TRAIN_TASK_NAME
 @pytest.fixture()
 def factory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[sessionmaker[Session]]:
     """A file-backed SQLite database: worker threads get their own connections."""
-    engine = create_engine(f"sqlite:///{tmp_path / 'jobs.db'}")
+    engine = create_engine(f"sqlite:///{tmp_path / 'jobs.db'}", connect_args={"timeout": 30})
     BackgroundJob.__table__.create(engine)
     sessions = sessionmaker(bind=engine, expire_on_commit=False)
     monkeypatch.setattr(db_session, "SessionLocal", sessions)
@@ -74,15 +76,18 @@ def client(factory: sessionmaker[Session], api_headers: dict[str, str]) -> Itera
 
 
 @pytest.fixture()
-def trains(model_path: Path, monkeypatch: pytest.MonkeyPatch) -> list[str]:
-    """Replaces the real training run, writing to the staging path it is handed."""
+def trains(store: Path, monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Replaces the real training run, writing a bundle where it is told."""
+    import joblib
+
     calls: list[str] = []
 
-    def fake_main(argv: Any = None, save_path: Path | None = None) -> Path:
+    def fake_main(argv: Any = None, save_path: Path | None = None, metrics_path: Path | None = None) -> Path:
         # The worker passes its own argv and a staging path; the process argv
-        # belongs to Celery, and the served path is only written by a rename.
-        assert argv == [] and save_path is not None
-        save_path.write_bytes(b"a freshly trained model")
+        # belongs to Celery, and no published version is ever written over.
+        assert argv == [] and save_path is not None and metrics_path is not None
+        joblib.dump({"model": "trained", "features": ["b11"], "elkan_noto_c": 0.8}, save_path)
+        metrics_path.write_text(json.dumps({"folds": []}), encoding="utf-8")
         calls.append("trained")
         return save_path
 
@@ -163,6 +168,34 @@ def test_a_second_start_is_refused_while_a_job_is_active(
     assert body["error_code"] == "training_in_progress"
     assert first in body["detail"] and "queued" in body["detail"]
     assert f"GET /train/{first}" in body["remedy"]
+    assert len(published) == 1
+
+
+def test_concurrent_starts_create_exactly_one_active_job(
+    client: TestClient, factory: sessionmaker[Session], published: list[dict[str, Any]]
+) -> None:
+    """Mandatory 1: the guard has to hold when the requests arrive together."""
+    import threading
+
+    codes: list[int] = []
+    barrier = threading.Barrier(8)
+
+    def start() -> None:
+        barrier.wait()
+        codes.append(client.post("/train").status_code)
+
+    threads = [threading.Thread(target=start) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    with factory() as db:
+        rows = db.scalars(select(BackgroundJob)).all()
+        active = [row for row in rows if row.status in jobs.ACTIVE_STATUSES]
+    assert codes.count(202) == 1, f"{codes.count(202)} starts were accepted: {codes}"
+    assert sorted(set(codes) - {202}) == [409], f"unexpected statuses: {sorted(set(codes))}"
+    assert len(active) == 1 and len(rows) == 1
     assert len(published) == 1
 
 
@@ -266,14 +299,14 @@ def test_the_worker_trains_and_records_success(
     assert trains == ["trained"]
     status = client.get(f"/train/{task_id}").json()
     assert status["status"] == "completed"
-    assert status["detail"] == "model retrained and saved"
+    assert status["detail"].startswith("model retrained and published as ")
     assert status["started_at"] is not None and status["finished_at"] is not None
     assert status["started_at"] <= status["finished_at"]
 
 
 def test_the_worker_records_a_training_failure(
     client: TestClient, factory: sessionmaker[Session], published: list[dict[str, Any]],
-    model_path: Path, monkeypatch: pytest.MonkeyPatch,
+    store: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def broken(*_args: Any, **_kwargs: Any) -> None:
         raise RuntimeError("raster missing")
@@ -348,7 +381,7 @@ def test_a_worker_that_lost_its_job_cannot_overwrite_it(factory: sessionmaker[Se
 
 
 def test_the_lease_is_renewed_while_training(
-    factory: sessionmaker[Session], model_path: Path, monkeypatch: pytest.MonkeyPatch
+    factory: sessionmaker[Session], store: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(settings, "TRAINING_HEARTBEAT_SECONDS", 0.05)
     renewals: list[bool] = []
@@ -361,10 +394,13 @@ def test_the_lease_is_renewed_while_training(
 
     monkeypatch.setattr(jobs, "renew_lease", spy)
 
-    def slow_training(argv: Any = None, save_path: Path | None = None) -> Path:
+    def slow_training(argv: Any = None, save_path: Path | None = None, metrics_path: Path | None = None) -> Path:
+        import joblib
+
         time.sleep(0.3)
-        assert save_path is not None
-        save_path.write_bytes(b"a freshly trained model")
+        assert save_path is not None and metrics_path is not None
+        joblib.dump({"model": "slow", "features": ["b11"], "elkan_noto_c": 0.8}, save_path)
+        metrics_path.write_text("{}", encoding="utf-8")
         return save_path
 
     monkeypatch.setattr(train_module, "main", slow_training)
@@ -380,24 +416,36 @@ def test_the_lease_is_renewed_while_training(
 
 
 @pytest.fixture()
-def model_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Stand in for models/prospectivity_v1.pkl, with a model already in place."""
-    import src.models.prospectivity.pu_xgboost as pu_xgboost
+def store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A registry of its own, so no test can promote into models/."""
+    from src.models import registry
 
-    path = tmp_path / "prospectivity_v1.pkl"
-    path.write_bytes(b"the model in production")
-    monkeypatch.setattr(pu_xgboost, "MODEL_PATH", path)
-    return path
+    root = tmp_path / "registry"
+    monkeypatch.setattr(registry, "REGISTRY_DIR", root)
+    monkeypatch.setattr(registry, "VERSIONS_DIR", root / "versions")
+    monkeypatch.setattr(registry, "STAGING_DIR", root / "staging")
+    monkeypatch.setattr(registry, "POINTER_PATH", root / "active.json")
+    monkeypatch.setattr(registry, "LOCK_PATH", root / ".registry.lock")
+    registry.clear_pointer_cache()
+    yield root
+    registry.clear_pointer_cache()
 
 
-def _stub_training(monkeypatch: pytest.MonkeyPatch, during: Any = None) -> list[Path]:
-    """Replace training with a write to whatever path it is handed."""
+def _bundle(marker: str) -> dict[str, Any]:
+    return {"model": marker, "features": ["b11", "b12"], "elkan_noto_c": 0.8}
+
+
+def _stub_training(monkeypatch: pytest.MonkeyPatch, during: Any = None, marker: str = "trained") -> list[Path]:
+    """Replace training with a valid bundle written where it is told."""
+    import joblib
+
     staged: list[Path] = []
 
-    def fake_main(argv: Any = None, save_path: Path | None = None) -> Path:
+    def fake_main(argv: Any = None, save_path: Path | None = None, metrics_path: Path | None = None) -> Path:
         # The worker must pass its own argv; the process's belongs to Celery.
-        assert argv == [] and save_path is not None
-        save_path.write_bytes(b"a freshly trained model")
+        assert argv == [] and save_path is not None and metrics_path is not None
+        joblib.dump(_bundle(marker), save_path)
+        metrics_path.write_text(json.dumps({"version": save_path.parent.name, "folds": []}), encoding="utf-8")
         staged.append(save_path)
         if during is not None:
             during()
@@ -407,26 +455,66 @@ def _stub_training(monkeypatch: pytest.MonkeyPatch, during: Any = None) -> list[
     return staged
 
 
-def test_a_finished_run_promotes_its_staged_model(
-    factory: sessionmaker[Session], model_path: Path, monkeypatch: pytest.MonkeyPatch
+def test_a_finished_run_publishes_a_version_without_touching_the_served_model(
+    factory: sessionmaker[Session], store: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    from src.models import registry
+    from src.models.prospectivity import predict
+
+    monkeypatch.delenv("PROSPECTIVITY_MODEL", raising=False)
+    monkeypatch.setattr(settings, "TRAINING_ACTIVATE_ON_SUCCESS", False)
     staged = _stub_training(monkeypatch)
-    _insert(factory, job_id="promotes", status="queued")
+    _insert(factory, job_id="publishes", status="queued")
 
-    assert train_prospectivity_model.apply(args=("promotes",)).get() == "claimed"
+    assert train_prospectivity_model.apply(args=("publishes",)).get() == "claimed"
 
-    assert model_path.read_bytes() == b"a freshly trained model"
-    assert staged and staged[0] != model_path, "training wrote straight to the served path"
-    assert not staged[0].exists(), "the staging file was left behind"
-    job = _row(factory, "promotes")
+    job = _row(factory, "publishes")
     assert job.status == "completed"
-    assert job.result_data == {"detail": "model retrained and saved", "model_path": str(model_path)}
+    assert job.result_data["activated"] is False
+    version = job.result_data["version"]
+    assert version in registry.versions()
+    assert joblib.load(registry.version_dir(version) / registry.MODEL_FILENAME)["model"] == "trained"
+    # Publishing alone must not change what inference loads.
+    assert predict.active_model_path() == predict.SHIPPED_MODEL_PATH
+    assert not staged[0].parent.exists(), "the staging directory was left behind"
 
 
-def test_a_worker_that_lost_its_lease_does_not_overwrite_the_model(
-    factory: sessionmaker[Session], model_path: Path, monkeypatch: pytest.MonkeyPatch
+def test_a_finished_run_changes_what_is_served_when_activation_is_on(
+    factory: sessionmaker[Session], store: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Two runs can overlap; the one that lost the job must not land its model."""
+    """Mandatory 6: the artifact predict_point and the heatmap key actually use."""
+    from src.api.routers import reference
+    from src.models.prospectivity import explain, predict
+
+    monkeypatch.delenv("PROSPECTIVITY_MODEL", raising=False)
+    monkeypatch.setattr(settings, "TRAINING_ACTIVATE_ON_SUCCESS", True)
+    explain.clear_bundle_cache()
+    _stub_training(monkeypatch, marker="the-new-model")
+    before_key = reference._cache_key((79.0, 21.3, 80.6, 22.1), 32, "none", predict.active_model_version())
+    _insert(factory, job_id="activates", status="queued")
+
+    train_prospectivity_model.apply(args=("activates",)).get()
+
+    job = _row(factory, "activates")
+    assert job.result_data["activated"] is True
+    assert predict.active_model_path() == Path(job.result_data["model_path"])
+    assert predict.active_model_version() == job.result_data["version"]
+    # What load_bundle - and so score_frame - resolves to has changed with it.
+    assert explain.load_bundle(predict.active_model_path())["model"] == "the-new-model"
+    after_key = reference._cache_key((79.0, 21.3, 80.6, 22.1), 32, "none", predict.active_model_version())
+    assert before_key != after_key, "cached tiles would survive a promotion"
+
+
+def test_a_worker_that_lost_its_job_publishes_nothing(
+    factory: sessionmaker[Session], store: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two runs can overlap; the one that lost the job must not publish."""
+    from src.models import registry
+    from src.models.prospectivity import predict
+
+    monkeypatch.delenv("PROSPECTIVITY_MODEL", raising=False)
+    monkeypatch.setattr(settings, "TRAINING_ACTIVATE_ON_SUCCESS", True)
+
     def taken_over() -> None:
         later = jobs.utcnow() + timedelta(seconds=settings.TRAINING_LEASE_SECONDS + 60)
         assert jobs.claim_job("handed-over", later).token is not None
@@ -436,10 +524,42 @@ def test_a_worker_that_lost_its_lease_does_not_overwrite_the_model(
 
     train_prospectivity_model.apply(args=("handed-over",)).get()
 
-    assert model_path.read_bytes() == b"the model in production"
-    assert not staged[0].exists()
+    assert registry.versions() == [], "a worker that lost its job published anyway"
+    assert predict.active_model_path() == predict.SHIPPED_MODEL_PATH
+    assert not staged[0].parent.exists()
     # The new owner still holds the job, so the loser's failure is discarded too.
     assert _row(factory, "handed-over").status == "running"
+
+
+def test_a_crash_after_publishing_is_recovered_without_retraining(
+    factory: sessionmaker[Session], store: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Mandatory 5: the outcome is recorded on redelivery; nothing trains twice."""
+    from src.models import registry
+
+    monkeypatch.setattr(settings, "TRAINING_ACTIVATE_ON_SUCCESS", True)
+    trained: list[Path] = _stub_training(monkeypatch)
+    _insert(factory, job_id="crashed", status="queued")
+    first_claim = jobs.claim_job("crashed", jobs.utcnow())
+    assert first_claim.token is not None
+    from src.worker.tasks import _train_and_publish
+
+    published = _train_and_publish("crashed", first_claim.token, first_claim.fence)
+    assert len(trained) == 1
+    # ...and the worker dies here, before the outcome is written. Its lease
+    # lapses, and the message is delivered again.
+    with factory() as db:
+        row = db.scalars(select(BackgroundJob).where(BackgroundJob.job_id == "crashed")).one()
+        row.updated_at = jobs.utcnow() - timedelta(seconds=settings.TRAINING_LEASE_SECONDS + 60)
+        db.commit()
+
+    assert train_prospectivity_model.apply(args=("crashed",)).get() == "claimed"
+
+    assert len(trained) == 1, "the redelivery retrained instead of recovering"
+    assert registry.versions() == [published.version]
+    job = _row(factory, "crashed")
+    assert job.status == "completed"
+    assert job.result_data["version"] == published.version
 
 
 # --- Celery wiring -------------------------------------------------------

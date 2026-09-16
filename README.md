@@ -105,7 +105,17 @@ OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES \
   celery -A src.worker.celery_app worker --queues training --concurrency 1 --loglevel INFO
 ```
 
-Run exactly one worker process: two runs can still overlap when one loses its lease, but each trains into a file of its own and only the run that still holds the lease promotes it, by rename. `CELERY_BROKER_URL` in `backend/.env` points at Redis (default `redis://127.0.0.1:6379/0`).
+Run exactly one worker process. Two runs can still overlap when one loses its lease, but each trains into a directory of its own and publishes an immutable version; the fence comparison and the ownership check happen inside the same lock that moves the pointer, so a stalled worker cannot publish over a newer artifact. `CELERY_BROKER_URL` in `backend/.env` points at Redis (default `redis://127.0.0.1:6379/0`).
+
+**Model versions are promoted, not overwritten.** A finished job publishes `models/registry/versions/<version>/` (model, metrics, manifest) and leaves serving alone — a training run silently replacing a shipped model is the failure this project already had once. `models/registry/active.json` says which version inference loads, and the API picks a change up without a restart:
+
+```bash
+cd backend
+python -m scripts.promote_model --list        # published versions, and the active one
+python -m scripts.promote_model <version>     # point serving at one
+```
+
+Set `TRAINING_ACTIVATE_ON_SUCCESS=true` in `backend/.env` if a successful job should activate its own artifact instead.
 
 ### Frontend
 

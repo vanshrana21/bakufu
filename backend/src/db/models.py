@@ -261,6 +261,10 @@ class BackgroundJob(Base):
     job_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     task_name: Mapped[str] = mapped_column(String(64))
     status: Mapped[str] = mapped_column(String(16), default="queued", index=True)
+    #: Bumped past every fence handed out before it, each time the job is
+    #: claimed. A worker carries it into model promotion, where a publish with
+    #: a fence no newer than the active one is refused (src/models/registry.py).
+    claim_fence: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     progress: Mapped[float | None] = mapped_column(Float, nullable=True)
     result_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)

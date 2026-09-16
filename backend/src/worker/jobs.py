@@ -56,6 +56,11 @@ def lock_task_starts(db: Session, task_name: str) -> None:
     db.execute(text("SELECT pg_advisory_xact_lock(CAST(:key AS BIGINT))"), {"key": key})
 
 
+def lock_model_promotion(db: Session, task_name: str) -> None:
+    """Serialise model promotion across hosts for the length of a transaction."""
+    lock_task_starts(db, f"model_promotion:{task_name}")
+
+
 def expire_stale_jobs(db: Session, task_name: str, now: datetime) -> int:
     """Fail active jobs that no worker will ever finish, freeing the slot.
 
@@ -144,6 +149,9 @@ class Claim:
     token: datetime | None
     #: The job's status as found; None when the row does not exist.
     status: str | None
+    #: The fence this claim took: strictly greater than every fence before it,
+    #: and what model promotion is judged against. 0 when nothing was claimed.
+    fence: int = 0
 
 
 def claim_job(job_id: str, now: datetime) -> Claim:
@@ -166,13 +174,39 @@ def claim_job(job_id: str, now: datetime) -> Claim:
                 updated_at=now,
                 finished_at=None,
                 error_message=None,
+                # One counter for every job: the database, not a clock, decides
+                # which claim is newer.
+                claim_fence=select(func.coalesce(func.max(BackgroundJob.claim_fence), 0) + 1)
+                .select_from(BackgroundJob)
+                .scalar_subquery(),
             )
             .execution_options(synchronize_session=False)
         ).rowcount
         if claimed == 1:
-            return Claim(token=now, status="running")
+            fence = db.scalar(select(BackgroundJob.claim_fence).where(BackgroundJob.job_id == job_id))
+            return Claim(token=now, status="running", fence=int(fence or 0))
         status = db.scalar(select(BackgroundJob.status).where(BackgroundJob.job_id == job_id))
         return Claim(token=None, status=status)
+
+
+def owns_job(job_id: str, token: datetime) -> bool:
+    """Whether the claim identified by `token` still owns this running job.
+
+    Read-only, for the check model promotion makes inside the registry lock.
+    """
+    with db_session.SessionLocal() as db:
+        return (
+            db.scalar(
+                select(func.count())
+                .select_from(BackgroundJob)
+                .where(
+                    BackgroundJob.job_id == job_id,
+                    BackgroundJob.status == "running",
+                    BackgroundJob.started_at == token,
+                )
+            )
+            or 0
+        ) == 1
 
 
 def renew_lease(job_id: str, token: datetime, now: datetime) -> bool:

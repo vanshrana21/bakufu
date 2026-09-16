@@ -79,9 +79,11 @@ can be read in a browser; they expose no data.
 `409 training_in_progress` while a job is queued or running, `503
 broker_unavailable` when the broker cannot be reached (nothing is left queued).
 `GET /train/{task_id}` reports `queued`, `running`, `completed` or `failed`; a
-job whose worker died reads as `failed` once its lease lapses. A run writes its
-model to a staging file and promotes it by rename only while it still holds the
-lease, so an overlapping run can never half-write or overwrite the served one.
+job whose worker died reads as `failed` once its lease lapses. A completed job's
+`detail` names the version it published, and its `result_data` carries
+`{version, model_path, activated}`. `activated: false` - the default - means the
+artifact is in the registry and serving still uses the previously active
+version until `python -m scripts.promote_model <version>` says otherwise.
 
 **`GET /prospectivity/heatmap` can answer `503 service_busy`.** Two uncached
 grids are scored at a time; a third waits, and is refused rather than queued

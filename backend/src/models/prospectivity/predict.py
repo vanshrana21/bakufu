@@ -39,8 +39,25 @@ SHIPPED_MODEL_PATH: Path = settings.MODELS_DIR / "prospectivity_v6.pkl"
 #: Overridable so another bundle can be exercised through the running API
 #: without editing code. MODEL_PATH stays as the training scratch target.
 _ENV_MODEL = os.environ.get("PROSPECTIVITY_MODEL")
+#: The fallback, and what the process starts on. What is actually served comes
+#: from active_model_path() below, which follows the registry pointer, so a
+#: promotion takes effect without a restart.
 ACTIVE_MODEL_PATH: Path = Path(_ENV_MODEL) if _ENV_MODEL else SHIPPED_MODEL_PATH
 MODEL_VERSION: str = ACTIVE_MODEL_PATH.stem
+
+
+def active_model_path() -> Path:
+    """The bundle to score with now: registry pointer, env override, or shipped."""
+    from src.models.registry import active_model
+
+    return active_model().path
+
+
+def active_model_version() -> str:
+    """The version string reported on every scored response."""
+    from src.models.registry import active_model
+
+    return active_model().version
 
 #: Features must come from the same mosaic the active model was trained on,
 #: otherwise inference silently drifts from training. Overridable alongside
@@ -142,7 +159,7 @@ def score_frame(
     adjust: bool = True,
 ) -> np.ndarray:
     """Predicted probabilities, optionally Elkan-Noto adjusted."""
-    bundle = load_bundle(model_path or ACTIVE_MODEL_PATH)
+    bundle = load_bundle(model_path or active_model_path())
     X = frame.reindex(columns=bundle["features"]).astype("float64")
     # Bundles trained with a missing-value sentinel must be served the same way,
     # or absent terrain reaches the trees as NaN instead of the value they split on.
@@ -169,7 +186,7 @@ def predict_point(
     if frame[AE_COLUMNS].isna().all(axis=1).iloc[0]:
         return None
 
-    model_path = model_path or ACTIVE_MODEL_PATH
+    model_path = model_path or active_model_path()
     score = float(cap_score(score_frame(frame, model_path)[0]))
     bundle = load_bundle(model_path)
     row = frame.reindex(columns=bundle["features"]).astype("float64")
@@ -190,7 +207,7 @@ def predict_point(
         "uncertainty": float(uncertainty_from_probability(score)),
         "features_extracted": extracted,
         "shap_top5": shap_top5,
-        "model_version": MODEL_VERSION,
+        "model_version": active_model_version(),
         "lat": lat,
         "lon": lon,
     }
@@ -260,7 +277,7 @@ def predict_bbox(
     inside = frame[AE_COLUMNS].notna().all(axis=1).to_numpy()
     scores = np.full(len(frame), np.nan)
     if inside.any():
-        scores[inside] = cap_score(score_frame(frame[inside], model_path or ACTIVE_MODEL_PATH))
+        scores[inside] = cap_score(score_frame(frame[inside], model_path or active_model_path()))
 
     result = pd.DataFrame(
         {
@@ -278,7 +295,7 @@ def predict_bbox(
         "bbox": [min_lon, min_lat, max_lon, max_lat],
         "grid_resolution_m": float(step),
         "cells_outside_raster": int((~inside).sum()),
-        "model_version": MODEL_VERSION,
+        "model_version": active_model_version(),
     }
 
 
@@ -315,7 +332,7 @@ def heatmap_grid(
     usable = frame[AE_COLUMNS].notna().all(axis=1).to_numpy()
     scores = np.full(len(frame), np.nan)
     if usable.any():
-        scores[usable] = cap_score(score_frame(frame[usable], model_path or ACTIVE_MODEL_PATH))
+        scores[usable] = cap_score(score_frame(frame[usable], model_path or active_model_path()))
 
     grid = scores.reshape(grid_size, grid_size)
     outside = int(np.isnan(grid).sum())
@@ -348,5 +365,5 @@ def heatmap_grid(
             "max": min(float(finite.max()), float(SCORE_CAP)) if finite.size else None,
             "cap": float(SCORE_CAP),
         },
-        "model_version": Path(model_path or ACTIVE_MODEL_PATH).stem,
+        "model_version": Path(model_path).stem if model_path else active_model_version(),
     }

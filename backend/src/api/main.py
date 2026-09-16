@@ -49,17 +49,25 @@ async def lifespan(app: FastAPI):
 
     from src.api.routers.reference import clear_heatmap_memory
     from src.models.explainers import clear_explainers
+    from src.models.prospectivity.explain import clear_bundle_cache
+    from src.models.registry import active_model, clear_pointer_cache
 
     clear_forecast_cache()
     clear_shortfall_cache()
     clear_heatmap_memory()
     clear_explainers()
+    # The pointer and the bundles it names are re-read from disk, so a
+    # promotion that happened while this process was down is picked up.
+    clear_pointer_cache()
+    clear_bundle_cache()
     app.state.artifacts = load_all()
     loaded = [name for name, a in app.state.artifacts.artifacts.items() if a.ok]
     failed = app.state.artifacts.degraded
     logger.info("startup: %d artifacts loaded%s", len(loaded),
                 f", {len(failed)} failed: {', '.join(failed)}" if failed else "")
     logger.info("startup: %s required on every route", API_KEY_HEADER)
+    serving = active_model()
+    logger.info("startup: scoring with %s (%s)", serving.version, serving.source)
     stop_warming = _start_heatmap_warming()
     yield
     stop_warming.set()

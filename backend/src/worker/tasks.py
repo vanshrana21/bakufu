@@ -6,18 +6,18 @@
 from __future__ import annotations
 
 import logging
-import os
+import shutil
 import threading
 import time
 import traceback
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 from celery import Task
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.config.settings import settings
+from src.db import session as db_session
 from src.worker import jobs
 from src.worker.celery_app import TRAIN_TASK, celery_app
 
@@ -58,19 +58,15 @@ def train_prospectivity_model(self: Task, job_id: str) -> str:
         logger.info("training job %s is %s; nothing to do", job_id, claim.status or "missing")
         return claim.status or "missing"
 
-    run_training_job(job_id, claim.token)
+    run_training_job(job_id, claim.token, claim.fence)
     return "claimed"
 
 
-class LeaseLost(RuntimeError):
-    """Raised when a job's lease lapsed before its model could be promoted."""
-
-
-def run_training_job(job_id: str, token: datetime) -> None:
+def run_training_job(job_id: str, token: datetime, fence: int) -> None:
     """Train while renewing the job's lease, then record how it went."""
     with _LeaseHeartbeat(job_id, token):
         try:
-            model_path = _train(job_id, token)
+            published = _train_and_publish(job_id, token, fence)
         except Exception as exc:  # noqa: BLE001 - surfaced through GET /train/{task_id}
             outcome: dict[str, Any] = {
                 "status": "failed",
@@ -80,39 +76,72 @@ def run_training_job(job_id: str, token: datetime) -> None:
             outcome = {
                 "status": "completed",
                 "progress": 100.0,
-                "result_data": {"detail": "model retrained and saved", "model_path": str(model_path)},
+                "result_data": {
+                    "detail": (
+                        f"model retrained and published as {published.version}"
+                        + ("; serving now uses it" if published.activated else "; not yet activated")
+                    ),
+                    "version": published.version,
+                    "model_path": str(published.path),
+                    "activated": published.activated,
+                },
             }
     _record_outcome(job_id, token, outcome)
 
 
-def _train(job_id: str, token: datetime) -> Path:
-    """Train into a staging file and promote it only while the lease still holds.
+def _train_and_publish(job_id: str, token: datetime, fence: int):
+    """Train into this claim's own directory and publish it to the registry.
 
-    Two runs can overlap - a worker cut off from the database keeps training
-    while its replacement starts - and the loser must not land its model on top
-    of the winner's. Training therefore writes to a file of its own, the lease
-    is re-checked, and the promotion is a rename, which is atomic: the served
-    path is never a half-written bundle and never the stale run's work.
+    Nothing is written where inference looks. The artifact is validated, moved
+    into an immutable version directory, and - only when the server is
+    configured to activate on success - the pointer is moved to it. Both the
+    fence comparison and the ownership check happen inside the registry lock
+    that also writes the pointer, so a worker that stalled and lost its job
+    cannot publish over a newer artifact.
     """
     # Imported here, inside the forked worker process: torch and XGBoost must
     # not start their thread pools in the parent that does the forking.
-    from src.models.prospectivity.pu_xgboost import MODEL_PATH
+    from src.models import registry
     from src.models.prospectivity.train_pu_xgboost import main as train_main
 
-    staging = MODEL_PATH.with_name(f".{MODEL_PATH.stem}.{job_id}.staging.pkl")
+    already = registry.artifact_for_job(job_id)
+    if already is not None:
+        # This job published before the outcome could be recorded. Retraining
+        # would produce a second artifact for one job; recover instead.
+        logger.info("training job %s already published %s; recording that", job_id, already)
+        pointer = registry.read_pointer() or {}
+        return registry.PublishedVersion(
+            version=already,
+            path=registry.version_dir(already) / registry.MODEL_FILENAME,
+            fence=fence,
+            job_id=job_id,
+            activated=pointer.get("version") == already,
+        )
+
+    staged = registry.staging_dir(job_id, fence)
+    shutil.rmtree(staged, ignore_errors=True)
+    staged.mkdir(parents=True, exist_ok=True)
     try:
         # An explicit argv: the parser would otherwise read the worker's own
         # command line and exit.
-        train_main([], save_path=staging)
-        if not jobs.renew_lease(job_id, token, jobs.utcnow()):
-            raise LeaseLost(
-                f"the lease lapsed while job {job_id} was training, so another worker owns it now; "
-                f"the new model was discarded rather than written over {MODEL_PATH.name}"
+        train_main(
+            [],
+            save_path=staged / registry.MODEL_FILENAME,
+            metrics_path=staged / registry.METRICS_FILENAME,
+        )
+        # The advisory lock serialises promotion across hosts; the registry lock
+        # inside publish() covers this host and the pointer write itself.
+        with db_session.SessionLocal() as db, db.begin():
+            jobs.lock_model_promotion(db, jobs.TRAIN_TASK_NAME)
+            return registry.publish(
+                staged=staged,
+                job_id=job_id,
+                fence=fence,
+                activate=settings.TRAINING_ACTIVATE_ON_SUCCESS,
+                still_owns_job=lambda: jobs.owns_job(job_id, token),
             )
-        os.replace(staging, MODEL_PATH)
     finally:
-        staging.unlink(missing_ok=True)
-    return MODEL_PATH
+        shutil.rmtree(staged, ignore_errors=True)
 
 
 def _record_outcome(job_id: str, token: datetime, outcome: dict[str, Any]) -> None:
