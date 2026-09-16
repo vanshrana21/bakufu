@@ -1,10 +1,11 @@
-"""The bounded heatmap caches in src/api/routers/reference.py.
+"""The bounded heatmap caches and scoring guards in src/api/routers/reference.py.
 
-Both the payload cache and the per-key computation locks used to be plain
-dicts that only ever grew: every distinct bbox a client asked for left a
-payload and a lock behind for the life of the process. They are now bounded
-caches, and these tests pin the bound, the expiry and the single-flight
-behaviour that keeps one cold grid from being scored twice at once.
+The payload cache used to be a plain dict that only grew: every distinct bbox a
+client asked for left a payload behind for the life of the process. It is a
+bounded TTL cache now. The per-key computation locks are bounded differently -
+by reference counting - because evicting a lock somebody still holds destroys
+the mutual exclusion it exists for, and a ceiling on concurrent scoring keeps a
+flood of distinct viewports from running one model pass per request.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from typing import Any
 import pytest
 from cachetools import TTLCache
 
+from src.api.errors import ServiceBusy
 from src.api.routers import reference
 
 BBOX = (79.0, 21.3, 80.6, 22.1)
@@ -42,16 +44,13 @@ def _payload(grid_size: int = 4) -> dict[str, Any]:
     }
 
 
-# --- the caches the module actually uses --------------------------------
+# --- the payload cache ---------------------------------------------------
 
 
-def test_both_caches_are_bounded() -> None:
+def test_the_payload_cache_is_bounded() -> None:
     assert isinstance(reference._MEMORY, TTLCache)
     assert reference._MEMORY.maxsize == reference.MEMORY_MAX_ENTRIES
     assert reference._MEMORY.ttl == reference.MEMORY_TTL_SECONDS
-    assert isinstance(reference._KEY_LOCKS, TTLCache)
-    assert reference._KEY_LOCKS.maxsize == reference.KEY_LOCK_MAX_ENTRIES
-    assert reference._KEY_LOCKS.ttl == reference.KEY_LOCK_TTL_SECONDS
 
 
 def test_payloads_are_evicted_by_size_and_by_age(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -68,23 +67,115 @@ def test_payloads_are_evicted_by_size_and_by_age(monkeypatch: pytest.MonkeyPatch
     assert len(reference._MEMORY) == 0
 
 
-def test_a_key_keeps_one_lock_and_the_table_stays_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(reference, "_KEY_LOCKS", TTLCache(maxsize=4, ttl=60, timer=time.monotonic))
-    assert reference._key_lock("same") is reference._key_lock("same")
-    assert reference._key_lock("same") is not reference._key_lock("other")
-
-    for index in range(50):
-        reference._key_lock(f"key-{index}")
-    assert len(reference._KEY_LOCKS) == 4
+# --- the per-key locks ---------------------------------------------------
 
 
-def test_a_lock_in_use_does_not_expire(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Re-inserting on every lookup restarts the TTL, so a busy key keeps its lock."""
-    monkeypatch.setattr(reference, "_KEY_LOCKS", TTLCache(maxsize=8, ttl=0.08, timer=time.monotonic))
-    first = reference._key_lock("busy")
-    for _ in range(4):
-        time.sleep(0.03)
-        assert reference._key_lock("busy") is first
+def test_the_lock_table_empties_itself() -> None:
+    with reference._key_guard("one"):
+        assert set(reference._KEY_LOCKS) == {"one"}
+        with reference._key_guard("two"):
+            assert set(reference._KEY_LOCKS) == {"one", "two"}
+    assert reference._KEY_LOCKS == {}
+
+
+def test_a_lock_in_use_is_never_replaced() -> None:
+    """The bug an LRU or TTL lock table would reintroduce: two locks, one key."""
+    held = reference._KEY_LOCKS
+    entered = threading.Event()
+    release = threading.Event()
+    second_entered = threading.Event()
+
+    def hold() -> None:
+        with reference._key_guard("busy"):
+            entered.set()
+            release.wait(5)
+
+    def follow() -> None:
+        with reference._key_guard("busy"):
+            second_entered.set()
+
+    holder = threading.Thread(target=hold)
+    holder.start()
+    assert entered.wait(5)
+    mine = held["busy"]
+
+    follower = threading.Thread(target=follow)
+    follower.start()
+    # Thousands of other keys come and go while "busy" is held.
+    for index in range(5_000):
+        with reference._key_guard(f"key-{index}"):
+            pass
+
+    assert held["busy"] is mine, "the held lock was replaced"
+    assert not second_entered.is_set(), "a second thread entered while the key was held"
+    release.set()
+    holder.join(5)
+    follower.join(5)
+    assert second_entered.is_set()
+    assert reference._KEY_LOCKS == {}
+
+
+def test_the_lock_table_is_bounded_by_work_in_flight() -> None:
+    for index in range(2_000):
+        with reference._key_guard(f"key-{index}"):
+            assert len(reference._KEY_LOCKS) == 1
+    assert reference._KEY_LOCKS == {}
+
+
+# --- concurrent scoring --------------------------------------------------
+
+
+def test_scoring_slots_are_limited_and_released(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(reference, "_SCORING_SLOTS", threading.BoundedSemaphore(1))
+    monkeypatch.setattr(reference, "SCORING_QUEUE_TIMEOUT_SECONDS", 0.05)
+
+    with reference._scoring_slot():
+        with pytest.raises(ServiceBusy) as refused:
+            with reference._scoring_slot():
+                pass
+    assert refused.value.status_code == 503
+    assert refused.value.error_code == "service_busy"
+
+    # The slot is handed back, so the next caller is served.
+    with reference._scoring_slot():
+        pass
+
+
+def test_a_flood_of_distinct_viewports_cannot_pile_up(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Each distinct bbox is its own key, so only the slot ceiling holds them back."""
+    from src.models.prospectivity import predict
+
+    monkeypatch.setattr(reference, "CACHE_DIR", tmp_path / "cache")
+    monkeypatch.setattr(reference, "_SCORING_SLOTS", threading.BoundedSemaphore(2))
+    monkeypatch.setattr(reference, "SCORING_QUEUE_TIMEOUT_SECONDS", 5)
+    live = 0
+    peak = 0
+    counter = threading.Lock()
+
+    def slow_grid(*_args: Any, grid_size: int = 4, **_kwargs: Any) -> dict[str, Any]:
+        nonlocal live, peak
+        with counter:
+            live += 1
+            peak = max(peak, live)
+        time.sleep(0.15)
+        with counter:
+            live -= 1
+        return _payload(grid_size)
+
+    monkeypatch.setattr(predict, "heatmap_grid", slow_grid)
+
+    def ask(index: int) -> None:
+        reference.compute_heatmap(79.0 + index / 100, 21.3, 80.6, 22.1, grid_size=4, mask="none")
+
+    threads = [threading.Thread(target=ask, args=(index,)) for index in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert peak <= 2, f"{peak} model passes ran at once"
 
 
 # --- single flight -------------------------------------------------------
@@ -124,3 +215,4 @@ def test_one_cold_computation_per_key_under_concurrency(
     assert all(result["scores"] == _payload(4)["scores"] for result in results)
     # One disk tile, not eight.
     assert len(list((tmp_path / "cache").glob("heatmap_*.json"))) == 1
+    assert reference._KEY_LOCKS == {}

@@ -8,7 +8,9 @@ import json
 import logging
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -16,7 +18,7 @@ from typing import Any
 from cachetools import TTLCache
 from fastapi import APIRouter, HTTPException, Query, Request
 
-from src.api.errors import ModelNotLoaded
+from src.api.errors import ModelNotLoaded, ServiceBusy
 from src.config.settings import settings
 
 from src.reference.moil_mines import (
@@ -128,21 +130,32 @@ MEMORY_TTL_SECONDS = 10 * 60
 #: Heatmap payloads held in memory. The warmer keeps 12 (3 viewports x 4 masks);
 #: arbitrary client bboxes share the rest, least recently used out first.
 MEMORY_MAX_ENTRIES = 256
-#: Per-key computation locks. An entry idle for KEY_LOCK_TTL_SECONDS is dropped.
-KEY_LOCK_MAX_ENTRIES = 1000
-KEY_LOCK_TTL_SECONDS = 3600
+#: Grids scored at once. Each pass holds a full lattice of features in memory,
+#: so unrelated viewports queue rather than pile up and exhaust the process.
+MAX_CONCURRENT_SCORING = 2
+#: How long a request waits for one of those slots before it is refused.
+SCORING_QUEUE_TIMEOUT_SECONDS = 45
 MIN_GRID, MAX_GRID = 8, 128
 
-# cachetools caches are not thread-safe - a read reorders and expires entries -
-# so every access to either cache happens under its guard.
+# TTLCache is not thread-safe - a read reorders and expires entries - so every
+# access happens under this guard.
 _MEMORY: TTLCache[str, dict[str, Any]] = TTLCache(
     maxsize=MEMORY_MAX_ENTRIES, ttl=MEMORY_TTL_SECONDS, timer=time.monotonic
 )
 _MEMORY_GUARD = threading.Lock()
-_KEY_LOCKS: TTLCache[str, threading.Lock] = TTLCache(
-    maxsize=KEY_LOCK_MAX_ENTRIES, ttl=KEY_LOCK_TTL_SECONDS, timer=time.monotonic
-)
+
+
+@dataclass
+class _KeyLock:
+    """One key's lock, with the number of callers holding or waiting for it."""
+
+    lock: threading.Lock = field(default_factory=threading.Lock)
+    holders: int = 0
+
+
+_KEY_LOCKS: dict[str, _KeyLock] = {}
 _KEY_LOCKS_GUARD = threading.Lock()
+_SCORING_SLOTS = threading.BoundedSemaphore(MAX_CONCURRENT_SCORING)
 
 
 def clear_heatmap_memory() -> None:
@@ -160,20 +173,51 @@ def _memory_write(key: str, payload: dict[str, Any]) -> None:
         _MEMORY[key] = payload
 
 
-def _key_lock(key: str) -> threading.Lock:
-    """The lock that serialises computing `key`.
+@contextmanager
+def _key_guard(key: str) -> Iterator[None]:
+    """Serialise computing `key`, keeping the lock only while it is wanted.
 
-    Re-inserting on every call restarts the entry's TTL, so a key in use never
-    expires. Should 1,000 newer keys push out a lock that is still held, the
-    next caller gets a fresh lock and computes the same payload a second time:
-    duplicated work, never a wrong or corrupted result.
+    Reference counted, never evicted on a size or time bound: dropping a lock
+    another thread still holds would hand the next caller a different lock for
+    the same key, and both would score the same grid at once - the mutual
+    exclusion this exists for. The table is bounded by the requests in flight
+    instead, and empties itself as they finish.
     """
     with _KEY_LOCKS_GUARD:
-        lock = _KEY_LOCKS.get(key)
-        if lock is None:
-            lock = threading.Lock()
-        _KEY_LOCKS[key] = lock
-        return lock
+        entry = _KEY_LOCKS.get(key)
+        if entry is None:
+            entry = _KEY_LOCKS[key] = _KeyLock()
+        entry.holders += 1
+    try:
+        with entry.lock:
+            yield
+    finally:
+        with _KEY_LOCKS_GUARD:
+            entry.holders -= 1
+            if entry.holders == 0:
+                _KEY_LOCKS.pop(key, None)
+
+
+@contextmanager
+def _scoring_slot() -> Iterator[None]:
+    """Hold one of the concurrent-scoring slots, or refuse the request.
+
+    A cold grid is a model pass over the whole lattice. Without a ceiling,
+    enough distinct viewports arriving at once - a user panning the map, or a
+    crawler - would run that pass once per request until the process died.
+    """
+    if not _SCORING_SLOTS.acquire(timeout=SCORING_QUEUE_TIMEOUT_SECONDS):
+        raise ServiceBusy(
+            detail=(
+                f"already scoring {MAX_CONCURRENT_SCORING} uncached viewports and this request "
+                f"waited {SCORING_QUEUE_TIMEOUT_SECONDS}s for a slot"
+            ),
+            remedy="retry shortly, or request one of the pre-warmed viewports, which are cached",
+        )
+    try:
+        yield
+    finally:
+        _SCORING_SLOTS.release()
 
 
 def _cache_key(bbox: tuple[float, ...], grid_size: int, mask: str, version: str) -> str:
@@ -225,7 +269,7 @@ def compute_heatmap(
     # One computation per key: a request that arrives while the warmer is
     # scoring the same surface waits for that result instead of starting a
     # second pass over the raster.
-    with _key_lock(key):
+    with _key_guard(key):
         hit = _memory_read(key)
         if hit is not None:
             return {**hit, "cached": True}
@@ -235,7 +279,10 @@ def compute_heatmap(
             return {**cached, "cached": True}
 
         if mask == "none":
-            payload = heatmap_grid(min_lon, min_lat, max_lon, max_lat, grid_size=grid_size)
+            # Only the model pass takes a slot; deriving a masked surface from
+            # an already-scored grid is cheap and must never queue behind one.
+            with _scoring_slot():
+                payload = heatmap_grid(min_lon, min_lat, max_lon, max_lat, grid_size=grid_size)
             payload["generated_at"] = datetime.now(UTC).isoformat(timespec="seconds")
         else:
             base = compute_heatmap(min_lon, min_lat, max_lon, max_lat, grid_size, "none")

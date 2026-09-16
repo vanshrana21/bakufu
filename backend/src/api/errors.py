@@ -59,6 +59,11 @@ class BrokerUnavailable(ApiError):
     error_code = "broker_unavailable"
 
 
+class ServiceBusy(ApiError):
+    status_code = 503
+    error_code = "service_busy"
+
+
 async def api_error_handler(_request: Request, exc: ApiError) -> JSONResponse:
     body: dict[str, str] = {"error_code": exc.error_code, "detail": exc.detail}
     if exc.remedy:
