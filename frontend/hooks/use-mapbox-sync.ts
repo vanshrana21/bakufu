@@ -21,6 +21,8 @@ export interface MapboxSync {
   layersRevision: number;
   /** What the engine actually drew, counted by unique id once the map is idle. */
   rendered: { cells: number; excluded: number; waste: number };
+  /** A style/source installation failure, kept separate from tile failures. */
+  failure: string | null;
 }
 
 /** Keeps the map's sources and layers in step with the data.
@@ -36,6 +38,7 @@ export function useMapboxSync(
 ): MapboxSync {
   const [layersRevision, setLayersRevision] = useState(0);
   const [rendered, setRendered] = useState({ cells: 0, excluded: 0, waste: 0 });
+  const [failure, setFailure] = useState<string | null>(null);
   const latest = useRef({ sites, surface });
 
   useEffect(() => {
@@ -63,16 +66,29 @@ export function useMapboxSync(
   // again. installMapboxLayers is idempotent, so this can only ever add.
   useEffect(() => {
     if (!map || styleRevision === 0) return;
-    installMapboxLayers(map, latest.current);
-    setLayersRevision(styleRevision);
+    let active = true;
+    try {
+      installMapboxLayers(map, latest.current);
+      if (active) {
+        setFailure(null);
+        setLayersRevision(styleRevision);
+      }
+    } catch {
+      if (active) setFailure("Map layers could not be installed after the map style changed. The site list remains available.");
+    }
+    return () => { active = false; };
   }, [map, styleRevision]);
 
   // Data: replace source contents without recreating the map.
   useEffect(() => {
     if (!map || layersRevision === 0) return;
-    (map.getSource(MAP_IDS.sites) as GeoJSONSource | undefined)?.setData(siteFeatures(sites));
-    (map.getSource(MAP_IDS.surface) as GeoJSONSource | undefined)?.setData(surface);
+    try {
+      (map.getSource(MAP_IDS.sites) as GeoJSONSource | undefined)?.setData(siteFeatures(sites));
+      (map.getSource(MAP_IDS.surface) as GeoJSONSource | undefined)?.setData(surface);
+    } catch {
+      setFailure("Map data could not be updated. The site list remains available.");
+    }
   }, [map, layersRevision, sites, surface]);
 
-  return { layersRevision, rendered };
+  return { layersRevision, rendered, failure };
 }

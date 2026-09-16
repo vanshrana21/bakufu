@@ -19,14 +19,15 @@ import matplotlib
 from cachetools import LRUCache
 
 matplotlib.use("Agg")  # headless; no display on the box this runs on
-import matplotlib.pyplot as plt  # noqa: E402
-import numpy as np  # noqa: E402
-import pandas as pd  # noqa: E402
-import shap  # noqa: E402
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import shap
 
-from src.config.settings import settings  # noqa: E402
-from src.models.explainers import tree_explainer  # noqa: E402
-from src.models.prospectivity.pu_xgboost import MODEL_PATH  # noqa: E402
+from src.config.settings import settings
+from src.models.artifact_security import load_joblib
+from src.models.explainers import tree_explainer
+from src.models.prospectivity.pu_xgboost import MODEL_PATH
 
 SUMMARY_PLOT_PATH: Path = settings.DATA_PROCESSED / "shap_summary.png"
 
@@ -42,7 +43,9 @@ def _identity(path: Path) -> tuple[str, int, int]:
     return (str(path.resolve()), stat.st_mtime_ns, stat.st_size)
 
 
-def load_bundle(model_path: Path | str = MODEL_PATH) -> dict[str, Any]:
+def load_bundle(
+    model_path: Path | str = MODEL_PATH, *, production: bool = True
+) -> dict[str, Any]:
     """Load and memoise the trained model bundle.
 
     Keyed by what is on disk, not just the path: promotion replaces the file
@@ -60,7 +63,12 @@ def load_bundle(model_path: Path | str = MODEL_PATH) -> dict[str, Any]:
         cached = _CACHE.get(key)
     if cached is not None:
         return cached
-    bundle = joblib.load(path)
+    if production:
+        from src.models import registry
+
+        bundle = load_joblib(path, registry_root=registry.VERSIONS_DIR)
+    else:
+        bundle = joblib.load(path)
     with _CACHE_LOCK:
         _CACHE[key] = bundle
     return bundle

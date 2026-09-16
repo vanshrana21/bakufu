@@ -76,20 +76,34 @@ export function useMapboxSelection(
   // deliberately left where the user put it.
   useEffect(() => {
     if (!map || layersRevision === 0 || !map.getSource(MAP_IDS.sites)) return;
-    if (previousSelection.current) {
-      map.setFeatureState({ source: MAP_IDS.sites, id: previousSelection.current }, { selected: false });
-    }
-    if (selectedSiteId) {
-      map.setFeatureState({ source: MAP_IDS.sites, id: selectedSiteId }, { selected: true });
+    let active = true;
+    // A style replacement removes feature state even though the selected id is
+    // unchanged. Reapply it only while this installation is still current.
+    try {
+      if (previousSelection.current) {
+        map.setFeatureState({ source: MAP_IDS.sites, id: previousSelection.current }, { selected: false });
+      }
+      if (active && selectedSiteId && map.getSource(MAP_IDS.sites)) {
+        map.setFeatureState({ source: MAP_IDS.sites, id: selectedSiteId }, { selected: true });
+      }
+    } catch {
+      // Style changes can race this effect; the next style revision retries.
+      return () => { active = false; };
     }
     previousSelection.current = selectedSiteId;
     markerRef.current?.remove();
     markerRef.current = null;
     const site = sites.find((candidate) => candidate.id === selectedSiteId);
     if (site?.location) {
-      markerRef.current = new mapboxgl.Marker({ element: siteLabelElement(site.name), ...SITE_LABEL_MARKER })
-        .setLngLat([site.location.longitude, site.location.latitude])
-        .addTo(map);
+      try {
+        markerRef.current = new mapboxgl.Marker({ element: siteLabelElement(site.name), ...SITE_LABEL_MARKER })
+          .setLngLat([site.location.longitude, site.location.latitude])
+          .addTo(map);
+      } catch {
+        // A style/container teardown can race marker installation.
+        markerRef.current = null;
+      }
     }
+    return () => { active = false; };
   }, [map, layersRevision, selectedSiteId, sites]);
 }

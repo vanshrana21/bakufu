@@ -207,9 +207,9 @@ def test_a_promotion_reloads_the_bundle_rather_than_serving_the_cached_one(
     # Even at one unchanged path, a replaced file is a different bundle.
     same_path = store / "fixed.pkl"
     joblib.dump({"model": "a", "features": ["x"], "elkan_noto_c": 0.5}, same_path)
-    assert explain.load_bundle(same_path)["model"] == "a"
+    assert explain.load_bundle(same_path, production=False)["model"] == "a"
     joblib.dump({"model": "b", "features": ["x"], "elkan_noto_c": 0.5}, same_path)
-    assert explain.load_bundle(same_path)["model"] == "b"
+    assert explain.load_bundle(same_path, production=False)["model"] == "b"
 
 
 def test_the_heatmap_cache_key_moves_with_the_active_version(

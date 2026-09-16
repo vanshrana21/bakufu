@@ -40,13 +40,19 @@ export function useMapboxEngine(token: string = MAPBOX_PUBLIC_TOKEN): MapboxEngi
   const [ready, setReady] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [styleRevision, setStyleRevision] = useState(0);
+  const generation = useRef(0);
 
   // Created once, torn down on unmount. The token cannot change at runtime:
   // it is baked in at build time.
   useEffect(() => {
+    const currentGeneration = ++generation.current;
+    let active = true;
+    const guarded = (callback: () => void) => {
+      if (active && generation.current === currentGeneration) callback();
+    };
     if (!containerRef.current) return;
     if (!mapboxgl.supported()) {
-      setFailure("WebGL is unavailable in this browser. Use the site list below.");
+      guarded(() => setFailure("WebGL is unavailable in this browser. Use the site list below."));
       return;
     }
     let instance: mapboxgl.Map;
@@ -66,7 +72,7 @@ export function useMapboxEngine(token: string = MAPBOX_PUBLIC_TOKEN): MapboxEngi
         preserveDrawingBuffer: true,
       });
     } catch {
-      setFailure("The map could not initialize. Use the site list below.");
+      guarded(() => setFailure("The map could not initialize. Use the site list below."));
       return;
     }
     instance.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "top-right");
@@ -74,28 +80,30 @@ export function useMapboxEngine(token: string = MAPBOX_PUBLIC_TOKEN): MapboxEngi
     const observer = new ResizeObserver(() => instance.resize());
     observer.observe(containerRef.current);
     const timeout = setTimeout(
-      () => setFailure("Satellite tiles are taking too long to load. The site list remains available."),
+      () => guarded(() => setFailure("Satellite tiles are taking too long to load. The site list remains available.")),
       TILE_TIMEOUT_MS,
     );
 
-    const onStyleLoad = () => setStyleRevision((revision) => revision + 1);
-    const onLoad = () => {
+    const onStyleLoad = () => guarded(() => setStyleRevision((revision) => revision + 1));
+    const onLoad = () => guarded(() => {
       clearTimeout(timeout);
       setReady(true);
       setFailure(null);
-    };
-    const onError = (event: mapboxgl.ErrorEvent) => {
+    });
+    const onError = (event: mapboxgl.ErrorEvent) => guarded(() => {
       if (event.error.message.includes("access token")) setReady(false);
       setFailure(
         "Some map resources could not load. Check the public token, allowed URLs and network. The site list remains available.",
       );
-    };
+    });
 
     instance.on("style.load", onStyleLoad);
     instance.on("load", onLoad);
     instance.on("error", onError);
     setMap(instance);
     return () => {
+      active = false;
+      generation.current++;
       clearTimeout(timeout);
       observer.disconnect();
       instance.off("style.load", onStyleLoad);

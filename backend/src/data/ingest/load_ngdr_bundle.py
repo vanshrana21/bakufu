@@ -57,7 +57,7 @@ def _point_from_feature(feature: dict[str, Any]) -> tuple[float, float] | None:
                 point = geom if geom.geom_type == "Point" else geom.representative_point()
                 if valid_lonlat(point.x, point.y):
                     return point.x, point.y
-        except Exception:  # noqa: BLE001 - fall through to the property coordinates
+        except (AttributeError, TypeError, ValueError):
             pass
 
     props: dict[str, Any] = feature.get("properties") or {}
@@ -71,7 +71,24 @@ def _point_from_feature(feature: dict[str, Any]) -> tuple[float, float] | None:
 def _extract_bundle(zip_path: Path, dest: Path) -> list[Path]:
     """Unzip the bundle into `dest` and return its GeoJSON files, layer-sorted."""
     with zipfile.ZipFile(zip_path) as archive:
-        archive.extractall(dest)
+        root = dest.resolve()
+        for member in archive.infolist():
+            name = member.filename
+            target = (root / name).resolve()
+            try:
+                target.relative_to(root)
+            except ValueError:
+                raise ValueError(f"archive member escapes extraction directory: {name!r}")
+            # Zip symlinks can otherwise turn a safe-looking later member into
+            # an arbitrary write, so reject them rather than materialising them.
+            if (member.external_attr >> 16) & 0o170000 == 0o120000:
+                raise ValueError(f"archive symlink is not allowed: {name!r}")
+            if member.is_dir():
+                target.mkdir(parents=True, exist_ok=True)
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with archive.open(member) as source, target.open("xb") as output:
+                output.write(source.read())
     return sorted(dest.rglob("*.geojson"))
 
 

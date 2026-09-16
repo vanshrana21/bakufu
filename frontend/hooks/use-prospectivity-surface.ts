@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { FeatureCollection, Polygon } from "geojson";
 import type { MaskMode } from "@/lib/contracts";
 import type { SiteFixture } from "@/fixtures/predictions";
@@ -37,15 +37,17 @@ export function useProspectivitySurface(sites: readonly SiteFixture[], mask: Mas
     surface: null, loading: LIVE_MODE, error: null, origin: LIVE_MODE ? "live" : "fixture",
     cached: false, note: null, cellsScored: null, cellsNoData: null,
   });
+  const requestGeneration = useRef(0);
 
   useEffect(() => {
     if (!LIVE_MODE) return;
+    const generation = ++requestGeneration.current;
     const controller = new AbortController();
-    let current = true;
+    const current = () => requestGeneration.current === generation && !controller.signal.aborted;
     setState((previous) => ({ ...previous, surface: null, loading: true, error: null }));
     fetchHeatmap({ ...WARM_VIEWPORTS.full_bbox, gridSize: 32, mask, signal: controller.signal }).then(
       (result) => {
-        if (!current) return;
+        if (!current()) return;
         setState({
           surface: result.surface, loading: false, error: null, origin: "live",
           cached: result.cached, note: result.maskExclusionNote,
@@ -54,7 +56,7 @@ export function useProspectivitySurface(sites: readonly SiteFixture[], mask: Mas
         });
       },
       (error: unknown) => {
-        if (!current || controller.signal.aborted) return;
+        if (!current()) return;
         // No fixture fallback: a synthetic surface presented as live model
         // output is the one failure mode this map must never have.
         setState({
@@ -64,7 +66,11 @@ export function useProspectivitySurface(sites: readonly SiteFixture[], mask: Mas
         });
       },
     );
-    return () => { current = false; controller.abort(); };
+    return () => {
+      controller.abort();
+      // Invalidate even fetch implementations that incorrectly resolve after abort.
+      requestGeneration.current++;
+    };
   }, [mask]);
 
   if (!LIVE_MODE) {

@@ -33,22 +33,22 @@ export function installMaplibreLayers(
 ): void {
   // Fit display fixtures for this viewport, never treat camera bounds as scope.
   const extent = siteExtent(sites, { inScopeOnly: false });
-  if (extent) map.fitBounds(extent, { duration: 0, padding: framingPadding(map.getContainer().clientWidth, "initial") });
+  if (extent && !map.getSource(MAP_IDS.sites)) map.fitBounds(extent, { duration: 0, padding: framingPadding(map.getContainer().clientWidth, "initial") });
 
   registerMaskPattern(map);
-  map.addSource(MAP_IDS.surface, { type: "geojson", data: surface });
+  if (!map.getSource(MAP_IDS.surface)) map.addSource(MAP_IDS.surface, { type: "geojson", data: surface });
   // Both engines implement these standard v8 fill expressions. Narrow cast
   // stays at the adapter boundary; no Mapbox-only paint properties are used.
-  for (const layer of prospectivityLayers("geojson")) map.addLayer(layer as FillLayerSpecification);
-  map.addLayer({
+  for (const layer of prospectivityLayers("geojson")) if (!map.getLayer(layer.id)) map.addLayer(layer as FillLayerSpecification);
+  if (!map.getLayer(MAP_IDS.outlines)) map.addLayer({
     id: MAP_IDS.outlines,
     type: "line",
     source: MAP_IDS.surface,
     paint: { "line-color": "#EACEAA", "line-width": 1, "line-opacity": 0.8 },
   });
-  map.addSource(MAP_IDS.sites, { type: "geojson", data: siteFeatures(sites), promoteId: "id" });
-  map.addImage(MAP_IDS.wasteIcon, wasteDiamondPixels(), { pixelRatio: 2 });
-  map.addLayer({
+  if (!map.getSource(MAP_IDS.sites)) map.addSource(MAP_IDS.sites, { type: "geojson", data: siteFeatures(sites), promoteId: "id" });
+  if (!map.hasImage(MAP_IDS.wasteIcon)) map.addImage(MAP_IDS.wasteIcon, wasteDiamondPixels(), { pixelRatio: 2 });
+  if (!map.getLayer(MAP_IDS.selectionLayer)) map.addLayer({
     id: MAP_IDS.selectionLayer,
     type: "circle",
     source: MAP_IDS.sites,
@@ -61,14 +61,14 @@ export function installMaplibreLayers(
       "circle-stroke-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 1, 0],
     },
   });
-  map.addLayer({
+  if (!map.getLayer(MAP_IDS.diagnosticLayer)) map.addLayer({
     id: MAP_IDS.diagnosticLayer,
     type: "circle",
     source: MAP_IDS.sites,
     filter: ["==", ["get", "waste"], false],
     paint: { "circle-radius": 6, "circle-color": "#EACEAA", "circle-stroke-width": 2, "circle-stroke-color": "#85431E" },
   });
-  map.addLayer({
+  if (!map.getLayer(MAP_IDS.wasteLayer)) map.addLayer({
     id: MAP_IDS.wasteLayer,
     type: "symbol",
     source: MAP_IDS.sites,
@@ -79,7 +79,7 @@ export function installMaplibreLayers(
 
 /** Low-resolution NASA Blue Marble tiles under the screening layers. */
 export function addNasaContext(map: maplibregl.Map): void {
-  map.addSource(NASA_CONTEXT_SOURCE, {
+  if (!map.getSource(NASA_CONTEXT_SOURCE)) map.addSource(NASA_CONTEXT_SOURCE, {
     type: "raster",
     tileSize: 256,
     maxzoom: 8,
@@ -88,7 +88,7 @@ export function addNasaContext(map: maplibregl.Map): void {
     ],
     attribution: '<a href="https://earthdata.nasa.gov/centers/gibs">NASA GIBS · Blue Marble / MODIS</a>',
   });
-  map.addLayer(
+  if (!map.getLayer("nasa-imagery")) map.addLayer(
     {
       id: "nasa-imagery",
       type: "raster",

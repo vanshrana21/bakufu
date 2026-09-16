@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from src.config.settings import settings
+from src.models.artifact_security import load_joblib
 
 logger = logging.getLogger("api.state")
 
@@ -90,14 +91,13 @@ def _load(state: AppState, name: str, path: Path, loader) -> None:
 
 def load_all() -> AppState:
     """Load every served artifact. Never raises; failures are recorded."""
-    import joblib
     import pandas as pd
 
     state = AppState()
-    _load(state, "forecast_model", SHIPPED_FORECAST_MODEL, joblib.load)
+    _load(state, "forecast_model", SHIPPED_FORECAST_MODEL, load_joblib)
     _load(state, "forecast_metrics", SHIPPED_FORECAST_METRICS, lambda p: pd.read_json(p))
     _load(state, "backtest_rows", SHIPPED_BACKTEST_ROWS, pd.read_parquet)
-    _load(state, "shortfall_model", SHIPPED_SHORTFALL_MODEL, joblib.load)
+    _load(state, "shortfall_model", SHIPPED_SHORTFALL_MODEL, load_joblib)
     _load(state, "production_series", PRODUCTION_SERIES, pd.read_parquet)
     _load(state, "shortfall_features", SHORTFALL_FEATURES, pd.read_parquet)
     return state

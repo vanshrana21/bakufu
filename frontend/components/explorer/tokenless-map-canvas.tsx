@@ -35,6 +35,8 @@ export default function TokenlessMapCanvas(props: MapCanvasProps) {
   // Map lifecycle: created once, torn down on unmount.
   useEffect(() => {
     if (!container.current) return;
+    let active = true;
+    const guard = (callback: () => void) => { if (active) callback(); };
     let map: maplibregl.Map;
     try {
       map = new maplibregl.Map({
@@ -46,7 +48,7 @@ export default function TokenlessMapCanvas(props: MapCanvasProps) {
         attributionControl: false,
       });
     } catch {
-      setFailure("WebGL is unavailable. Use the screening locations below; scores remain accessible.");
+      guard(() => setFailure("WebGL is unavailable. Use the screening locations below; scores remain accessible."));
       return;
     }
     mapRef.current = map;
@@ -57,9 +59,13 @@ export default function TokenlessMapCanvas(props: MapCanvasProps) {
     observer.observe(container.current);
 
     const onLoad = () => {
-      installMaplibreLayers(map, latest.current);
-      setReady(true); // Local data is ready independently of the basemap network.
-      addNasaContext(map);
+      try {
+        installMaplibreLayers(map, latest.current);
+        guard(() => setReady(true)); // Local data is ready independently of the basemap network.
+        addNasaContext(map);
+      } catch {
+        guard(() => setFailure("Map layers could not be installed. Use the screening locations below."));
+      }
     };
     // Counted when the map settles, not on every frame: queryRenderedFeatures
     // on each render turns a pan into continuous query work for a number that
@@ -74,15 +80,14 @@ export default function TokenlessMapCanvas(props: MapCanvasProps) {
     };
     const onSourceData = (event: maplibregl.MapSourceDataEvent) => {
       if (event.sourceId === NASA_CONTEXT_SOURCE && event.tile?.state === "loaded") {
-        setImagery(true);
-        setFailure(null);
+        guard(() => { setImagery(true); setFailure(null); });
       }
     };
     const onError = (event: maplibregl.ErrorEvent) => {
       if ("sourceId" in event && event.sourceId === NASA_CONTEXT_SOURCE) {
-        setFailure("Satellite context unavailable. Synthetic screening layers remain usable.");
+        guard(() => setFailure("Satellite context unavailable. Synthetic screening layers remain usable."));
       } else {
-        setFailure("A map resource could not load. Use the location list to inspect the same evidence.");
+        guard(() => setFailure("A map resource could not load. Use the location list to inspect the same evidence."));
       }
     };
     const onClick = (event: maplibregl.MapMouseEvent) => {
@@ -109,6 +114,7 @@ export default function TokenlessMapCanvas(props: MapCanvasProps) {
       map.on("mouseleave", layer, onLeave);
     }
     return () => {
+      active = false;
       observer.disconnect();
       markerRef.current?.remove();
       markerRef.current = null;
@@ -131,17 +137,29 @@ export default function TokenlessMapCanvas(props: MapCanvasProps) {
   useEffect(() => {
     const map = mapRef.current;
     if (!ready || !map) return;
-    (map.getSource(MAP_IDS.sites) as GeoJSONSource).setData(siteFeatures(props.sites));
-    (map.getSource(MAP_IDS.surface) as GeoJSONSource).setData(props.surface);
-    map.removeFeatureState({ source: MAP_IDS.sites });
+    const sitesSource = map.getSource(MAP_IDS.sites) as GeoJSONSource | undefined;
+    const surfaceSource = map.getSource(MAP_IDS.surface) as GeoJSONSource | undefined;
+    if (!sitesSource || !surfaceSource) return;
+    try {
+      sitesSource.setData(siteFeatures(props.sites));
+      surfaceSource.setData(props.surface);
+      map.removeFeatureState({ source: MAP_IDS.sites });
+    } catch {
+      setFailure("Map data could not be updated. Use the screening locations below.");
+      return;
+    }
     markerRef.current?.remove();
     markerRef.current = null;
     const site = props.sites.find((s) => s.id === props.selectedSiteId);
     if (site?.location) {
-      map.setFeatureState({ source: MAP_IDS.sites, id: site.id }, { selected: true });
-      markerRef.current = new maplibregl.Marker({ element: siteLabelElement(site.name), ...SITE_LABEL_MARKER })
-        .setLngLat([site.location.longitude, site.location.latitude])
-        .addTo(map);
+      try {
+        map.setFeatureState({ source: MAP_IDS.sites, id: site.id }, { selected: true });
+        markerRef.current = new maplibregl.Marker({ element: siteLabelElement(site.name), ...SITE_LABEL_MARKER })
+          .setLngLat([site.location.longitude, site.location.latitude])
+          .addTo(map);
+      } catch {
+        markerRef.current = null;
+      }
     }
   }, [props.sites, props.activeMask, props.surface, props.selectedSiteId, ready]);
 

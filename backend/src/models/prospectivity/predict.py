@@ -206,7 +206,7 @@ def score_frame(
     adjust: bool = True,
 ) -> np.ndarray:
     """Predicted probabilities, optionally Elkan-Noto adjusted."""
-    bundle = load_bundle(model_path or active_model_path())
+    bundle = load_bundle(model_path or active_model_path(), production=True)
     _verify_provenance(bundle)
     X = frame.reindex(columns=bundle["features"]).astype("float64")
     # Bundles trained with a missing-value sentinel must be served the same way,
@@ -236,7 +236,7 @@ def predict_point(
 
     model_path = model_path or active_model_path()
     score = float(cap_score(score_frame(frame, model_path)[0]))
-    bundle = load_bundle(model_path)
+    bundle = load_bundle(model_path, production=True)
     row = frame.reindex(columns=bundle["features"]).astype("float64")
 
     shap_top5: list[dict[str, Any]] = []

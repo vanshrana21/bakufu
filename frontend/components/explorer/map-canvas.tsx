@@ -40,7 +40,7 @@ export default function MapCanvas(props: MapCanvasProps) {
  * selection hook what a click means. Nothing here holds map state. */
 function MapboxCanvas({ sites, surface, selectedSiteId, onSelect, onUnmappedClick }: MapCanvasProps) {
   const engine = useMapboxEngine();
-  const { layersRevision, rendered } = useMapboxSync(engine, { sites, surface });
+  const { layersRevision, rendered, failure: layerFailure } = useMapboxSync(engine, { sites, surface });
   useMapboxSelection(engine.map, layersRevision, { sites, selectedSiteId, onSelect, onUnmappedClick });
 
   const extent = siteExtent(sites, { inScopeOnly: true });
@@ -66,9 +66,9 @@ function MapboxCanvas({ sites, surface, selectedSiteId, onSelect, onUnmappedClic
       {!engine.ready && (
         <MapFallbackPlot sites={sites} selectedSiteId={selectedSiteId} onSelect={onSelect} failure={engine.failure} />
       )}
-      {engine.ready && engine.failure && (
+      {engine.ready && (engine.failure || layerFailure) && (
         <div role="status" className="absolute left-4 right-16 top-16 rounded bg-[var(--canvas-ink)] px-3 py-2 text-xs text-foreground">
-          {engine.failure}
+          {layerFailure ?? engine.failure}
         </div>
       )}
       {!MAPBOX_PUBLIC_TOKEN && (

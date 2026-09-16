@@ -36,6 +36,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from src.config.settings import settings
+from src.models.artifact_security import load_joblib, verify_model_path
 
 logger = logging.getLogger("models.registry")
 
@@ -201,10 +202,8 @@ def validate_artifact(model_file: Path) -> dict[str, Any]:
     """Load the staged bundle and check it is the shape inference expects."""
     if not model_file.exists():
         raise RegistryError(f"training produced no model at {model_file}")
-    import joblib
-
     try:
-        bundle = joblib.load(model_file)
+        bundle = load_joblib(model_file, allow_staging=True, registry_root=VERSIONS_DIR)
     except Exception as exc:
         raise RegistryError(f"staged bundle at {model_file} could not be loaded: {exc}") from exc
     if not isinstance(bundle, dict):
@@ -272,20 +271,23 @@ def acceptance_report(staged: Path, active: ActiveModel) -> AcceptanceReport:
     candidate that fails is still published - it is evidence - but the pointer
     stays where it is and the job says why.
     """
-    import joblib
-
     reasons: list[str] = []
     metrics = _fold_metrics(staged / METRICS_FILENAME) or {}
 
     try:
-        candidate_bundle = joblib.load(staged / MODEL_FILENAME)
+        candidate_bundle = load_joblib(
+            staged / MODEL_FILENAME, allow_staging=True, registry_root=VERSIONS_DIR
+        )
         candidate_features = list(candidate_bundle["features"])
     except Exception as exc:  # noqa: BLE001 - validate_artifact reports the detail
         return AcceptanceReport(False, [f"the candidate bundle could not be read: {exc}"], metrics)
     if "provenance" not in candidate_bundle:
         reasons.append("the candidate bundle has no scientific input provenance")
     try:
-        serving_features = list(joblib.load(active.path)["features"])
+        verify_model_path(active.path, registry_root=VERSIONS_DIR)
+        serving_features = list(
+            load_joblib(active.path, registry_root=VERSIONS_DIR)["features"]
+        )
     except Exception:  # noqa: BLE001 - nothing to compare against; the floors still apply
         serving_features = []
     if serving_features and candidate_features != serving_features:
@@ -428,6 +430,7 @@ def activate_version(version: str) -> ActiveModel:
     if not manifest_file.is_file():
         raise RegistryError(f"no version {version} in {VERSIONS_DIR}")
     manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
+    verify_model_path(target / MODEL_FILENAME, registry_root=VERSIONS_DIR)
     validate_artifact(target / MODEL_FILENAME)
 
     with registry_lock():
