@@ -73,28 +73,38 @@ export function spend(
   return { allowed: true, retryAfter: 0 };
 }
 
-/** The caller's identity for rate limiting: the nearest thing to a client that
- * a proxied request carries. Falls back to a single shared bucket, which is
- * strict rather than permissive when nothing identifies the caller. */
-export function clientKey(headers: Headers): string {
+/** Whether a reverse proxy in front of this app rewrites the forwarding
+ * headers. Off by default: a caller can otherwise set X-Forwarded-For itself
+ * and take a fresh budget on every request, which is worse than no per-client
+ * accounting at all, because it looks like accounting. */
+export const TRUST_FORWARDED_FOR = process.env.PROXY_TRUST_FORWARDED_FOR === "true";
+
+/** The caller's identity for rate limiting.
+ *
+ * Only headers a trusted proxy set are believed. Without one, every caller
+ * shares a single bucket: strict rather than forgeable, with the in-flight cap
+ * behind it. Set PROXY_TRUST_FORWARDED_FOR=true only when something upstream
+ * strips and rewrites these headers. */
+export function clientKey(headers: Headers, trustForwarded: boolean = TRUST_FORWARDED_FOR): string {
+  if (!trustForwarded) return "shared";
   const forwarded = headers.get("x-forwarded-for");
   if (forwarded) return forwarded.split(",")[0]!.trim();
-  return headers.get("x-real-ip") ?? "unknown";
+  return headers.get("x-real-ip") ?? "shared";
 }
 
-/** True when the request came from this app's own pages.
+/** True when the request carries a browser's proof that it came from this app.
  *
- * `Sec-Fetch-Site` is sent by every browser that can run this app, so a page on
- * another origin cannot use this proxy as free API credit. Requests with no
- * Origin and no Sec-Fetch-Site (curl, server-side fetches) are allowed through
- * to the rate limiter: refusing them would break same-origin tooling without
- * stopping anyone, since either header can be forged outside a browser. */
+ * Every browser that can run this app sends `Sec-Fetch-Site`, so requiring it -
+ * or a matching `Origin` - costs a real visitor nothing and refuses both other
+ * sites' pages and clients that send neither. It is not authentication: a
+ * non-browser client can forge either header. It is there so this endpoint
+ * cannot be used as free API credit by someone else's page, and the rate limit
+ * behind it is best-effort DoS control, not access control. */
 export function isSameSite(headers: Headers, selfOrigin: string): boolean {
   const fetchSite = headers.get("sec-fetch-site");
-  if (fetchSite) return fetchSite === "same-origin" || fetchSite === "same-site" || fetchSite === "none";
+  if (fetchSite) return fetchSite === "same-origin" || fetchSite === "same-site";
   const origin = headers.get("origin");
-  if (origin) return origin === selfOrigin;
-  return true;
+  return origin === selfOrigin;
 }
 
 export function tooLarge(body: string): boolean {

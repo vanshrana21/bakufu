@@ -305,9 +305,15 @@ def evict_disk_cache() -> int:
         total = 0
         for index, (path, stat) in enumerate(fresh):
             total += stat.st_size
-            if index == 0:
-                continue  # never drop the tile just written
             if index >= CACHE_MAX_FILES or total > CACHE_MAX_BYTES:
+                # The ceiling is absolute: a tile too large to fit inside it on
+                # its own is dropped too, rather than being kept as an exception
+                # that quietly breaks the budget.
+                if index == 0:
+                    logger.warning(
+                        "heatmap tile %s is %d bytes, over the whole %d byte cache budget; not keeping it",
+                        path.name, stat.st_size, CACHE_MAX_BYTES,
+                    )
                 removed += _remove_tile(path)
     return removed
 

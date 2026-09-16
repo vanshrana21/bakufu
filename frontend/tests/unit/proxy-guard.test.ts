@@ -66,20 +66,39 @@ describe("proxy abuse controls", () => {
     expect(buckets.size).toBeLessThanOrEqual(MAX_TRACKED_CLIENTS);
   });
 
-  it("identifies the caller behind a proxy header", () => {
-    expect(clientKey(new Headers({ "x-forwarded-for": "203.0.113.7, 10.0.0.1" }))).toBe("203.0.113.7");
-    expect(clientKey(new Headers({ "x-real-ip": "198.51.100.4" }))).toBe("198.51.100.4");
-    // Nothing identifies it: one shared bucket, which is the strict choice.
-    expect(clientKey(new Headers())).toBe("unknown");
+  it("ignores forwarding headers unless a trusted proxy sets them", () => {
+    const spoofed = new Headers({ "x-forwarded-for": "203.0.113.7", "x-real-ip": "198.51.100.4" });
+    // Untrusted by default: a caller cannot mint itself a fresh budget.
+    expect(clientKey(spoofed, false)).toBe("shared");
+    expect(clientKey(new Headers(), false)).toBe("shared");
+    // Behind a proxy that rewrites them, the client is identified again.
+    expect(clientKey(new Headers({ "x-forwarded-for": "203.0.113.7, 10.0.0.1" }), true)).toBe("203.0.113.7");
+    expect(clientKey(new Headers({ "x-real-ip": "198.51.100.4" }), true)).toBe("198.51.100.4");
+    expect(clientKey(new Headers(), true)).toBe("shared");
   });
 
-  it("serves this app's pages and refuses another site's", () => {
+  it("cannot be bypassed by rotating a forged client address", () => {
+    const buckets = new Map<string, Bucket>();
+    const now = 7_000_000;
+    let served = 0;
+    for (let i = 0; i < 100; i += 1) {
+      const headers = new Headers({ "x-forwarded-for": `198.51.100.${i % 254}` });
+      if (spend(buckets, clientKey(headers, false), costOf("prospectivity/heatmap"), now).allowed) served += 1;
+    }
+    expect(served).toBeLessThanOrEqual(BUCKET_CAPACITY / costOf("prospectivity/heatmap"));
+  });
+
+  it("serves this app's pages and refuses everything else", () => {
     const self = "http://localhost:3000";
     expect(isSameSite(new Headers({ "sec-fetch-site": "same-origin" }), self)).toBe(true);
-    expect(isSameSite(new Headers({ "sec-fetch-site": "none" }), self)).toBe(true);
-    expect(isSameSite(new Headers({ "sec-fetch-site": "cross-site" }), self)).toBe(false);
-    expect(isSameSite(new Headers({ origin: "https://someone-else.example" }), self)).toBe(false);
+    expect(isSameSite(new Headers({ "sec-fetch-site": "same-site" }), self)).toBe(true);
     expect(isSameSite(new Headers({ origin: self }), self)).toBe(true);
+    expect(isSameSite(new Headers({ "sec-fetch-site": "cross-site" }), self)).toBe(false);
+    // A page the user typed the URL into is not this app making a request.
+    expect(isSameSite(new Headers({ "sec-fetch-site": "none" }), self)).toBe(false);
+    expect(isSameSite(new Headers({ origin: "https://someone-else.example" }), self)).toBe(false);
+    // Neither header at all: refused rather than waved through.
+    expect(isSameSite(new Headers(), self)).toBe(false);
   });
 
   it("refuses a body larger than the requests this app makes", () => {
