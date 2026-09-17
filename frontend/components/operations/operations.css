@@ -826,8 +826,8 @@
   overflow: visible;
 }
 .ruler-num {
-  font: 400 9px var(--font-mono);
-  fill: var(--metadata);
+  font: 400 10px var(--font-mono);
+  color: color-mix(in srgb, var(--signal) 60%, transparent);
 }
 .ruler-thresh-lbl {
   font: 500 10px var(--font-mono);

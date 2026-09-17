@@ -167,19 +167,6 @@ export function VitalTiles({ latest, next, risk, proposed, drafts, change, histo
         </div>
         <p className={s.metricValue} style={getNumStyle(prVis)}>{proposedStr === "—" ? "—" : proposedStr}<small>{registerData ? `${drafts} draft` : "unavailable"}</small></p>
 
-        <div className={s.microVisual} aria-hidden="true">
-          <svg viewBox="0 0 100 28" preserveAspectRatio="none" style={{ width: '100%', height: '100%' }}>
-            <g transform="translate(0, 12)">
-               {Array.from({length: Math.max(1, proposed)}).map((_, i) => (
-                  <rect key={`p-${i}`} x={i * 12} y={0} width={8} height={12} fill={proposed > 0 ? 'var(--action)' : 'none'} stroke="var(--action)" strokeWidth="1.5" />
-               ))}
-               {Array.from({length: Math.max(0, drafts)}).map((_, i) => (
-                  <rect key={`d-${i}`} x={(Math.max(1, proposed) + i) * 12} y={0} width={8} height={12} fill="none" stroke="var(--action)" strokeWidth="1.5" />
-               ))}
-            </g>
-          </svg>
-        </div>
-
         <div className={s.metricFootWrapper}>
           <p className={s.metricFoot}>{registerData ? "drafts are not proposals yet" : "Recommendations unavailable"}</p>
         </div>
