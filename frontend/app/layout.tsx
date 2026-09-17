@@ -4,6 +4,8 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "@fontsource-variable/noto-sans";
 import "@fontsource-variable/jetbrains-mono";
+import "@fontsource/archivo-black/latin-400.css";
+import "@fontsource-variable/fraunces/opsz.css";
 import "./globals.css";
 // Area stylesheets, in cascade order. Each one is global because its classes are
 // shared across routes; keep new rules in the file for their area.

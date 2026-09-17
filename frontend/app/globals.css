@@ -2,8 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
-/* BAKUFU palette. These nine are the only solid colours in the product; every
- * other colour is one of them at an opacity. Landing and workspace share them. */
+/* BAKUFU palette. These eleven are the only solid colours in the product; every
+ * other colour is one of them at an opacity. Landing and workspace share them.
+ * Mineral and steel are the hero's cool half - its type and its terrain light -
+ * so the workspace can carry the same warm/cool balance as the landing. */
 :root {
   --ground: #150C0C;
   --shade-1: #1D1616;
@@ -14,6 +16,8 @@
   --glow: #D39858;
   --char: #34150F;
   --ink: #000000;
+  --mineral: #E4E9E8;
+  --steel: #57717B;
   /* Status semantics only, never decoration: good / live / inside / low, and
    * attention / outside / high. Kept to a few percent of any screen. */
   --moss: #7E9B72;
@@ -243,6 +247,12 @@ summary:focus-visible {
 input::placeholder {
   color: var(--metadata);
   opacity: 1;
+}
+/* A multi-select listbox otherwise highlights with the OS grey, off-palette on
+ * every theme. The gradient is what overrides the unfocused system colour. */
+select[multiple] option:checked {
+  background: linear-gradient(var(--row-selected), var(--row-selected));
+  color: var(--foreground);
 }
 h1,
 h2,

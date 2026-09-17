@@ -26,11 +26,12 @@
   color: var(--primary);
 }
 .operations-page .operations-header h1 {
-  font-family: var(--font-sans);
-  font-size: clamp(28px, 2.2vw, 32px);
-  font-weight: 600;
-  line-height: 1.15;
-  letter-spacing: -0.015em;
+  font-family: "Archivo Black", sans-serif;
+  font-size: clamp(26px, 2.2vw, 34px);
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: -0.04em;
+  text-transform: uppercase;
   color: var(--foreground);
 }
 .operations-header > div > p:not(.app-kicker) {
@@ -85,29 +86,36 @@
 }
 .forecast-basis-period {
   margin: 25px 0;
-  font-size: 32px;
-  font-weight: 500;
+  font-family: "Archivo Black", sans-serif;
+  font-size: 28px;
+  font-weight: 400;
   line-height: 1.15;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.035em;
+  text-transform: uppercase;
+  color: var(--foreground);
 }
 .forecast-basis-estimate {
   border-block: 1px solid var(--border);
   padding: 18px 0;
 }
 .forecast-basis-estimate > span {
+  font: 600 10px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--instrument-muted);
-  font-size: 11px;
 }
 .forecast-basis-estimate > p {
-  margin: 5px 0;
+  margin: 6px 0;
+  font-family: "Archivo Black", sans-serif;
   font-size: 32px;
-  letter-spacing: -0.025em;
-  font-weight: 550;
+  letter-spacing: -0.035em;
+  font-weight: 400;
+  color: var(--glow);
 }
 .forecast-basis-estimate small {
   color: var(--instrument-muted);
-  font-size: 14px;
-  font-weight: 400;
+  font: 500 11px var(--font-mono);
+  margin-left: 6px;
 }
 .instrument-metadata {
   margin-top: 12px;
@@ -211,15 +219,18 @@
   margin: 25px 0 12px;
 }
 .docket-count strong {
-  font-size: 64px;
-  font-weight: 450;
+  font-family: "Archivo Black", sans-serif;
+  font-size: 58px;
+  font-weight: 400;
   line-height: 1;
   letter-spacing: -0.04em;
+  color: var(--glow);
 }
 .docket-count span {
   max-width: 85px;
-  font-size: 12px;
-  line-height: 1.6;
+  font: 500 11px/1.6 var(--font-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: var(--instrument-muted);
 }
 .docket-copy {
@@ -233,8 +244,10 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
-  color: var(--primary-ink);
+  font: 600 10px var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--glow);
 }
 .docket-guide {
   margin-top: 18px;
@@ -254,24 +267,34 @@
 .decision-protocol {
   padding: 24px;
   border: 1px solid var(--border);
-  border-radius: 3px;
+  border-radius: 6px;
   background: var(--surface);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+  transition: border-color 200ms ease;
+}
+.decision-protocol:hover {
+  border-color: color-mix(in srgb, var(--glow) 35%, transparent);
 }
 .decision-protocol-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-bottom: 20px;
+  padding-bottom: 18px;
   border-bottom: 1px solid var(--border);
-  font-size: 12px;
+  font: 600 11px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--metadata);
 }
 .decision-protocol h2 {
-  font-size: 24px;
-  line-height: 1.3;
-  letter-spacing: -0.025em;
-  margin-top: 22px;
-  font-weight: 500;
+  font-family: "Archivo Black", sans-serif;
+  font-size: 22px;
+  line-height: 1.25;
+  letter-spacing: -0.03em;
+  text-transform: uppercase;
+  margin-top: 20px;
+  font-weight: 400;
+  color: var(--foreground);
 }
 .decision-protocol .protocol-steps {
   gap: 23px;
@@ -342,11 +365,14 @@
   padding: 3px 6px;
 }
 .action-evidence-body h3 {
-  font-size: 25px;
-  font-weight: 550;
-  letter-spacing: -0.025em;
-  line-height: 1.3;
+  font-family: "Archivo Black", sans-serif;
+  font-size: 22px;
+  font-weight: 400;
+  letter-spacing: -0.03em;
+  text-transform: uppercase;
+  line-height: 1.25;
   margin-top: 20px;
+  color: var(--foreground);
 }
 .action-recommendation {
   max-width: 68ch;
@@ -515,10 +541,10 @@
   font-size: 11px;
 }
 .instrument-risk .risk-donut strong {
-  font-family: var(--font-sans);
-  font-weight: 550;
-  letter-spacing: -0.035em;
-  color: var(--foreground);
+  font-family: "Archivo Black", sans-serif;
+  font-weight: 400;
+  letter-spacing: -0.04em;
+  color: var(--glow);
 }
 .instrument-risk .risk-definition {
   border-top: 1px solid var(--border);

@@ -1,38 +1,64 @@
-/* Workspace-only tokens; the landing retains its own identity. No new palette colors. */
+/* Workspace-only tokens; the landing retains its own identity. No new palette colors.
+ * The hero's palette, assigned by role - "mineral-white typography, a copper core
+ * and restrained steel light". Warm ground carries the surface; mineral type and
+ * steel structure are the cool half; copper marks where you are and what matters.
+ * Rules read these roles, so each colour means one thing on every page.
+ * Two temperatures, as in the hero: the chrome (header, sidebar, scope band) is
+ * steel-cooled, the content keeps the warm ground, and steel frames the panels.
+ * Contrast on ground / shade-2 / table head: ink 15.1/12.7/11.3, soft 10.7/8.9/8.0,
+ * steel text 7.9/6.6/5.8, critical 6.4/5.4/4.8, glow 7.7/6.5/5.8, moss 6.3/5.2/4.7. */
 .workspace[data-theme="dark"], .workspace [data-theme="dark"] {
-  --background: var(--ground); --surface: var(--shade-1); --card: var(--shade-1); --surface-raised: var(--shade-2); --foreground: var(--paper);
-  --muted-foreground: color-mix(in srgb, var(--paper) 78%, var(--ground));
-  --metadata: color-mix(in srgb, var(--paper) 65%, var(--ground));
-  --border: color-mix(in srgb, var(--paper) 14%, var(--ground));
-  --border-strong: color-mix(in srgb, var(--paper) 28%, var(--ground));
-  --input: var(--border-strong); --success: var(--moss); --success-soft: color-mix(in srgb, var(--moss) 12%, var(--ground));
-  --critical: var(--glow); --critical-soft: color-mix(in srgb, var(--brick) 18%, var(--ground));
+  --ink-strong: color-mix(in srgb, var(--mineral) 82%, var(--paper));
+  --ink-soft: color-mix(in srgb, var(--mineral) 68%, var(--steel));
+  /* The hero steel lifted in OKLCH at its own hue (223), so labels read as steel
+   * rather than as grey - an sRGB mix toward white washes the hue out. */
+  --steel-text: oklch(0.72 0.045 223);
+  --chrome: color-mix(in srgb, var(--steel) 16%, var(--ground));
+  --background: var(--ground); --surface: var(--shade-1); --card: var(--shade-1); --surface-raised: var(--shade-2);
+  --surface-cool: color-mix(in srgb, var(--steel) 22%, var(--shade-1));
+  --band: var(--chrome);
+  --foreground: var(--ink-strong); --card-foreground: var(--ink-strong); --popover-foreground: var(--ink-strong);
+  --secondary-foreground: var(--ink-strong); --accent-foreground: var(--ink-strong);
+  --muted-foreground: var(--ink-soft);
+  --metadata: var(--steel-text);
+  --border: color-mix(in srgb, var(--steel) 48%, var(--ground));
+  --border-strong: color-mix(in srgb, var(--steel) 66%, var(--ground));
+  --input: var(--steel);
+  --row-hover: color-mix(in srgb, var(--steel) 14%, var(--shade-1));
+  --success: var(--moss); --success-soft: color-mix(in srgb, var(--moss) 14%, var(--ground));
+  --warning: var(--glow); --warning-soft: color-mix(in srgb, var(--glow) 14%, var(--ground));
+  --critical: color-mix(in srgb, var(--brick) 62%, var(--mineral)); --critical-soft: color-mix(in srgb, var(--brick) 20%, var(--ground));
+  --info: var(--steel-text); --info-soft: color-mix(in srgb, var(--steel) 18%, var(--ground));
+  --chart-actual: var(--ink-strong); --chart-forecast: var(--glow);
   --radius: .375rem; --radius-lg: .5rem;
 }
 .workspace { font-size: 13px; font-variant-numeric: tabular-nums; }
 .workspace .workspace-page, .workspace .briefing-page, .workspace .survey-page { max-width: 1760px; margin: 0 auto; padding: 26px 28px 32px; }
-.workspace .module-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px 24px; margin-bottom: 24px; }
+.workspace .module-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px 24px; margin-bottom: 24px; border-bottom: 1px solid var(--border); padding-bottom: 18px; }
 .workspace .module-heading { min-width: 0; }
-.workspace .module-header h1 { margin: 0; font: 600 28px/1.25 var(--font-sans); letter-spacing: -.025em; color: var(--foreground); }
+.workspace .module-header h1 { margin: 0; font: 400 clamp(24px, 2.2vw, 32px)/1.15 "Archivo Black", sans-serif; letter-spacing: -0.035em; text-transform: uppercase; color: var(--foreground); }
 .workspace .module-heading > p { margin-top: 7px; max-width: 74ch; font-size: 12px; line-height: 1.7; color: var(--muted-foreground); }
 .workspace .module-header-tools { display: flex; align-items: flex-end; flex-direction: column; gap: 10px; flex-shrink: 0; }
-.workspace .module-status { font-size: 10px; color: var(--metadata); }
+.workspace .module-status { font: 500 10px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--metadata); }
 .workspace .module-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.workspace .module-actions .ui-control { height: 34px; padding: 0 12px; font-size: 11px; }
+.workspace .module-actions .ui-control { height: 34px; padding: 0 12px; font-size: 11px; font-weight: 500; border-color: var(--border-strong); transition: border-color 160ms var(--ease-out); }
+.workspace .module-actions .ui-control:hover { border-color: var(--glow); }
 .workspace .module-section { margin-top: 24px; }
 .workspace .module-section-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 12px; }
-.workspace .module-section-head h2 { font-size: 15px; font-weight: 600; letter-spacing: -.015em; }
+.workspace .module-section-head h2 { font: 500 16px/1.3 "Archivo Black", sans-serif; letter-spacing: -0.02em; text-transform: uppercase; color: var(--foreground); }
 .workspace .module-section-head p { margin-top: 4px; font-size: 12px; color: var(--metadata); line-height: 1.6; }
-.workspace .module-section-head > span { font-size: 10px; color: var(--metadata); }
+.workspace .module-section-head > span { font: 10px var(--font-mono); letter-spacing: 0.06em; color: var(--metadata); }
 .workspace .module-footnote { margin-top: 24px; padding-top: 14px; border-top: 1px solid var(--border); color: var(--metadata); font-size: 11px; line-height: 1.7; }
-.workspace .ui-table-scroll { border-radius: 6px; }
+.workspace .ui-table-scroll { border-radius: 6px; border: 1px solid var(--border); overflow: hidden; }
 .workspace .ui-table-scroll table { font-size: 12px; }
-.workspace .ui-table-scroll thead { background: var(--shade-2); }
-.workspace .ui-table-scroll th { font-size: 11px; }
+.workspace .ui-table-scroll thead { background: var(--surface-cool); border-bottom: 1px solid var(--border-strong); }
+.workspace .ui-table-scroll th { font: 600 10px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--metadata); }
+.workspace .ui-table-scroll tr { transition: background-color 160ms var(--ease-out); }
+.workspace .ui-table-scroll tbody tr:hover { background-color: var(--row-hover); }
 .workspace .ui-table-scroll td, .workspace .ui-table-scroll th { padding-top: 12px; padding-bottom: 12px; }
 .workspace .ui-control { font-size: 12px; }
-.workspace .section-label { font: 500 11px/1.5 var(--font-sans); letter-spacing: 0; text-transform: none; }
-.workspace .note { font-size: 12px; padding: 10px 12px; }
+.workspace .section-label { font: 600 10px/1.5 var(--font-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--metadata); }
+.workspace .note { font-size: 12px; padding: 10px 14px; border-radius: 4px; }
 .workspace .operations-page .production-layout { display: flex; flex-direction: column; gap: 18px; }
 .workspace .production-layout > .forecast-risk-layout { width: 100%; grid-template-columns: minmax(0,1fr) 300px; order: -1; gap: 16px; }
 .workspace .production-page .chart-figure { height: 320px; }
@@ -78,21 +104,23 @@
 .workspace .feedback-context { min-height: 300px; }
 .workspace .reports-layout { display: grid; grid-template-columns: 310px minmax(0,1fr); gap: 20px; align-items: start; }
 .workspace .report-templates { display: grid; gap: 10px; }
-.workspace .report-templates > button { min-width: 0; border-radius: 8px; }
-.workspace .report-template-card { padding: 16px; }
-.workspace .report-template-card h3 { font-size: 13px; line-height: 1.6; font-weight: 600; }
+.workspace .report-templates > button { min-width: 0; border-radius: 6px; transition: border-color 160ms var(--ease-out); }
+.workspace .report-template-card { padding: 18px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); transition: border-color 160ms var(--ease-out); }
+.workspace .report-template-card:hover { border-color: color-mix(in srgb, var(--glow) 45%, transparent); }
+.workspace .report-template-card h3 { font-size: 13px; line-height: 1.6; font-weight: 600; color: var(--foreground); }
 .workspace .report-template-card p { margin-top: 8px; font-size: 11px; line-height: 1.7; color: var(--muted-foreground); }
-.workspace .report-template-card > span { display: inline-block; margin-top: 12px; font-size: 11px; color: var(--primary-ink); }
-.workspace .mine-grid { gap: 12px; }
-.workspace .mine-card { padding: 16px; }
+.workspace .report-template-card > span { display: inline-block; margin-top: 12px; font: 600 11px var(--font-mono); letter-spacing: 0.04em; color: var(--glow); }
+.workspace .mine-grid { gap: 14px; }
+.workspace .mine-card { padding: 18px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); transition: border-color 160ms var(--ease-out); }
+.workspace .mine-card:hover { border-color: color-mix(in srgb, var(--glow) 50%, transparent); }
 .workspace .mine-card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
-.workspace .mine-card h3 { font-size: 14px; font-weight: 600; }
-.workspace .mine-card-top p { margin-top: 4px; font-size: 10px; color: var(--metadata); }
+.workspace .mine-card h3 { font: 600 14px "Archivo Black", sans-serif; letter-spacing: -0.02em; text-transform: uppercase; color: var(--foreground); }
+.workspace .mine-card-top p { margin-top: 4px; font: 10px var(--font-mono); letter-spacing: 0.04em; color: var(--metadata); }
 .workspace .mine-card dl { display: grid; grid-template-columns: 1fr auto; gap: 16px; padding-top: 16px; margin-top: 14px; border-top: 1px solid var(--border); }
-.workspace .mine-card dt { font-size: 10px; color: var(--metadata); }
-.workspace .mine-card dd { margin-top: 4px; font-size: 20px; font-weight: 500; letter-spacing: -.025em; }
-.workspace .mine-plan { margin-top: 10px; font-size: 10px; color: var(--metadata); }
-.workspace .inventory-feature { border-radius: 8px; padding: 18px; border: 1px solid color-mix(in srgb, var(--glow) 30%, var(--ground)); background: var(--surface); }
+.workspace .mine-card dt { font: 500 10px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--metadata); }
+.workspace .mine-card dd { margin-top: 4px; font: 400 22px "Archivo Black", sans-serif; letter-spacing: -0.035em; color: var(--foreground); }
+.workspace .mine-plan { margin-top: 10px; font: 10px var(--font-mono); color: var(--metadata); }
+.workspace .inventory-feature { border-radius: 6px; padding: 20px; border: 1px solid color-mix(in srgb, var(--glow) 40%, var(--ground)); background: var(--shade-2); box-shadow: inset 0 0 24px color-mix(in srgb, var(--glow) 6%, transparent); }
 .workspace .admin-grid { display: grid; gap: 20px; }
 .workspace .admin-grid > :first-child { grid-column: 1 / -1; }
 @media (min-width: 1500px) { .workspace .admin-grid { grid-template-columns: minmax(0,.85fr) minmax(0,1.15fr); } }
@@ -126,7 +154,7 @@
   .workspace .module-section-head { align-items: flex-start; }
 }
 @media print {
-  .workspace[data-theme="dark"], .workspace [data-theme="dark"] { --background: var(--paper); --surface: var(--paper); --surface-raised: var(--paper); --foreground: var(--ink); --muted-foreground: var(--char); --metadata: var(--char); --border: var(--char); --card: var(--paper); --card-foreground: var(--ink); color: var(--ink); background: var(--paper); }
+  .workspace[data-theme="dark"], .workspace [data-theme="dark"] { --background: var(--paper); --surface: var(--paper); --surface-raised: var(--paper); --foreground: var(--ink); --muted-foreground: var(--char); --metadata: var(--char); --border: var(--char); --card: var(--paper); --card-foreground: var(--ink); --surface-cool: var(--paper); --band: var(--paper); --chrome: var(--paper); --border-strong: var(--char); --input: var(--char); --row-hover: var(--paper); --chart-actual: var(--ink); --critical: var(--ore); --info: var(--char); --success: var(--char); --warning: var(--ore); color: var(--ink); background: var(--paper); }
   .workspace .module-actions { display: none; }
   .workspace .reports-layout, .workspace .feedback-layout, .workspace .production-layout > .forecast-risk-layout { display: block; }
 }

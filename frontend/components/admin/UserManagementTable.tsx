@@ -20,7 +20,7 @@ const users: User[] = [
 ];
 
 const roleColors: Record<User["role"], string> = {
-  Admin: "bg-[var(--primary)]/10 text-[var(--primary)] border border-[var(--primary)]/20",
+  Admin: "bg-[var(--primary)]/10 text-primary-ink border border-[var(--primary)]/20",
   Geologist: "bg-[var(--oxide)]/10 text-[var(--oxide)] border border-[var(--oxide)]/20",
   Operator: "border-[var(--border-strong)] bg-transparent text-foreground",
   Viewer: "border-transparent bg-muted text-muted-foreground",

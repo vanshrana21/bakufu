@@ -28,21 +28,21 @@
  * title and one muted line; display type belongs to the landing only. */
 .app-kicker {
   display: block;
-  margin: 0 0 10px;
-  font: 500 11px/1.4 var(--font-mono);
-  letter-spacing: 0.14em;
+  margin: 0 0 8px;
+  font: 600 10px/1.4 var(--font-mono);
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--muted-foreground);
+  color: var(--glow);
 }
 .app-title,
 .briefing-page h1,
 .operations-page .operations-header h1 {
-  font-family: var(--font-sans);
-  font-size: clamp(28px, 2.2vw, 32px);
-  font-weight: 600;
-  line-height: 1.15;
-  letter-spacing: -0.015em;
-  text-transform: none;
+  font-family: "Archivo Black", sans-serif;
+  font-size: clamp(26px, 2.2vw, 34px);
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: -0.04em;
+  text-transform: uppercase;
   color: var(--foreground);
 }
 .app-description {

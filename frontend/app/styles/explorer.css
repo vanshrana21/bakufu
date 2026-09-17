@@ -1,11 +1,11 @@
 /* Prospectivity explorer: survey panels, map surface, legend, inspector. */
 .explorer-page-heading h1 {
-  font-family: var(--font-sans);
-  font-size: clamp(28px, 2.2vw, 32px);
-  font-weight: 600;
-  line-height: 1.15;
-  letter-spacing: -0.015em;
-  text-transform: none;
+  font-family: "Archivo Black", sans-serif;
+  font-size: clamp(26px, 2.2vw, 34px);
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: -0.04em;
+  text-transform: uppercase;
   color: var(--foreground);
 }
 /* Map workbench: persistent geography, inspectable evidence. */
@@ -29,20 +29,27 @@
   color: var(--muted-foreground);
 }
 .explorer-page-heading .app-kicker {
-  margin: 0 0 10px;
-  font-size: 11px;
+  margin: 0 0 8px;
+  font: 600 10px/1.4 var(--font-mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--glow);
 }
 .explorer-mode-label {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 11px;
-  border: 1px solid var(--border);
-  padding: 9px 12px;
-  background: var(--surface);
+  font: 600 10px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 1px solid color-mix(in srgb, var(--glow) 35%, transparent);
+  border-radius: 4px;
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--glow) 8%, var(--ground));
+  color: var(--glow);
 }
 .explorer-mode-label svg {
-  color: var(--oxide);
+  color: var(--glow);
 }
 .survey-grid {
   display: grid;
@@ -50,7 +57,10 @@
   gap: 0;
   align-items: stretch;
   border: 1px solid var(--border);
+  border-radius: 6px;
   background: var(--surface);
+  overflow: hidden;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
 }
 .survey-grid > .paper-panel {
   border: 0;
@@ -206,7 +216,7 @@
   background: var(--ground);
   border: 1px solid var(--glow);
   border-radius: 2px;
-  color: var(--paper);
+  color: var(--foreground);
   padding: 6px 9px;
   font: 600 11px var(--font-sans);
   white-space: nowrap;
@@ -222,9 +232,9 @@
   gap: 7px;
   font-size: 10px;
   line-height: 1.5;
-  color: var(--paper);
+  color: var(--foreground);
   background: var(--ground);
-  border: 1px solid color-mix(in srgb, var(--paper) 30%, transparent);
+  border: 1px solid var(--border-strong);
   padding: 9px 10px;
   border-radius: 2px;
   pointer-events: none;
