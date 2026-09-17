@@ -1,11 +1,11 @@
 import type { CSSProperties } from "react";
 import Link from "next/link";
-import { ArrowRight, ArrowUpRight, Check, Diamond, Minus, Scan, TrendingDown, TrendingUp } from "lucide-react";
+import { ArrowRight, ArrowUpRight, Check, Diamond, Minus, Scan } from "lucide-react";
 import { DEMO_SITES, isGhostReserveCandidate } from "@/fixtures/predictions";
 import { actionFixture } from "@/fixtures/operations";
 import { loadDashboard, loadForecastBundle, loadRegister } from "@/lib/api/load";
 import { PrintBriefing } from "@/components/operations/print-briefing";
-import { ForecastRiskPanel } from "@/components/operations/forecast-risk-panel";
+import { ForecastStrip } from "@/components/operations/forecast-strip";
 import { PageHeader } from "@/components/shell/page-header";
 import { InsetBoundary } from "@/components/shell/inset-boundary";
 import { Button } from "@/components/ui/button";
@@ -42,10 +42,9 @@ export default async function HomePage() {
 
     <VitalTiles latest={latest} next={next} risk={risk} proposed={proposed} drafts={drafts} change={change} history={history} firstForecast={forecast?.points[0]} live={live} registerData={register.data} />
 
-    <section className={s.section} aria-label="Production outlook and downside risk">
-      {bundle.data ? <InsetBoundary label="Production outlook"><ForecastRiskPanel forecast={bundle.data.forecast} risk={bundle.data.risk} riskError={bundle.data.riskError} horizonNote={bundle.data.horizonNote} history={bundle.data.history} /></InsetBoundary>
-        : <p role="alert" className="note">Forecast and risk unavailable — {bundle.error}</p>}
-    </section>
+    {bundle.data?.forecast
+      ? <section className={s.section}><ForecastStrip forecast={bundle.data.forecast} history={bundle.data.history} /></section>
+      : <section className={s.section}><p role="alert" className="note">Forecast and risk unavailable — {bundle.error}</p></section>}
 
     <section className={s.reserveSection} aria-labelledby="places-heading">
       <div className={s.reserveIntro}>

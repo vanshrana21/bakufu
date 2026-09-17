@@ -39,7 +39,7 @@ export function ForecastRiskPanel({ forecast, risk, riskError = null, horizonNot
       <div className="px-4 pb-4"><ProductionChart forecast={displayedForecast} history={history} /></div>
       <p className="border-t px-5 py-3 text-xs leading-5 text-metadata">{forecast.provenance.data_origin === "fixture" ? "All plotted values, including the actual-series example, are synthetic. Interval coverage has not been validated." : forecast.provenance.source}</p>
     </section>
-    <aside className="risk-instrument rounded-lg border bg-surface p-5">
+    <aside id="downside-risk" aria-label="Downside risk" className="risk-instrument rounded-lg border bg-surface p-5" style={{ minHeight: 0, alignSelf: "start" }}>
       <p className="section-label mb-4 block">DOWNSIDE RISK</p>
       {risk === null
         ? <p role="status" className="note">Shortfall risk unavailable{riskError ? ` — ${riskError}` : "."} No probability has been substituted.</p>

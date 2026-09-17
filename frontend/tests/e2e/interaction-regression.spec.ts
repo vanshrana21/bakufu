@@ -65,7 +65,7 @@ test("Review register links preserve selected evidence and never create approval
 });
 
 test("Print includes closed evidence tables and restores the reading state", async ({ page }) => {
-  await page.goto("/operations");
+  await page.goto("/production");
   const disclosure = page.locator("main details").filter({ has: page.getByText("View production values and bounds", { exact: true }) });
   await expect(disclosure).not.toHaveAttribute("open");
   await page.evaluate(() => {
