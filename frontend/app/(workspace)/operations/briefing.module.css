@@ -90,7 +90,7 @@
 @media (max-width: 600px) { .metric { padding: 14px; } .metricValue { font-size: 26px; flex-wrap: wrap; gap: 6px; } .metricLabel { font-size: 11px; } .metricLabel > span { display: none; } .sectionHead { flex-wrap: wrap; gap: 8px; } .reserveIntro { display: block; padding: 16px; } .candidateCount { margin: 14px 0; } .reserveTable { padding: 4px 12px 14px; } .demo { display: block; } .demoTrigger { margin-top: 14px; } .register { padding: 16px; } }
 @media print { .metrics { break-inside: avoid; } .humanGrid, .reserveSection { display: block; } .demo { margin-top: 16px; } .filters, .inlineLink { display: none; } }
 
-/* VITAL TILES UPGRADE */
+/* VITAL TILES UPGRADE - CLEANED */
 .metric { border-top: 2px solid var(--kind-ink); position: relative; transition: transform 200ms ease, border-color 200ms ease; }
 .metric:hover { transform: translateY(-2px); border-top-color: var(--kind-ink); border-color: var(--kind-ink); }
 .metricValue sup { font-size: 14px; margin-left: 4px; color: var(--kind-ink); vertical-align: super; font-weight: 500; }
