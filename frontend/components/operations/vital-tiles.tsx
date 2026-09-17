@@ -6,74 +6,35 @@ import Link from "next/link";
 import s from "../../app/(workspace)/operations/briefing.module.css";
 import type { HistoricalPoint } from "./production-chart";
 
-function useCountUp(endStr: string | null | undefined, delayMs: number, disable: boolean) {
-  const [value, setValue] = useState<string | number>("—");
-  const hasAnimated = useRef(false);
-
+function usePrintIn(delayMs: number, disable: boolean) {
+  const [visible, setVisible] = useState(false);
+  
   useEffect(() => {
-    if (disable || !endStr || endStr === "—" || hasAnimated.current) {
-      if (endStr) setValue(endStr);
-      return;
-    }
+    if (disable) return;
     const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (prefersReducedMotion) {
-      setValue(endStr);
-      hasAnimated.current = true;
+      setVisible(true);
       return;
     }
-    const cleanStr = endStr.replace(/,/g, "").replace("%", "");
-    const endVal = parseFloat(cleanStr);
-    if (isNaN(endVal)) {
-      setValue(endStr);
-      hasAnimated.current = true;
-      return;
-    }
-
-    const duration = 600;
-    const start = 0;
-    let startTime: number | null = null;
     let observer: IntersectionObserver;
     let el = document.getElementById("metric-row");
-    
     if (!el) {
-      setValue(endStr);
+      setVisible(true);
       return;
     }
-
-    const startAnim = () => {
-      const timeout = setTimeout(() => {
-        hasAnimated.current = true;
-        requestAnimationFrame(function animate(time) {
-          if (!startTime) startTime = time;
-          const progress = Math.min((time - startTime) / duration, 1);
-          const current = start + (endVal - start) * Math.sin(progress * Math.PI / 2); // ease out
-          
-          let formatted = Math.floor(current).toLocaleString("en-IN");
-          
-          setValue(formatted);
-          
-          if (progress < 1) {
-            requestAnimationFrame(animate);
-          } else {
-            setValue(formatted);
-          }
-        });
-      }, delayMs);
-      return () => clearTimeout(timeout);
-    };
 
     observer = new IntersectionObserver((entries) => {
       if (entries[0]?.isIntersecting) {
-        startAnim();
+        setTimeout(() => setVisible(true), delayMs);
         observer.disconnect();
       }
     });
     observer.observe(el);
 
     return () => observer.disconnect();
-  }, [endStr, delayMs, disable]);
+  }, [delayMs, disable]);
 
-  return value;
+  return visible;
 }
 
 function Corners() {
@@ -94,20 +55,21 @@ export function VitalTiles({ latest, next, risk, proposed, drafts, change, histo
   const riskStr = risk && !risk.unavailable ? risk.value : "—";
   const proposedStr = String(proposed).padStart(2, "0");
 
-  const pVal = useCountUp(prodStr, 60, !mounted);
-  const nVal = useCountUp(nextStr, 120, !mounted);
-  const rVal = useCountUp(riskStr, 180, !mounted);
-  const prVal = useCountUp(proposedStr, 240, !mounted);
+  const pVis = usePrintIn(60, !mounted);
+  const nVis = usePrintIn(120, !mounted);
+  const rVis = usePrintIn(180, !mounted);
+  const prVis = usePrintIn(240, !mounted);
 
   const riskNum = riskStr !== "—" ? parseFloat(riskStr.replace("%","")) : 0;
   const riskColor = riskNum >= 30 ? "var(--brick)" : "var(--moss)";
   const riskTicks = Math.round(riskNum / 10);
   const riskLevelText = riskStr !== "—" ? "below 90% of issued forecast" : (risk?.note ?? "Read event definition and calibration below");
 
-  // Staggered entrance
   const prefersReduced = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const baseStyle = mounted ? { transform: "translateY(0)", opacity: 1 } : { transform: "translateY(8px)", opacity: 0 };
   const getStyle = (delay: number) => (prefersReduced || !mounted ? undefined : { ...baseStyle, transition: `transform 400ms ease ${delay}ms, opacity 400ms ease ${delay}ms` });
+
+  const getNumStyle = (vis: boolean) => (prefersReduced || !mounted ? { fontVariantNumeric: "tabular-nums" } : { fontVariantNumeric: "tabular-nums", opacity: vis ? 1 : 0, filter: vis ? "blur(0)" : "blur(4px)", transition: "opacity 200ms ease, filter 200ms ease" });
 
   return (
     <section id="metric-row" className={s.metrics} aria-label="Operational vital signs">
@@ -117,7 +79,7 @@ export function VitalTiles({ latest, next, risk, proposed, drafts, change, histo
           {live && <span className={`${s.pulseDot} ${s.pulseMoss}`} />}
           Latest production<span>tonnes</span>
         </div>
-        <p className={s.metricValue}>{pVal === "—" ? "—" : <>{pVal}<sup>t</sup></>}</p>
+        <p className={s.metricValue} style={getNumStyle(pVis)}>{prodStr === "—" ? "—" : <>{prodStr}<sup>t</sup></>}</p>
         
         <div className={s.microVisual} aria-hidden="true">
           <svg viewBox="0 0 100 28" preserveAspectRatio="none">
@@ -150,7 +112,7 @@ export function VitalTiles({ latest, next, risk, proposed, drafts, change, histo
           {live && <span className={`${s.pulseDot} ${s.pulseMoss}`} />}
           Next-month forecast<span>tonnes</span>
         </div>
-        <p className={s.metricValue}>{nVal === "—" ? "—" : <>{nVal}<sup>t</sup></>}</p>
+        <p className={s.metricValue} style={getNumStyle(nVis)}>{nextStr === "—" ? "—" : <>{nextStr}<sup>t</sup></>}</p>
         
         <div className={s.microVisual} aria-hidden="true">
           <svg viewBox="0 0 100 28" preserveAspectRatio="none">
@@ -181,7 +143,7 @@ export function VitalTiles({ latest, next, risk, proposed, drafts, change, histo
           {live && <span className={`${s.pulseDot} ${s.pulseMoss}`} />}
           Downside risk<span>forecast-relative</span>
         </div>
-        <p className={s.metricValue} data-testid="vital-risk">{rVal === "—" ? "—" : <>{rVal}<sup>%</sup></>}</p>
+        <p className={s.metricValue} data-testid="vital-risk" style={getNumStyle(rVis)}>{riskStr === "—" ? "—" : <>{riskStr}<sup>%</sup></>}</p>
 
         <div className={s.microVisual} aria-hidden="true" style={{ display: 'flex', gap: '2px', alignItems: 'center', height: '28px' }}>
           {Array.from({length: 10}).map((_, i) => (
@@ -200,7 +162,7 @@ export function VitalTiles({ latest, next, risk, proposed, drafts, change, histo
           <span className={`${s.pulseDot} ${s.pulseCopper}`} />
           Pending reviews<Link href="/actions" aria-label="View corrective actions"><ArrowUpRight size={15} /></Link>
         </div>
-        <p className={s.metricValue}>{prVal === "—" ? "—" : prVal}<small>{registerData ? `${drafts} draft` : "unavailable"}</small></p>
+        <p className={s.metricValue} style={getNumStyle(prVis)}>{proposedStr === "—" ? "—" : proposedStr}<small>{registerData ? `${drafts} draft` : "unavailable"}</small></p>
 
         <div className={s.microVisual} aria-hidden="true" style={{ display: 'flex', gap: '4px', alignItems: 'flex-end', height: '28px', paddingBottom: '4px' }}>
           {Array.from({length: Math.max(1, proposed)}).map((_, i) => (

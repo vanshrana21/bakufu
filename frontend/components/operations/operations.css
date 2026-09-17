@@ -753,3 +753,205 @@
     font-size: 24px;
   }
 }
+
+.risk-card {
+  display: flex;
+  flex-direction: column;
+}
+.risk-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.risk-label {
+  font: 600 10px var(--font-mono);
+  letter-spacing: 0.08em;
+  color: var(--metadata);
+}
+.risk-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  font: 600 9px var(--font-mono);
+  letter-spacing: 0.04em;
+}
+.risk-chip.low {
+  border: 1px solid var(--moss);
+  color: var(--moss);
+}
+.risk-chip.elevated {
+  background: var(--brick);
+  color: var(--card);
+}
+.risk-chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.risk-number-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-top: 12px;
+}
+.risk-value {
+  font: 400 37px/1 "Archivo Black", sans-serif;
+  letter-spacing: -0.04em;
+  color: var(--signal);
+}
+.risk-sup {
+  font-size: 16px;
+  color: var(--signal);
+  margin-left: 2px;
+  vertical-align: super;
+}
+.risk-delta {
+  font: 500 11px var(--font-sans);
+}
+.risk-delta.up { color: var(--brick); }
+.risk-delta.down { color: var(--moss); }
+
+.risk-ruler-wrap {
+  width: 100%;
+  margin-top: 16px;
+  overflow: visible;
+}
+.risk-ruler {
+  width: 100%;
+  height: auto;
+  display: block;
+  overflow: visible;
+}
+.ruler-num {
+  font: 400 9px var(--font-mono);
+  fill: var(--metadata);
+}
+.ruler-thresh-lbl {
+  font: 500 9px var(--font-mono);
+  fill: var(--action);
+}
+.ruler-bracket-lbl {
+  font: 500 9px var(--font-mono);
+  fill: var(--action);
+  opacity: 0;
+}
+.ruler-ghost-lbl {
+  font: 500 9px var(--font-mono);
+  fill: var(--metadata);
+  opacity: 0;
+}
+.risk-def-sentence {
+  margin-top: 24px;
+  font: 400 14px/1.5 var(--font-sans);
+  color: color-mix(in srgb, var(--observed) 80%, transparent);
+}
+.risk-calibration-foot {
+  margin-top: 12px;
+  font: 600 10px var(--font-mono);
+  letter-spacing: 0.08em;
+  color: var(--metadata);
+}
+
+/* CHOREOGRAPHY */
+.risk-value, .risk-sup {
+  opacity: 0;
+  filter: blur(4px);
+  animation: printIn 200ms ease 500ms forwards;
+}
+.risk-delta {
+  opacity: 0;
+  animation: fadeIn 200ms ease 600ms forwards;
+}
+.ruler-baseline {
+  stroke: var(--border);
+  stroke-width: 1px;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: drawLine 150ms ease forwards;
+}
+.moss-zone, .brick-zone {
+  fill: var(--moss);
+  opacity: 0;
+}
+.brick-zone { fill: var(--brick); }
+.moss-zone {
+  animation: revealMoss 250ms ease 150ms forwards;
+}
+.brick-zone {
+  animation: revealBrick 250ms ease 150ms forwards;
+}
+.ruler-needle {
+  transform: translateY(-8px);
+  opacity: 0;
+  animation: dropNeedle 450ms cubic-bezier(0.34, 1.56, 0.64, 1) 400ms forwards;
+}
+.ruler-bracket path {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: drawLine 250ms ease 850ms forwards;
+}
+.ruler-bracket .ruler-bracket-lbl {
+  animation: fadeIn 200ms ease 850ms forwards;
+}
+
+.risk-card:hover .ruler-ghost-lbl {
+  opacity: 1;
+}
+.risk-card:hover .ruler-thresh-lbl {
+  fill: var(--glow);
+}
+
+@keyframes printIn {
+  to { opacity: 1; filter: blur(0); }
+}
+@keyframes fadeIn {
+  to { opacity: 1; }
+}
+@keyframes drawLine {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes revealMoss {
+  0% { clip-path: inset(0 0 0 100%); opacity: 0.12; }
+  100% { clip-path: inset(0 0 0 0); opacity: 0.12; }
+}
+@keyframes revealBrick {
+  0% { clip-path: inset(0 100% 0 0); opacity: 0.12; }
+  100% { clip-path: inset(0 0 0 0); opacity: 0.12; }
+}
+@keyframes dropNeedle {
+  0% { transform: translateY(-8px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .risk-value, .risk-sup, .risk-delta, .ruler-bracket .ruler-bracket-lbl {
+    animation: none;
+    opacity: 1;
+    filter: blur(0);
+  }
+  .ruler-baseline, .ruler-bracket path {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+  .moss-zone, .brick-zone {
+    animation: none;
+    clip-path: none;
+    opacity: 0.12;
+  }
+  .ruler-needle {
+    animation: none;
+    transform: none;
+    opacity: 1;
+  }
+}
+@media (max-width: 390px) {
+  .ruler-num:not(:first-of-type):not(:last-of-type) {
+    display: none;
+  }
+  .ruler-num:nth-of-type(2) {
+    display: block;
+  }
+}
