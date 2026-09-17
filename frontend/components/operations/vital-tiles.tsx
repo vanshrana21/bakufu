@@ -60,7 +60,8 @@ export function VitalTiles({ latest, next, risk, proposed, drafts, change, histo
   const rVis = usePrintIn(180, !mounted);
   const prVis = usePrintIn(240, !mounted);
 
-  const riskNum = riskStr !== "—" ? parseFloat(riskStr.replace("%","")) : 0;
+  const riskNumStr = riskStr !== "—" ? riskStr.replace("%", "") : "—";
+  const riskNum = riskStr !== "—" ? parseFloat(riskNumStr) : 0;
   const riskColor = riskNum >= 30 ? "var(--brick)" : "var(--moss)";
   const riskTicks = Math.round(riskNum / 10);
   const riskLevelText = riskStr !== "—" ? "below 90% of issued forecast" : (risk?.note ?? "Read event definition and calibration below");
@@ -137,18 +138,20 @@ export function VitalTiles({ latest, next, risk, proposed, drafts, change, histo
         </div>
       </article>
 
-      <article className={s.metric} data-kind="model" style={{ ...getStyle(180), '--kind-ink': riskColor } as any}>
+      <article className={s.metric} data-kind="model" style={{ ...getStyle(180), borderTopColor: riskColor } as any}>
         <Corners />
         <div className={s.metricLabel}>
           {live && <span className={`${s.pulseDot} ${s.pulseMoss}`} />}
           Downside risk<span>forecast-relative</span>
         </div>
-        <p className={s.metricValue} data-testid="vital-risk" style={getNumStyle(rVis)}>{riskStr === "—" ? "—" : <>{riskStr}<sup>%</sup></>}</p>
+        <p className={s.metricValue} data-testid="vital-risk" style={getNumStyle(rVis)}>{riskNumStr === "—" ? "—" : <>{riskNumStr}<sup>%</sup></>}</p>
 
-        <div className={s.microVisual} aria-hidden="true" style={{ display: 'flex', gap: '2px', alignItems: 'center', height: '28px' }}>
-          {Array.from({length: 10}).map((_, i) => (
-            <div key={i} style={{ flex: 1, height: '8px', background: i < riskTicks ? riskColor : 'var(--border)' }} />
-          ))}
+        <div className={s.microVisual} aria-hidden="true">
+          <svg viewBox="0 0 100 28" preserveAspectRatio="none" style={{ width: '100%', height: '100%' }}>
+            {Array.from({length: 10}).map((_, i) => (
+              <rect key={i} x={`${i * 10}%`} y="10" width="8%" height="8" fill={i < riskTicks ? riskColor : 'var(--signal)'} opacity={i < riskTicks ? 1 : 0.25} />
+            ))}
+          </svg>
         </div>
 
         <div className={s.metricFootWrapper}>
@@ -164,13 +167,17 @@ export function VitalTiles({ latest, next, risk, proposed, drafts, change, histo
         </div>
         <p className={s.metricValue} style={getNumStyle(prVis)}>{proposedStr === "—" ? "—" : proposedStr}<small>{registerData ? `${drafts} draft` : "unavailable"}</small></p>
 
-        <div className={s.microVisual} aria-hidden="true" style={{ display: 'flex', gap: '4px', alignItems: 'flex-end', height: '28px', paddingBottom: '4px' }}>
-          {Array.from({length: Math.max(1, proposed)}).map((_, i) => (
-             <div key={`p-${i}`} style={{ width: '8px', height: '12px', background: proposed > 0 ? 'var(--action)' : 'transparent', border: '1px solid var(--action)' }} />
-          ))}
-          {Array.from({length: Math.max(0, drafts)}).map((_, i) => (
-             <div key={`d-${i}`} style={{ width: '8px', height: '12px', border: '1px solid var(--action)' }} />
-          ))}
+        <div className={s.microVisual} aria-hidden="true">
+          <svg viewBox="0 0 100 28" preserveAspectRatio="none" style={{ width: '100%', height: '100%' }}>
+            <g transform="translate(0, 12)">
+               {Array.from({length: Math.max(1, proposed)}).map((_, i) => (
+                  <rect key={`p-${i}`} x={i * 12} y={0} width={8} height={12} fill={proposed > 0 ? 'var(--action)' : 'none'} stroke="var(--action)" strokeWidth="1.5" />
+               ))}
+               {Array.from({length: Math.max(0, drafts)}).map((_, i) => (
+                  <rect key={`d-${i}`} x={(Math.max(1, proposed) + i) * 12} y={0} width={8} height={12} fill="none" stroke="var(--action)" strokeWidth="1.5" />
+               ))}
+            </g>
+          </svg>
         </div>
 
         <div className={s.metricFootWrapper}>

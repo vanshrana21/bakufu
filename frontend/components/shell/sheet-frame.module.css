@@ -48,8 +48,11 @@
   grid-row: 1;
   min-width: 0;
   padding: 9px 28px 0;
-  background: var(--band);
-  border-bottom: 4px double var(--rule);
+  background: var(--ground);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 60px;
+  z-index: 10;
 }
 .bandText {
   display: flex;
@@ -172,8 +175,8 @@
   bottom: 6px;
 }
 
-@media (max-width: 1100px) {
-  .legend { display: none; }
+@media (max-width: 900px) {
+  .longitude { display: none; }
 }
 @media (max-width: 700px) {
   .latitude,

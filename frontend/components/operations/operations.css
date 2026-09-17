@@ -830,17 +830,20 @@
   fill: var(--metadata);
 }
 .ruler-thresh-lbl {
-  font: 500 9px var(--font-mono);
-  fill: var(--action);
+  font: 500 10px var(--font-mono);
+  letter-spacing: 0.08em;
+  color: var(--action);
 }
 .ruler-bracket-lbl {
-  font: 500 9px var(--font-mono);
-  fill: var(--action);
+  font: 500 10px var(--font-mono);
+  letter-spacing: 0.08em;
+  color: var(--action);
   opacity: 0;
 }
 .ruler-ghost-lbl {
-  font: 500 9px var(--font-mono);
-  fill: var(--metadata);
+  font: 500 10px var(--font-mono);
+  letter-spacing: 0.08em;
+  color: var(--metadata);
   opacity: 0;
 }
 .risk-def-sentence {
@@ -888,20 +891,19 @@
   opacity: 0;
   animation: dropNeedle 450ms cubic-bezier(0.34, 1.56, 0.64, 1) 400ms forwards;
 }
-.ruler-bracket path {
-  stroke-dasharray: 100;
-  stroke-dashoffset: 100;
-  animation: drawLine 250ms ease 850ms forwards;
+.ruler-bracket {
+  opacity: 0;
+  animation: fadeIn 250ms ease 850ms forwards;
 }
 .ruler-bracket .ruler-bracket-lbl {
-  animation: fadeIn 200ms ease 850ms forwards;
+  /* Parent fades in */
 }
 
 .risk-card:hover .ruler-ghost-lbl {
   opacity: 1;
 }
 .risk-card:hover .ruler-thresh-lbl {
-  fill: var(--glow);
+  color: var(--glow);
 }
 
 @keyframes printIn {
@@ -927,12 +929,12 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .risk-value, .risk-sup, .risk-delta, .ruler-bracket .ruler-bracket-lbl {
+  .risk-value, .risk-sup, .risk-delta, .ruler-bracket {
     animation: none;
     opacity: 1;
     filter: blur(0);
   }
-  .ruler-baseline, .ruler-bracket path {
+  .ruler-baseline {
     animation: none;
     stroke-dashoffset: 0;
   }
