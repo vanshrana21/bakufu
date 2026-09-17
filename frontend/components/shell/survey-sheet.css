@@ -1,0 +1,235 @@
+/* ==========================================================================
+ * SURVEY SHEET
+ * The workspace drawn as sheets of one atlas: the Sausar Belt, the model's
+ * validated scope. Loaded after workspace.css, and every rule is scoped to
+ * .workspace, so the landing page keeps its own identity.
+ *
+ * The vocabulary is cartographic, and each piece carries information:
+ *   neatline + graticule   the sheet's extent (sheet-frame.tsx)
+ *   title block            sheet number, title, edition, actions
+ *   inset                  a framed panel with registration ticks at its corners
+ *   legend                 three inks that never swap meaning:
+ *                          mineral white = observed, manganese violet = model
+ *                          estimate, copper = a human action or where you are.
+ * ========================================================================== */
+
+/* -- Sheet body ------------------------------------------------------------
+ * Grid intersections marked with small crosses, as a survey sheet marks its
+ * grid. They sit in the gutters; every inset covers them with its own fill. */
+.workspace .workspace-content {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cpath d='M60 55v10M55 60h10' stroke='%2357717B' stroke-opacity='.42' stroke-width='1' fill='none'/%3E%3C/svg%3E");
+  background-position: -60px -60px;
+}
+
+/* -- Title block -----------------------------------------------------------
+ * One treatment for the four header shapes the pages use. */
+.workspace .workspace-content :is(.module-header, .operations-header, .explorer-page-heading, header:has(.app-title)) {
+  position: relative;
+  isolation: isolate;
+  margin-bottom: 28px;
+  padding-top: 8px;
+  padding-bottom: 24px;
+  /* The band's double neatline already closes the top; the block closes below. */
+  border-top: 0;
+  border-bottom: 4px double var(--rule);
+}
+/* Contour lines behind the right half of the block: the landing's terrain,
+ * reduced to linework. Masked so the title always sits on clear ground. */
+.workspace .workspace-content :is(.module-header, .operations-header, .explorer-page-heading, header:has(.app-title))::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 0 34%;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    repeating-radial-gradient(ellipse 58% 150% at 86% 128%, transparent 0 13px, color-mix(in srgb, var(--steel) 34%, transparent) 13px 14px),
+    repeating-radial-gradient(ellipse 36% 110% at 44% -40%, transparent 0 17px, color-mix(in srgb, var(--steel) 20%, transparent) 17px 18px);
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 55%);
+  mask-image: linear-gradient(to right, transparent, #000 55%);
+}
+/* The sheet reference: a boxed number, in copper because it says where you are. */
+.workspace .workspace-content .app-kicker {
+  display: inline-block;
+  width: fit-content;
+  margin: 0 0 14px;
+  padding: 3px 8px;
+  border: 1px solid var(--rule);
+  background: var(--ground);
+  font: 600 10px/1.3 var(--font-mono);
+  letter-spacing: 0.14em;
+  color: var(--action);
+}
+.workspace .workspace-content :is(.module-header h1, .operations-header h1, .explorer-page-heading h1, h1.app-title) {
+  margin: 0;
+  font: 400 clamp(28px, 2.5vw, 38px)/1.04 "Archivo Black", sans-serif;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  color: var(--observed);
+}
+.workspace .workspace-content :is(.module-heading > p, .operations-header > div > p:not(.app-kicker), .app-description, .explorer-page-heading > div > p:not(.app-kicker)) {
+  max-width: 68ch;
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted-foreground);
+}
+/* The Explorer's scope statement sits in the block's tool corner like the other
+ * pages' edition notes, not as a second headline under the description. */
+.workspace .workspace-content .explorer-page-heading > .explorer-mode-label {
+  flex: none;
+  margin-top: 0;
+  padding: 6px 10px;
+  font: 600 10px/1.3 var(--font-mono);
+  letter-spacing: 0.1em;
+  border-radius: var(--radius-sm);
+}
+.workspace .workspace-content :is(.module-status, .operations-edition) {
+  font: 500 10px/1.5 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--metadata);
+}
+
+/* -- Insets ----------------------------------------------------------------
+ * A framed panel: square corners, a hairline, and registration ticks drawn over
+ * the corners (the --corners layers). Flat, as print is: no drop shadows. */
+.workspace .workspace-content :is(
+  .forecast-instrument, .risk-instrument, .review-register, .paper-panel,
+  .mine-card, .report-template-card, .inventory-feature,
+  .decision-protocol, .action-evidence, .instrument-rail, .forecast-basis, .survey-grid,
+  [class~="rounded-lg"][class~="border"]:not([role="tablist"])
+) {
+  --inset-fill: var(--surface);
+  background: var(--corners), var(--inset-fill);
+  border-radius: var(--radius-lg);
+  box-shadow: none;
+}
+.workspace .workspace-content .inventory-feature {
+  --inset-fill: color-mix(in srgb, var(--violet) 7%, var(--shade-1));
+  border-color: var(--signal-line);
+}
+/* Tables inside an inset already sit within its frame. */
+.workspace .workspace-content .ui-table-scroll {
+  border: 0;
+  border-radius: 0;
+}
+.workspace .workspace-content .note {
+  border-radius: var(--radius-sm);
+}
+
+/* Inset captions: the small label that names what an inset shows, set as a map
+ * inset's caption with a corner mark rather than a free-floating eyebrow. */
+.workspace .workspace-content .section-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 600 10px/1.5 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--metadata);
+}
+.workspace .workspace-content .section-label::before {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-top: 1px solid var(--tick);
+  border-left: 1px solid var(--tick);
+}
+/* Where the inset's own heading already names it, a caption above would only
+ * repeat it (FORECAST over "Production outlook", DOWNSIDE RISK over "Shortfall
+ * risk"): one name per inset. */
+.workspace .workspace-content :is(.forecast-instrument, .risk-instrument) > .section-label,
+.workspace .workspace-content .forecast-instrument .section-label {
+  display: none;
+}
+
+/* -- Type ------------------------------------------------------------------
+ * Display type belongs to the title block alone. Inset headings, card titles
+ * and figures are set in the text face, where tabular figures line up. */
+.workspace .workspace-content :is(.module-section-head h2, .section-heading) {
+  font: 600 16px/1.35 var(--font-sans);
+  letter-spacing: -0.01em;
+  text-transform: none;
+  color: var(--observed);
+}
+.workspace .workspace-content .mine-card h3 {
+  font: 600 15px/1.3 var(--font-sans);
+  letter-spacing: -0.01em;
+  text-transform: none;
+}
+.workspace .workspace-content .mine-card dd {
+  font: 600 22px/1.1 var(--font-sans);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.workspace .workspace-content .ui-table-scroll th {
+  letter-spacing: 0.06em;
+}
+
+/* -- The three inks --------------------------------------------------------
+ * Anything a model produced is marked data-kind="model" where it renders, and
+ * the forecast chart reads --chart-forecast / --chart-interval. */
+.workspace .workspace-content [data-kind="model"] {
+  color: var(--signal);
+}
+.workspace .workspace-content .instrument-risk .risk-donut strong {
+  color: var(--signal);
+  font-weight: 600;
+}
+.workspace .workspace-content .production-chart .chart-legend-line {
+  border-top-color: var(--chart-actual);
+}
+.workspace .workspace-content .production-chart .chart-legend-line.forecast {
+  border-top-color: var(--chart-forecast);
+}
+
+/* -- A failed inset --------------------------------------------------------
+ * See inset-boundary.tsx: the failure stays in its frame and says so. */
+.inset-failure {
+  padding: 18px 20px;
+  border: 1px solid color-mix(in srgb, var(--critical) 55%, var(--ground));
+  border-radius: var(--radius-lg);
+  background: var(--corners), var(--critical-soft);
+}
+.inset-failure-title {
+  font: 600 14px/1.4 var(--font-sans);
+  color: var(--critical);
+}
+.inset-failure-detail {
+  margin-top: 6px;
+  max-width: 70ch;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted-foreground);
+}
+.inset-failure-retry {
+  margin-top: 12px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  font-size: 12px;
+  color: var(--foreground);
+  cursor: pointer;
+  transition: border-color 160ms var(--ease-out), color 160ms var(--ease-out);
+}
+.inset-failure-retry:hover {
+  border-color: var(--action);
+  color: var(--action);
+}
+
+@media (max-width: 700px) {
+  .workspace .workspace-content :is(.module-header, .operations-header, .explorer-page-heading, header:has(.app-title))::before {
+    inset: 0 0 0 50%;
+    opacity: 0.6;
+  }
+}
+@media print {
+  .workspace .workspace-content {
+    background-image: none;
+  }
+  .workspace .workspace-content :is(.module-header, .operations-header, .explorer-page-heading, header:has(.app-title))::before {
+    display: none;
+  }
+}
