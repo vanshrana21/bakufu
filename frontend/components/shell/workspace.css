@@ -5,8 +5,12 @@
  * Rules read these roles, so each colour means one thing on every page.
  * Two temperatures, as in the hero: the chrome (header, sidebar, scope band) is
  * steel-cooled, the content keeps the warm ground, and steel frames the panels.
+ * Survey Sheet: every page is a sheet of the Sausar Belt atlas. Three inks carry
+ * meaning and never swap: mineral white is what was OBSERVED, manganese violet is
+ * what a MODEL estimated, copper is a HUMAN decision or where you are.
  * Contrast on ground / shade-2 / table head: ink 15.1/12.7/11.3, soft 10.7/8.9/8.0,
- * steel text 7.9/6.6/5.8, critical 6.4/5.4/4.8, glow 7.7/6.5/5.8, moss 6.3/5.2/4.7. */
+ * steel text 7.9/6.6/5.8, violet 7.4/6.2/5.5, critical 6.4/5.4/4.8, glow 7.7/6.5/5.8,
+ * moss 6.3/5.2/4.7. */
 .workspace[data-theme="dark"], .workspace [data-theme="dark"] {
   --ink-strong: color-mix(in srgb, var(--mineral) 82%, var(--paper));
   --ink-soft: color-mix(in srgb, var(--mineral) 68%, var(--steel));
@@ -29,8 +33,31 @@
   --warning: var(--glow); --warning-soft: color-mix(in srgb, var(--glow) 14%, var(--ground));
   --critical: color-mix(in srgb, var(--brick) 62%, var(--mineral)); --critical-soft: color-mix(in srgb, var(--brick) 20%, var(--ground));
   --info: var(--steel-text); --info-soft: color-mix(in srgb, var(--steel) 18%, var(--ground));
-  --chart-actual: var(--ink-strong); --chart-forecast: var(--glow);
-  --radius: .375rem; --radius-lg: .5rem;
+  /* The three inks. */
+  --observed: var(--ink-strong);
+  --signal: var(--violet);
+  --signal-soft: color-mix(in srgb, var(--violet) 13%, var(--ground));
+  --signal-line: color-mix(in srgb, var(--violet) 45%, var(--ground));
+  --action: var(--glow);
+  --chart-actual: var(--observed); --chart-forecast: var(--signal);
+  --chart-interval: color-mix(in srgb, var(--violet) 28%, transparent);
+  /* Sheet linework: neatlines and rules, and the brighter registration ticks
+   * that mark each inset's corners the way crop marks mark a printed sheet. */
+  --rule: color-mix(in srgb, var(--steel) 58%, var(--ground));
+  --rule-faint: color-mix(in srgb, var(--steel) 30%, var(--ground));
+  --tick: oklch(0.80 0.035 223);
+  --tick-size: 10px;
+  --corners:
+    linear-gradient(var(--tick) 0 0) border-box left top / var(--tick-size) 1px no-repeat,
+    linear-gradient(var(--tick) 0 0) border-box left top / 1px var(--tick-size) no-repeat,
+    linear-gradient(var(--tick) 0 0) border-box right top / var(--tick-size) 1px no-repeat,
+    linear-gradient(var(--tick) 0 0) border-box right top / 1px var(--tick-size) no-repeat,
+    linear-gradient(var(--tick) 0 0) border-box left bottom / var(--tick-size) 1px no-repeat,
+    linear-gradient(var(--tick) 0 0) border-box left bottom / 1px var(--tick-size) no-repeat,
+    linear-gradient(var(--tick) 0 0) border-box right bottom / var(--tick-size) 1px no-repeat,
+    linear-gradient(var(--tick) 0 0) border-box right bottom / 1px var(--tick-size) no-repeat;
+  /* Printed sheets have square corners. */
+  --radius: 2px; --radius-lg: 2px; --radius-sm: 1px; --radius-xl: 3px;
 }
 .workspace { font-size: 13px; font-variant-numeric: tabular-nums; }
 .workspace .workspace-page, .workspace .briefing-page, .workspace .survey-page { max-width: 1760px; margin: 0 auto; padding: 26px 28px 32px; }
@@ -154,7 +181,7 @@
   .workspace .module-section-head { align-items: flex-start; }
 }
 @media print {
-  .workspace[data-theme="dark"], .workspace [data-theme="dark"] { --background: var(--paper); --surface: var(--paper); --surface-raised: var(--paper); --foreground: var(--ink); --muted-foreground: var(--char); --metadata: var(--char); --border: var(--char); --card: var(--paper); --card-foreground: var(--ink); --surface-cool: var(--paper); --band: var(--paper); --chrome: var(--paper); --border-strong: var(--char); --input: var(--char); --row-hover: var(--paper); --chart-actual: var(--ink); --critical: var(--ore); --info: var(--char); --success: var(--char); --warning: var(--ore); color: var(--ink); background: var(--paper); }
+  .workspace[data-theme="dark"], .workspace [data-theme="dark"] { --background: var(--paper); --surface: var(--paper); --surface-raised: var(--paper); --foreground: var(--ink); --muted-foreground: var(--char); --metadata: var(--char); --border: var(--char); --card: var(--paper); --card-foreground: var(--ink); --surface-cool: var(--paper); --band: var(--paper); --chrome: var(--paper); --border-strong: var(--char); --input: var(--char); --row-hover: var(--paper); --chart-actual: var(--ink); --critical: var(--ore); --info: var(--char); --success: var(--char); --warning: var(--ore); --observed: var(--ink); --signal: var(--violet); --signal-soft: var(--paper); --action: var(--ore); --rule: var(--char); --rule-faint: var(--char); --tick: var(--char); --chart-forecast: var(--violet); color: var(--ink); background: var(--paper); }
   .workspace .module-actions { display: none; }
   .workspace .reports-layout, .workspace .feedback-layout, .workspace .production-layout > .forecast-risk-layout { display: block; }
 }

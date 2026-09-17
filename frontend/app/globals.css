@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* BAKUFU palette. These eleven are the only solid colours in the product; every
+/* BAKUFU palette. These twelve are the only solid colours in the product; every
  * other colour is one of them at an opacity. Landing and workspace share them.
  * Mineral and steel are the hero's cool half - its type and its terrain light -
  * so the workspace can carry the same warm/cool balance as the landing. */
@@ -18,6 +18,11 @@
   --ink: #000000;
   --mineral: #E4E9E8;
   --steel: #57717B;
+  /* Manganese violet, the element's own colour (NH4MnP2O7, 1866; permanganate
+   * dissolves pink-violet). oklch(0.72 0.11 318): the same lightness and chroma
+   * as --glow, so copper and violet carry equal weight and differ only in hue.
+   * The workspace spends it on one meaning: what a model estimated. */
+  --violet: #A9C4D4;
   /* Status semantics only, never decoration: good / live / inside / low, and
    * attention / outside / high. Kept to a few percent of any screen. */
   --moss: #7E9B72;
@@ -270,4 +275,10 @@ summary {
 ::selection {
   background: var(--glow);
   color: var(--ink);
+}
+
+@media print {
+  :root {
+    --violet: #44687E;
+  }
 }
