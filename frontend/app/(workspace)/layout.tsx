@@ -6,6 +6,8 @@ import { ExplorerProvider } from "@/components/explorer/explorer-provider";
 // would leave the same components unstyled on the routes that omit it.
 import "@/components/operations/operations.css";
 import "@/components/shell/workspace.css";
+// Last: the Survey Sheet concept layer reads the tokens both files above define.
+import "@/components/shell/survey-sheet.css";
 
 export default function WorkspaceLayout({ children }: { children: ReactNode }) {
   return <ExplorerProvider><AppShell>{children}</AppShell></ExplorerProvider>;

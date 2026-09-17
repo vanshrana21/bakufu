@@ -277,6 +277,7 @@ summary {
   color: var(--ink);
 }
 
+/* Print override */
 @media print {
   :root {
     --violet: #44687E;

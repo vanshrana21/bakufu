@@ -24,6 +24,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { BakufuLockup } from "@/components/brand/logo-b";
 import { LIVE_MODE } from "@/lib/api/client";
+import { SheetFrame } from "./sheet-frame";
 import styles from "./app-shell.module.css";
 
 /** Remembers a collapsed sidebar across visits; a per-viewer convenience only. */
@@ -36,34 +37,36 @@ const navigationGroups = [
   {
     label: "Operations",
     items: [
-      { href: "/operations", label: "Command Center", icon: LayoutDashboard },
+      { href: "/operations", label: "Command Center", icon: LayoutDashboard, sheet: "01" },
       {
         href: "/production",
         label: "Production & Risk",
         icon: ChartNoAxesCombined,
+        sheet: "03",
       },
-      { href: "/actions", label: "Corrective Actions", icon: ListChecks },
-      { href: "/assets", label: "Assets & Inventory", icon: Archive },
+      { href: "/actions", label: "Corrective Actions", icon: ListChecks, sheet: "04" },
+      { href: "/assets", label: "Assets & Inventory", icon: Archive, sheet: "05" },
     ],
   },
   {
     label: "Intelligence",
     items: [
-      { href: "/explorer", label: "Prospectivity", icon: Scan },
+      { href: "/explorer", label: "Prospectivity", icon: Scan, sheet: "02" },
       {
         href: "/feedback",
         label: "Geologist Feedback",
         icon: MessageSquareText,
+        sheet: "06",
       },
-      { href: "/pipeline", label: "Data Pipeline", icon: Database },
+      { href: "/pipeline", label: "Data Pipeline", icon: Database, sheet: "07" },
     ],
   },
   {
     label: "Administration",
     items: [
-      { href: "/compliance", label: "Compliance", icon: FileCheck2 },
-      { href: "/reports", label: "Reports & Exports", icon: FileOutput },
-      { href: "/admin", label: "Administration & RBAC", icon: ShieldCheck },
+      { href: "/compliance", label: "Compliance", icon: FileCheck2, sheet: "08" },
+      { href: "/reports", label: "Reports & Exports", icon: FileOutput, sheet: "09" },
+      { href: "/admin", label: "Administration & RBAC", icon: ShieldCheck, sheet: "10" },
     ],
   },
 ];
@@ -163,6 +166,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           )}
         </button>
         <div className={styles.context}>
+          {activeItem && <span className={styles.sheetRef}>Sheet {activeItem.sheet} / 10</span>}
           <span>{activeGroup?.label}</span>
           <span aria-hidden="true">/</span>
           <strong>{activeItem?.label}</strong>
@@ -240,15 +244,12 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </aside>
         <div className={`workspace-main ${styles.mainColumn}`}>
-          <div className={styles.scopeStrip}>
-            <span>Sausar Belt · Gondite geology</span>
-            <span>September 2026 scenario</span>
-          </div>
+          <SheetFrame />
           <main
             ref={main}
             id="main-content"
             tabIndex={-1}
-            className="workspace-content"
+            className={`workspace-content ${styles.content}`}
           >
             {children}
           </main>

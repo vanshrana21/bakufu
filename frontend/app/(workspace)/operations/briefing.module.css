@@ -2,30 +2,36 @@
 .page { min-width: 0; }
 .notice { margin-bottom: 14px; }
 .sourceLine { margin-bottom: 12px; color: var(--metadata); font-size: 11px; }
-.metrics { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); border: 1px solid var(--border); border-radius: 6px; background: var(--card); box-shadow: 0 4px 20px rgba(0,0,0,0.3); overflow: hidden; }
-.metric { min-width: 0; padding: 20px 22px; transition: background-color 200ms var(--ease-out); }
-.metric:hover { background-color: var(--row-hover); }
+/* The reading line: four readings in one inset, each keyed to its ink. */
+.metrics { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--corners), var(--card); overflow: hidden; }
+.metric { --kind-ink: var(--observed); min-width: 0; padding: 20px 22px; }
+.metric[data-kind="model"] { --kind-ink: var(--signal); }
+.metric[data-kind="action"] { --kind-ink: var(--action); }
 .metric + .metric { border-left: 1px solid var(--border); }
-.metricLabel { display: flex; align-items: center; justify-content: space-between; gap: 8px; font: 600 10px var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--metadata); }
+.metricLabel { display: flex; align-items: center; justify-content: flex-start; gap: 8px; font: 600 10px var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--metadata); }
+.metricLabel::before { content: ""; flex: none; width: 14px; height: 2px; background: var(--kind-ink); }
+.metric[data-kind="model"] .metricLabel::before { background: repeating-linear-gradient(to right, var(--kind-ink) 0 4px, transparent 4px 7px); }
+.metricLabel > span, .metricLabel > a { margin-left: auto; }
 .metricLabel > span { font: 500 9px var(--font-mono); color: var(--metadata); }
 .metricLabel a { color: var(--glow); transition: transform 160ms ease; }
-.metricValue { display: flex; align-items: baseline; gap: 10px; margin-top: 14px; font: 400 34px/1.1 "Archivo Black", sans-serif; letter-spacing: -.04em; color: var(--foreground); font-variant-numeric: tabular-nums; }
+.metricValue { display: flex; align-items: baseline; gap: 10px; margin-top: 16px; font: 600 36px/1.05 var(--font-sans); letter-spacing: -.025em; color: var(--kind-ink); font-variant-numeric: tabular-nums; }
 .metricValue small { font: 600 10px var(--font-mono); letter-spacing: 0.04em; color: var(--glow); }
 .metricFoot { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 10px; color: var(--metadata); font: 10px/1.5 var(--font-mono); }
 .metricFoot [data-tone="good"] { color: var(--moss); font-weight: 600; }
 .section { margin-top: 24px; }
 .sectionHead { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
-.sectionHead h2 { font: 500 17px/1.2 "Archivo Black", sans-serif; letter-spacing: -.02em; text-transform: uppercase; color: var(--foreground); }
+.sectionHead h2 { font: 600 18px/1.3 var(--font-sans); letter-spacing: -.01em; color: var(--foreground); }
 .sectionHead p { margin-top: 4px; font-size: 11px; line-height: 1.6; color: var(--metadata); }
 .inlineLink { display: inline-flex; align-items: center; gap: 7px; font: 600 11px var(--font-mono); letter-spacing: 0.04em; color: var(--glow); transition: color 160ms var(--ease-out); }
 .inlineLink:hover { text-decoration: underline; text-underline-offset: 4px; }
-.reserveSection { display: grid; grid-template-columns: 260px minmax(0,1fr); border: 1px solid var(--border); border-radius: 6px; background: var(--surface); margin-top: 24px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.25); }
-.reserveIntro { padding: 24px; border-right: 1px solid var(--border); background: var(--card); }
-.reserveIcon { display: inline-flex; color: var(--glow); margin-bottom: 14px; }
-.reserveIntro h2 { font: 500 18px/1.2 "Archivo Black", sans-serif; letter-spacing: -.03em; text-transform: uppercase; color: var(--foreground); }
+/* Everything in this register is model screening output, so it carries the violet ink. */
+.reserveSection { display: grid; grid-template-columns: 260px minmax(0,1fr); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--corners), var(--surface); margin-top: 24px; overflow: hidden; }
+.reserveIntro { padding: 24px; border-right: 1px solid var(--border); background: color-mix(in srgb, var(--violet) 6%, var(--card)); }
+.reserveIcon { display: inline-flex; color: var(--signal); margin-bottom: 14px; }
+.reserveIntro h2 { font: 600 20px/1.25 var(--font-sans); letter-spacing: -.015em; color: var(--foreground); }
 .reserveIntro > p { margin-top: 8px; font-size: 11px; color: var(--metadata); line-height: 1.7; }
 .candidateCount { display: flex; align-items: center; gap: 14px; margin: 20px 0; }
-.candidateCount strong { font: 400 36px/1 "Archivo Black", sans-serif; letter-spacing: -0.04em; color: var(--glow); }
+.candidateCount strong { font: 600 46px/1 var(--font-sans); letter-spacing: -0.03em; color: var(--signal); font-variant-numeric: tabular-nums; }
 .candidateCount span { font: 10px/1.6 var(--font-mono); letter-spacing: 0.04em; color: var(--muted-foreground); text-transform: uppercase; }
 .reserveIntro .reserveCaveat { margin-top: 20px; font: 9px/1.6 var(--font-mono); color: var(--metadata); }
 .reserveTable { min-width: 0; padding: 8px 20px 16px; }
@@ -35,21 +41,21 @@
 .places thead th { font: 600 10px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--metadata); white-space: nowrap; }
 .places tbody th { font-weight: 400; }
 .places tbody tr { transition: background-color 160ms var(--ease-out); }
-.places tbody tr:hover { background-color: color-mix(in srgb, var(--glow) 5%, var(--surface)); }
+.places tbody tr:hover { background-color: var(--row-hover); }
 .placeName { display: block; font: 600 12px var(--font-sans); color: var(--foreground); }
 .placeKind { display: block; margin-top: 4px; font: 9px var(--font-mono); letter-spacing: 0.04em; color: var(--metadata); }
-.score { display: flex; align-items: center; gap: 10px; font: 600 12px var(--font-mono); color: var(--foreground); }
-.bar { display: block; width: 56px; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
-.bar i { display: block; height: 100%; width: calc(var(--w) * 100%); background: var(--glow); box-shadow: 0 0 6px color-mix(in srgb, var(--glow) 50%, transparent); }
+.score { display: flex; align-items: center; gap: 10px; font: 600 12px var(--font-mono); color: var(--signal); }
+.bar { display: block; width: 64px; height: 4px; background: var(--rule-faint); overflow: hidden; }
+.bar i { display: block; height: 100%; width: calc(var(--w) * 100%); background: var(--signal); }
 .pill { display: inline-flex; align-items: center; gap: 4px; color: var(--metadata); font: 500 10px var(--font-mono); }
 .pill[data-tone="good"] { color: var(--moss); font-weight: 600; }
 .footnote { margin-top: 10px; font: 10px/1.7 var(--font-mono); color: var(--metadata); }
 .humanGrid { display: grid; grid-template-columns: minmax(0,1fr) 320px; gap: 18px; align-items: stretch; }
-.register { display: flex; flex-direction: column; min-width: 0; padding: 20px 22px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); box-shadow: 0 4px 16px rgba(0,0,0,0.25); }
+.register { display: flex; flex-direction: column; min-width: 0; padding: 20px 22px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--corners), var(--surface); }
 .registerBar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
-.registerTitle { font: 500 14px/1.2 "Archivo Black", sans-serif; letter-spacing: -0.02em; text-transform: uppercase; color: var(--foreground); }
+.registerTitle { font: 600 16px/1.3 var(--font-sans); letter-spacing: -0.01em; color: var(--foreground); }
 .filters { display: flex; flex-wrap: wrap; gap: 4px; }
-.filter { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 4px 10px; border: 1px solid transparent; border-radius: 4px; font: 500 10px var(--font-mono); letter-spacing: 0.04em; color: var(--metadata); cursor: pointer; transition: color 160ms var(--ease-out), background-color 160ms var(--ease-out), border-color 160ms var(--ease-out); }
+.filter { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 4px 10px; border: 1px solid transparent; border-radius: var(--radius); font: 500 10px var(--font-mono); letter-spacing: 0.04em; color: var(--metadata); cursor: pointer; transition: color 160ms var(--ease-out), background-color 160ms var(--ease-out), border-color 160ms var(--ease-out); }
 .filter span { font-family: var(--font-mono); font-size: 9px; }
 .filter:hover { background: var(--row-hover); color: var(--foreground); border-color: var(--border); }
 .filter[aria-pressed="true"] { border-color: color-mix(in srgb, var(--glow) 40%, transparent); color: var(--glow); background: var(--primary-soft); }
@@ -58,19 +64,19 @@
 .registerTable thead th { font: 600 10px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--metadata); }
 .nowrap { white-space: nowrap; }
 .muted { color: var(--metadata); }
-.statusTag { display: inline-block; padding: 3px 8px; border: 1px solid var(--border); border-radius: 3px; font: 500 9px var(--font-mono); letter-spacing: 0.04em; color: var(--muted-foreground); text-transform: uppercase; }
-.empty { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; margin-top: 16px; padding: 26px 16px; background: var(--background); border-radius: 5px; text-align: center; }
+.statusTag { display: inline-block; padding: 3px 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); font: 500 9px var(--font-mono); letter-spacing: 0.04em; color: var(--muted-foreground); text-transform: uppercase; }
+.empty { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; margin-top: 16px; padding: 26px 16px; background: var(--background); border-radius: var(--radius); text-align: center; }
 .emptyMark { display: grid; place-items: center; position: relative; width: 36px; height: 36px; margin-bottom: 12px; color: var(--moss); }
 .emptyMark > svg:first-child { position: absolute; inset: 0; width: 36px; height: 36px; fill: none; stroke: var(--border-strong); stroke-width: 1; }
 .emptyMark > svg:last-child { width: 16px; height: 16px; }
 .emptyLine { font-size: 14px; font-weight: 500; }
 .emptyReason { max-width: 55ch; font-size: 11px; line-height: 1.7; color: var(--metadata); margin-top: 8px; }
 .demoColumn { min-width: 0; }
-.demo { padding: 20px; border: 1px solid var(--border); background: var(--surface); border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,0.25); transition: border-color 200ms ease; }
+.demo { padding: 20px; border: 1px solid var(--border); background: var(--corners), var(--surface); border-radius: var(--radius-lg); transition: border-color 200ms var(--ease-out); }
 .demo:hover { border-color: color-mix(in srgb, var(--glow) 35%, transparent); }
-.demoTag { display: inline-flex; padding: 3px 7px; font: 600 9px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--glow); background: var(--primary-soft); border-radius: 3px; border: 1px solid color-mix(in srgb, var(--glow) 25%, transparent); }
+.demoTag { display: inline-flex; padding: 3px 7px; font: 600 9px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--glow); background: var(--primary-soft); border-radius: var(--radius-sm); border: 1px solid color-mix(in srgb, var(--glow) 25%, transparent); }
 .demoMeta { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 12px; font: 9px/1.6 var(--font-mono); color: var(--metadata); }
-.demoTitle { margin-top: 10px; font: 600 15px/1.3 "Archivo Black", sans-serif; letter-spacing: -0.02em; text-transform: uppercase; color: var(--foreground); }
+.demoTitle { margin-top: 10px; font: 600 16px/1.35 var(--font-sans); letter-spacing: -0.01em; color: var(--foreground); }
 .demoText { margin-top: 8px; color: var(--muted-foreground); font-size: 11px; line-height: 1.7; }
 .demoTrigger { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); color: var(--metadata); font-size: 10px; line-height: 1.7; }
 .demoTrigger > span { display: block; color: var(--foreground); margin-bottom: 4px; }
@@ -78,7 +84,7 @@
 .demoLink { display: inline-flex; align-items: center; gap: 6px; font: 600 10px var(--font-mono); letter-spacing: 0.04em; color: var(--glow); }
 .demoLink:hover { text-decoration: underline; }
 .honesty { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding-top: 14px; margin-top: 24px; border-top: 1px solid var(--border); color: var(--metadata); font: 9px/1.7 var(--font-mono); letter-spacing: 0.04em; }
-@media (max-width: 1300px) { .metric { padding: 16px; } .metricValue { font-size: 27px; } .metricLabel { flex-wrap: wrap; } .reserveSection { grid-template-columns: 210px minmax(0,1fr); } }
+@media (max-width: 1300px) { .metric { padding: 16px; } .metricValue { font-size: 29px; } .metricLabel { flex-wrap: wrap; } .reserveSection { grid-template-columns: 210px minmax(0,1fr); } }
 @media (max-width: 1100px) { .humanGrid { grid-template-columns: minmax(0,1fr); } .demo { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 20px; } .demoTag, .demoMeta { grid-column: 1 / -1; } .demoTrigger { margin: 0; padding: 0; border: 0; } }
 @media (max-width: 800px) { .metrics { grid-template-columns: repeat(2,minmax(0,1fr)); } .metric:nth-child(3) { border-left: 0; } .metric:nth-child(n+3) { border-top: 1px solid var(--border); } .reserveSection { grid-template-columns: minmax(0,1fr); } .reserveIntro { border-right: 0; border-bottom: 1px solid var(--border); } .reserveIntro h2 br { display: none; } .reserveIntro { display: grid; grid-template-columns: 1fr auto; column-gap: 20px; } .reserveIcon { display: none; } .reserveIntro > p, .reserveIntro h2 { grid-column: 1; } .candidateCount { grid-column: 2; grid-row: 1 / 3; margin: 0; } .reserveIntro .reserveCaveat { grid-column: 1 / -1; margin-top: 12px; } }
 @media (max-width: 600px) { .metric { padding: 14px; } .metricValue { font-size: 26px; flex-wrap: wrap; gap: 6px; } .metricLabel { font-size: 11px; } .metricLabel > span { display: none; } .sectionHead { flex-wrap: wrap; gap: 8px; } .reserveIntro { display: block; padding: 16px; } .candidateCount { margin: 14px 0; } .reserveTable { padding: 4px 12px 14px; } .demo { display: block; } .demoTrigger { margin-top: 14px; } .register { padding: 16px; } }

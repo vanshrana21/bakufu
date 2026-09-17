@@ -32,7 +32,7 @@ export function ForecastRiskPanel({ forecast, risk, riskError = null, horizonNot
         <Tabs value={horizon} onValueChange={setHorizon} className="no-print"><TabsList aria-label="Forecast horizon"><TabsTrigger value="1">1 month</TabsTrigger><TabsTrigger value="3">3 months</TabsTrigger></TabsList></Tabs>
       </div>
       <div className="mx-5 my-3 flex flex-wrap items-center gap-x-5 gap-y-2 border-b pb-3 text-sm">
-        <span>Next month <strong className="ml-1 font-semibold">{first ? tonnes(first.point_estimate) : "Unavailable"} t</strong></span>
+        <span>Next month <strong className="ml-1 font-semibold" data-kind="model">{first ? tonnes(first.point_estimate) : "Unavailable"} t</strong></span>
         <span className="text-muted-foreground">{first?.lower_bound !== null && first?.upper_bound !== null && first ? `${tonnes(first.lower_bound)}–${tonnes(first.upper_bound)} t` : "Bounds unavailable"}</span>
       </div>
       {horizonNote && <p role="status" className="note mx-5 mb-3">{horizonNote}</p>}

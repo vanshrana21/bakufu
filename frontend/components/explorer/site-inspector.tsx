@@ -78,6 +78,7 @@ function ScoreTile({
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
       <p
         className="mt-2 text-[34px] font-semibold leading-none tracking-tight"
+        data-kind="model"
         data-testid={
           label.toLowerCase().includes("raw") ? "raw-score" : "final-score"
         }

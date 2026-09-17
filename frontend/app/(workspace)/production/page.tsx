@@ -1,3 +1,4 @@
+import { InsetBoundary } from "@/components/shell/inset-boundary";
 import { loadForecastBundle, loadRegister } from "@/lib/api/load";
 import { tonnes } from "@/lib/format";
 import { ForecastRiskPanel } from "@/components/operations/forecast-risk-panel";
@@ -36,7 +37,7 @@ export default async function ProductionPage() {
         <KeyConstraints />
       </aside>
       {bundle.data
-        ? <ForecastRiskPanel forecast={bundle.data.forecast} risk={bundle.data.risk} riskError={bundle.data.riskError} horizonNote={bundle.data.horizonNote} history={bundle.data.history} />
+        ? <InsetBoundary label="Production outlook"><ForecastRiskPanel forecast={bundle.data.forecast} risk={bundle.data.risk} riskError={bundle.data.riskError} horizonNote={bundle.data.horizonNote} history={bundle.data.history} /></InsetBoundary>
         : <p role="alert" className="note">Forecast and risk unavailable — {bundle.error}</p>}
     </div>
     <section className="forecast-reading" aria-label="Forecast evidence">
@@ -48,7 +49,7 @@ export default async function ProductionPage() {
       </div>
     </section>
     {register.data
-      ? <ReviewRegister rows={register.data.rows} message={register.data.message} />
+      ? <InsetBoundary label="Review register"><ReviewRegister rows={register.data.rows} message={register.data.message} /></InsetBoundary>
       : <p role="alert" className="note">Review register unavailable — {register.error}</p>}
     <footer className="operations-footer">Illustrative forecasting and risk responses. No live production filings or calibrated performance are claimed.</footer>
   </div>;

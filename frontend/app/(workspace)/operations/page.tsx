@@ -7,6 +7,7 @@ import { loadDashboard, loadForecastBundle, loadRegister } from "@/lib/api/load"
 import { PrintBriefing } from "@/components/operations/print-briefing";
 import { ForecastRiskPanel } from "@/components/operations/forecast-risk-panel";
 import { PageHeader } from "@/components/shell/page-header";
+import { InsetBoundary } from "@/components/shell/inset-boundary";
 import { Button } from "@/components/ui/button";
 import { BriefingHumans } from "./briefing-humans";
 import s from "./briefing.module.css";
@@ -29,7 +30,7 @@ export default async function HomePage() {
   const live = bundle.origin === "live";
 
   return <div className={`workspace-page operations-page ${s.page}`}>
-    <PageHeader title="Command Center" description="Production, screening and decisions. Your operational picture in one place."
+    <PageHeader kicker="01 / COMMAND" title="Command Center" description="Production, screening and decisions. Your operational picture in one place."
       status={forecast ? `Issued ${dateLabel(forecast.issue_date)} · Data through ${forecast.last_observed_month}` : "Forecast metadata unavailable"}
       actions={<><PrintBriefing /><Button asChild><Link href="/explorer"><Scan size={14} />Open explorer<ArrowUpRight size={14} /></Link></Button></>} />
 
@@ -38,22 +39,22 @@ export default async function HomePage() {
     {dashboard.origin === "fixture" && <p className={s.sourceLine}>Demonstration fixtures · no API configured</p>}
 
     <section className={s.metrics} aria-label="Operational vital signs">
-      <article className={s.metric}>
+      <article className={s.metric} data-kind="observed">
         <div className={s.metricLabel}>Latest production<span>tonnes</span></div>
         <p className={s.metricValue}>{latest && !latest.unavailable ? latest.value : "—"}</p>
         <p className={s.metricFoot}>{change === null ? (latest?.note ?? "Latest reported month") : <>{change >= 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />}<span data-tone={change >= 0 ? "good" : undefined}>{change > 0 ? "+" : ""}{change.toFixed(1)}%</span> vs previous month</>}</p>
       </article>
-      <article className={s.metric}>
+      <article className={s.metric} data-kind="model">
         <div className={s.metricLabel}>Next-month forecast<span>tonnes</span></div>
         <p className={s.metricValue}>{next && !next.unavailable ? next.value : "—"}</p>
         <p className={s.metricFoot}>{next?.unavailable ? next.note : "Point estimate · interval shown below"}</p>
       </article>
-      <article className={s.metric}>
+      <article className={s.metric} data-kind="model">
         <div className={s.metricLabel}>Downside risk<span>forecast-relative</span></div>
         <p className={s.metricValue} data-testid="vital-risk">{risk && !risk.unavailable ? risk.value : "—"}</p>
         <p className={s.metricFoot}>{risk?.unavailable ? risk.note : "Read event definition and calibration below"}</p>
       </article>
-      <article className={s.metric}>
+      <article className={s.metric} data-kind="action">
         <div className={s.metricLabel}>Pending reviews<Link href="/actions" aria-label="View corrective actions"><ArrowUpRight size={15} /></Link></div>
         <p className={s.metricValue}>{register.data ? String(proposed).padStart(2, "0") : "—"}<small>{register.data ? `${drafts} draft` : "unavailable"}</small></p>
         <p className={s.metricFoot}>{register.data ? "Proposals requiring a human decision" : "Recommendations unavailable"}</p>
@@ -61,7 +62,7 @@ export default async function HomePage() {
     </section>
 
     <section className={s.section} aria-label="Production outlook and downside risk">
-      {bundle.data ? <ForecastRiskPanel forecast={bundle.data.forecast} risk={bundle.data.risk} riskError={bundle.data.riskError} horizonNote={bundle.data.horizonNote} history={bundle.data.history} />
+      {bundle.data ? <InsetBoundary label="Production outlook"><ForecastRiskPanel forecast={bundle.data.forecast} risk={bundle.data.risk} riskError={bundle.data.riskError} horizonNote={bundle.data.horizonNote} history={bundle.data.history} /></InsetBoundary>
         : <p role="alert" className="note">Forecast and risk unavailable — {bundle.error}</p>}
     </section>
 
@@ -94,7 +95,7 @@ export default async function HomePage() {
 
     <section className={s.section} aria-labelledby="human-heading">
       <div className={s.sectionHead}><div><h2 id="human-heading">Decisions &amp; review</h2><p>Trace every proposal to its trigger. A person approves the next step.</p></div><Link href="/actions" className={s.inlineLink}>All corrective actions<ArrowUpRight size={14} /></Link></div>
-      {register.data ? <BriefingHumans rows={rows} message={register.data.message} demoRules={[actionFixture]} />
+      {register.data ? <InsetBoundary label="Review register"><BriefingHumans rows={rows} message={register.data.message} demoRules={[actionFixture]} /></InsetBoundary>
         : <p role="alert" className="note">Review register unavailable — {register.error}</p>}
     </section>
     <footer className={s.honesty}><span>{live ? "API-connected: production · forecast · risk" : "Synthetic: production · forecast · risk"}</span><span>Synthetic: waste inventory · demo rules. No operational changes executed.</span></footer>

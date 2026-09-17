@@ -2,23 +2,24 @@
 .brand { display: flex; align-items: center; flex-shrink: 0; width: 170px; }
 .context { display: flex; align-items: center; gap: 10px; font: 500 11px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--metadata); }
 .context strong { font-weight: 600; color: var(--foreground); }
+.sheetRef { padding: 2px 6px; border: 1px solid var(--rule); color: var(--action); letter-spacing: 0.08em; }
 .status { display: flex; align-items: center; gap: 12px; margin-left: auto; }
-.status > span { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border: 1px solid color-mix(in srgb, var(--glow) 35%, transparent); border-radius: 3px; font: 500 10px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--glow); background: color-mix(in srgb, var(--glow) 8%, var(--ground)); }
+.status > span { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border: 1px solid color-mix(in srgb, var(--glow) 35%, transparent); border-radius: var(--radius-sm); font: 500 10px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--glow); background: color-mix(in srgb, var(--glow) 8%, var(--ground)); }
 .status small { font: 10px var(--font-mono); color: var(--metadata); }
 .body { display: grid; grid-template-columns: 230px minmax(0, 1fr); flex: 1; min-width: 0; }
 .body[data-collapsed="true"] { grid-template-columns: 64px minmax(0, 1fr); }
-.collapseButton { display: inline-grid; place-items: center; flex-shrink: 0; width: 30px; height: 30px; border-radius: 4px; color: var(--metadata); cursor: pointer; transition: background-color 160ms, color 160ms; }
+.collapseButton { display: inline-grid; place-items: center; flex-shrink: 0; width: 30px; height: 30px; border-radius: var(--radius); color: var(--metadata); cursor: pointer; transition: background-color 160ms, color 160ms; }
 .collapseButton:hover { color: var(--foreground); background: var(--row-hover); }
 .sidebar { display: flex; flex-direction: column; position: sticky; top: 60px; align-self: start; height: calc(100dvh - 60px); overflow-y: auto; background: var(--chrome); border-right: 1px solid var(--border); }
 .workspaceLabel { display: flex; align-items: center; gap: 9px; padding: 22px 18px 18px; border-bottom: 1px solid var(--border); }
-.workspaceMonogram { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--glow); border-radius: 4px; font: 700 14px var(--font-mono); color: var(--glow); background: color-mix(in srgb, var(--ore) 20%, var(--ground)); box-shadow: 0 0 10px color-mix(in srgb, var(--glow) 22%, transparent); }
-.workspaceLabel strong { display: block; font: 600 12px "Archivo Black", sans-serif; letter-spacing: -0.02em; text-transform: uppercase; color: var(--foreground); }
+.workspaceMonogram { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--glow); border-radius: var(--radius); font: 700 14px var(--font-mono); color: var(--glow); background: color-mix(in srgb, var(--ore) 20%, var(--ground)); }
+.workspaceLabel strong { display: block; font: 600 13px/1.2 var(--font-sans); letter-spacing: -0.005em; color: var(--foreground); }
 .workspaceLabel small { display: block; margin-top: 3px; font: 10px var(--font-mono); letter-spacing: 0.04em; color: var(--metadata); }
 .navigation { padding: 12px 10px 20px; }
 .navigation section + section { margin-top: 24px; }
 .groupLabel { margin: 0 10px 8px; font: 600 10px/1.5 var(--font-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--metadata); }
 .navigation ul { display: grid; gap: 4px; }
-.navigation a { display: flex; align-items: center; gap: 10px; padding: 9px 12px; min-height: 38px; border: 1px solid transparent; border-radius: 4px; color: var(--muted-foreground); font-size: 12px; line-height: 18px; transition: background-color 160ms var(--ease-out), color 160ms var(--ease-out), border-color 160ms var(--ease-out); }
+.navigation a { display: flex; align-items: center; gap: 10px; padding: 9px 12px; min-height: 38px; border: 1px solid transparent; border-radius: var(--radius); color: var(--muted-foreground); font-size: 12px; line-height: 18px; transition: background-color 160ms var(--ease-out), color 160ms var(--ease-out), border-color 160ms var(--ease-out); }
 .navigation a svg { flex-shrink: 0; opacity: .85; color: var(--metadata); transition: opacity 160ms var(--ease-out); }
 .navigation a:hover { color: var(--foreground); background: var(--row-hover); border-color: var(--border); }
 .navigation a:hover svg { opacity: 1; }
@@ -28,8 +29,10 @@
 .sidebarFooter { display: flex; align-items: flex-start; gap: 9px; margin-top: auto; padding: 18px; border-top: 1px solid var(--border); color: var(--metadata); font-size: 10px; }
 .sidebarFooter strong { color: var(--foreground); font: 600 11px var(--font-mono); }
 .sidebarFooter p { margin-top: 4px; line-height: 1.5; font-size: 10px; }
-.mainColumn { min-width: 0; background: radial-gradient(ellipse 55% 460px at 12% 0%, color-mix(in srgb, var(--steel) 16%, transparent), transparent 72%), radial-gradient(ellipse 45% 380px at 92% 0%, color-mix(in srgb, var(--glow) 6%, transparent), transparent 72%), var(--ground); }
-.scopeStrip { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px 16px; padding: 9px 28px; background: var(--band); border-bottom: 1px solid var(--border); color: var(--metadata); font: 10px/1.5 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; }
+/* The sheet: a latitude margin, the scope band with its longitude ruler, then
+ * the content. See sheet-frame.module.css. */
+.mainColumn { display: grid; grid-template-columns: 34px minmax(0, 1fr); grid-template-rows: auto 1fr; align-items: start; min-width: 0; background: radial-gradient(ellipse 55% 460px at 12% 0%, color-mix(in srgb, var(--steel) 16%, transparent), transparent 72%), radial-gradient(ellipse 45% 380px at 92% 0%, color-mix(in srgb, var(--glow) 6%, transparent), transparent 72%), var(--ground); }
+.content { grid-column: 2; grid-row: 2; min-width: 0; }
 .menuButton { display: none; }
 .body[data-collapsed="true"] .workspaceLabel { justify-content: center; padding: 18px 0 12px; }
 .body[data-collapsed="true"] .workspaceLabel > div,
@@ -55,6 +58,6 @@
   .header { gap: 8px; padding: 0 14px; } .brand { flex: 1; } .status small { display: none; } .status > span { font-size: 10px; }
   .menuButton { width: 36px; padding: 0; } .menuButton > span { display: none; }
   .navigation { grid-template-columns: minmax(0, 1fr); gap: 18px; } .navigation a { min-height: 44px; font-size: 13px; }
-  .scopeStrip { padding: 9px 16px; font-size: 9px; }
 }
-@media print { .header, .sidebar, .scopeStrip { display: none !important; } .body { display: block; } }
+@media (max-width: 700px) { .mainColumn { grid-template-columns: minmax(0, 1fr); } .content { grid-column: 1; } }
+@media print { .header, .sidebar { display: none !important; } .body, .mainColumn { display: block; } }

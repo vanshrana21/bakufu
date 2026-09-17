@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ClipboardPen, MapPinned, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { AnnotationForm } from "./AnnotationForm";
+import { InsetBoundary } from "@/components/shell/inset-boundary";
 import { PendingAnnotationsTable } from "./PendingAnnotationsTable";
 import { demoAnnotations } from "./demo-annotations";
 import type { Annotation, AnnotationDraft } from "./types";
@@ -36,9 +37,9 @@ export function FeedbackHub() {
         </div>
       </section>
       <div className="min-w-0 space-y-6">
-        <AnnotationForm onSubmit={addAnnotation} />
+        <InsetBoundary label="Observation form"><AnnotationForm onSubmit={addAnnotation} /></InsetBoundary>
         <p role="status" aria-live="polite" aria-atomic="true" className={confirmation ? "rounded-md border bg-success-soft p-3 text-sm leading-6 text-success" : "sr-only"}>{confirmation}</p>
-        <PendingAnnotationsTable annotations={annotations} />
+        <InsetBoundary label="Pending annotations"><PendingAnnotationsTable annotations={annotations} /></InsetBoundary>
       </div>
     </div>
   </div>;

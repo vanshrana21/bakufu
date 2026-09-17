@@ -7,6 +7,7 @@ import { DEMO_SITES, isGhostReserveCandidate } from "@/fixtures/predictions";
 import type { MaskMode } from "@/lib/contracts";
 import { useExplorerStore } from "./explorer-provider";
 import { SiteInspector } from "./site-inspector";
+import { InsetBoundary } from "@/components/shell/inset-boundary";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -191,7 +192,9 @@ export function ExplorerWorkspace() {
               <MaskToggleGroup />
             </div>
           </div>
-          <SiteInspector />
+          <InsetBoundary label="Site inspector">
+            <SiteInspector />
+          </InsetBoundary>
         </section>
         <section
           className="survey-map-column paper-panel"
@@ -269,18 +272,20 @@ export function ExplorerWorkspace() {
             </div>
           </div>
           <div className="map-surface relative">
-            <MapCanvas
-              sites={visibleSites}
-              activeMask={mask}
-              surface={prospectivity.surface}
-              selectedSiteId={selectedId}
-              onSelect={choose}
-              onUnmappedClick={() =>
-                setMapNotice(
-                  "Arbitrary point queries require the live scope and prediction API. Choose a supplied fixture to continue.",
-                )
-              }
-            />
+            <InsetBoundary label="Prospectivity map">
+              <MapCanvas
+                sites={visibleSites}
+                activeMask={mask}
+                surface={prospectivity.surface}
+                selectedSiteId={selectedId}
+                onSelect={choose}
+                onUnmappedClick={() =>
+                  setMapNotice(
+                    "Arbitrary point queries require the live scope and prediction API. Choose a supplied fixture to continue.",
+                  )
+                }
+              />
+            </InsetBoundary>
             {/* The backend documents 5s warm / 45s cold for /prospectivity/heatmap.
               Without this the map reads as hung on a cold first paint. */}
             {prospectivity.loading && (
