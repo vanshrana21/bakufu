@@ -10,6 +10,8 @@ import { PageHeader } from "@/components/shell/page-header";
 import { InsetBoundary } from "@/components/shell/inset-boundary";
 import { Button } from "@/components/ui/button";
 import { BriefingHumans } from "./briefing-humans";
+import { VitalTiles } from "@/components/operations/vital-tiles";
+
 import s from "./briefing.module.css";
 
 const dateLabel = (iso: string) => new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
@@ -38,28 +40,7 @@ export default async function HomePage() {
     {dashboard.data && dashboard.data.degraded.length > 0 && <p role="status" className={`note ${s.notice}`}>Degraded components: {dashboard.data.degraded.join(", ")}. Their values are withheld rather than substituted.</p>}
     {dashboard.origin === "fixture" && <p className={s.sourceLine}>Demonstration fixtures · no API configured</p>}
 
-    <section className={s.metrics} aria-label="Operational vital signs">
-      <article className={s.metric} data-kind="observed">
-        <div className={s.metricLabel}>Latest production<span>tonnes</span></div>
-        <p className={s.metricValue}>{latest && !latest.unavailable ? latest.value : "—"}</p>
-        <p className={s.metricFoot}>{change === null ? (latest?.note ?? "Latest reported month") : <>{change >= 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />}<span data-tone={change >= 0 ? "good" : undefined}>{change > 0 ? "+" : ""}{change.toFixed(1)}%</span> vs previous month</>}</p>
-      </article>
-      <article className={s.metric} data-kind="model">
-        <div className={s.metricLabel}>Next-month forecast<span>tonnes</span></div>
-        <p className={s.metricValue}>{next && !next.unavailable ? next.value : "—"}</p>
-        <p className={s.metricFoot}>{next?.unavailable ? next.note : "Point estimate · interval shown below"}</p>
-      </article>
-      <article className={s.metric} data-kind="model">
-        <div className={s.metricLabel}>Downside risk<span>forecast-relative</span></div>
-        <p className={s.metricValue} data-testid="vital-risk">{risk && !risk.unavailable ? risk.value : "—"}</p>
-        <p className={s.metricFoot}>{risk?.unavailable ? risk.note : "Read event definition and calibration below"}</p>
-      </article>
-      <article className={s.metric} data-kind="action">
-        <div className={s.metricLabel}>Pending reviews<Link href="/actions" aria-label="View corrective actions"><ArrowUpRight size={15} /></Link></div>
-        <p className={s.metricValue}>{register.data ? String(proposed).padStart(2, "0") : "—"}<small>{register.data ? `${drafts} draft` : "unavailable"}</small></p>
-        <p className={s.metricFoot}>{register.data ? "Proposals requiring a human decision" : "Recommendations unavailable"}</p>
-      </article>
-    </section>
+    <VitalTiles latest={latest} next={next} risk={risk} proposed={proposed} drafts={drafts} change={change} history={history} firstForecast={forecast?.points[0]} live={live} registerData={register.data} />
 
     <section className={s.section} aria-label="Production outlook and downside risk">
       {bundle.data ? <InsetBoundary label="Production outlook"><ForecastRiskPanel forecast={bundle.data.forecast} risk={bundle.data.risk} riskError={bundle.data.riskError} horizonNote={bundle.data.horizonNote} history={bundle.data.history} /></InsetBoundary>
