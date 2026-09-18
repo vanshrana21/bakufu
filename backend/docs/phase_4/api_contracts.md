@@ -1,8 +1,41 @@
-# Phase 4 API Contracts — v1.8
+# Phase 4 API Contracts — v1.10
 
 Source of truth for the frontend. Schemas here are fixed; if implementation
 forces a change, the change is raised before it is made, not after.
 
+**v1.10 changes from v1.9:** `POST /predict/point` adds **`raw_probability`**
+and **`model_margin`**, the classifier's own output before the Elkan-Noto
+adjustment and the 0.99 cap (section 12). Additive and nullable: every existing
+field is unchanged, and a client that ignores them sees v1.9 behaviour.
+
+**v1.9 changes from v1.8:** `GET /forecast` adds **`series`**, one point per
+month of the horizon, so a chart no longer has to interpolate the months
+between the origin and the terminal point. Additive: every existing field is
+unchanged, and the last `series` entry equals the top-level `predicted_*`
+values.
+
+**v1.8 changes from v1.7:** prospectivity scoring now reads the mosaic v6 was
+trained on (`s2_moil_operational_v1.tif`, the training mosaic plus a western
+strip covering Gumgaon). Scores change at most coordinates. `POST
+/predict/point` returns `404` with the flat error body and `error_code:
+"no_imagery_at_location"` wherever there is no real imagery; previously such
+points returned a score computed from blank pixels. A heatmap cell is `null`
+under the same condition.
+`/mines` and `/mines/{mine_name}` add `lat`, `lon`, `confidence`, `source`,
+`source_url` (null where no full URL exists), `coordinate_precision` and
+`coordinate_note`; coordinates are corrected from cited sources and
+Sitapatore moves to its MOIL Mining Plan point in Madhya Pradesh.
+
+**v1.7 changes from v1.6:** `/forecast` is horizon-adaptive: seasonal-naive
+serves horizons 1, 3 and 6, Prophet serves 12. It adds `model_used`, `reason`,
+`model.interval_method` and `accuracy_at_horizon.prophet_mape`.
+**Semantic change:** `accuracy_at_horizon` now describes the *served* model;
+in v1.6 its `mape`, `rmse`, `ci80_coverage` and `skill_vs_naive_pp` were
+always Prophet's. `/forecast/history` adds a per-horizon `comparison`,
+per-origin `seasonal_naive_tonnes` and a top-level `routing` block.
+`/dashboard/summary` `next_forecast` adds `model_used`.
+`POST /predict/bbox` is renamed `POST /predict/points_in_bbox`; the old path
+still answers, marked deprecated (section 11).
 **v1.8 changes from v1.7:** `GET /` adds `provenance_bound`;
 `/dashboard/summary`'s `data_provenance` adds `prospectivity_provenance_bound`;
 `GET /predictions/{prediction_id}` adds `encoder_version`, `lat` and `lon`.
@@ -60,6 +93,18 @@ Entity, and one shape means the frontend needs one handler.
 }
 ```
 
+**No imagery returns `404`** with the same flat body. `POST /predict/point`
+at a location with no real Sentinel-2 pixels (outside the served mosaic, or a
+gap where any band is zero or missing) answers:
+
+```json
+{
+  "error_code": "no_imagery_at_location",
+  "detail": "Sentinel-2 mosaic does not cover (21.2667, 79.0)",
+  "remedy": "Location falls outside imagery footprint. See /prospectivity/heatmap for served coverage."
+}
+```
+
 **Server-side failures return `500`** with a flat body carrying a machine
 -readable code:
 
@@ -71,7 +116,8 @@ Entity, and one shape means the frontend needs one handler.
 }
 ```
 
-Error codes: `model_not_loaded`, `data_not_loaded`, `prediction_failed`.
+Error codes: `model_not_loaded`, `data_not_loaded`, `prediction_failed` (all
+`500`), `not_implemented` (`501`), `no_imagery_at_location` (`404`).
 
 **`GET /` carries the served model.** `{status, version, model_version,
 model_source, encoder_version, provenance_bound, degraded}`. `status` is
@@ -216,7 +262,14 @@ The ten MOIL operating mines.
       "sources": [
         {"tag": "IBM_2022", "url": "https://ibm.gov.in/writereaddata/files/17125770456613da1576db0Manganese_Ore_2022.pdf"}
       ],
-      "type_note": null
+      "type_note": null,
+      "lat": 21.8333,
+      "lon": 80.2333,
+      "confidence": "high",
+      "source": "MoEFCC PFR boundary centroid + subsidence report (forestsclearance.nic.in)",
+      "source_url": null,
+      "coordinate_precision": null,
+      "coordinate_note": null
     }
   ],
   "counts": {
@@ -233,8 +286,27 @@ The ten MOIL operating mines.
 `type_note` is non-null **only for Kandri**; the frontend should treat it as
 optional and render it as a tooltip where present.
 
-Districts for the six Maharashtra mines are inferred from general geography,
-not source-cited — do not present them as sourced facts.
+**Coordinates and provenance (v1.8).** Every mine carries `lat`, `lon`,
+`confidence`, `source`, `source_url`, `coordinate_precision` and
+`coordinate_note`. All keys are always present.
+
+| field | meaning |
+|---|---|
+| `confidence` | `high`, `medium_high`, `low_medium`, `low` or `none` |
+| `source` | the named source of the coordinate |
+| `source_url` | full URL, or **`null`** where no full URL has been provided (never a truncated link) |
+| `coordinate_precision` | `null`, or a string such as `"approximate — town centroid, mine may be 1-3 km offset"` |
+| `coordinate_note` | the source's own note where it has one (Kandri, Sitapatore), else a caution for `low` / `low_medium` / approximate coordinates, else `null` |
+
+Current tiers: **high** for Balaghat, Ukwa, Chikla, Gumgaon, Kandri and
+Sitapatore; **medium_high** for Munsar; **low_medium** for Dongri Buzurg and
+Tirodi (settlement proxies); **low** for Beldongri (a third-party USGS
+database).
+
+Render `low` and `low_medium` markers so they do not read as surveyed mine
+boundaries, and show `coordinate_note` as a tooltip. Sitapatore sits in
+Madhya Pradesh / Balaghat (MOIL Mining Plan coordinate), so `MP` counts 4 and
+`MH` 6. Full provenance: `docs/moil_coordinate_sources.md`.
 
 ```bash
 curl "http://127.0.0.1:8000/mines?state=MP"
@@ -296,7 +368,20 @@ curl "http://127.0.0.1:8000/mines/Dongri%20Buzurg"
 
 ## 4. `GET /forecast`
 
-Prophet forecast of MH+MP production.
+Forecast of MH+MP production from whichever model wins the backtest at the
+requested horizon. Both models were scored on the same rolling origins.
+
+| horizon | `model_used` | `reason` | backtest MAPE, served vs alternative |
+|---|---|---|---|
+| 1 | `seasonal_naive` | `seasonal_naive_beats_prophet_at_short_horizon` | 9.67 vs Prophet 10.93 |
+| 3 | `seasonal_naive` | `seasonal_naive_beats_prophet_at_short_horizon` | 10.05 vs Prophet 11.74 |
+| 6 | `seasonal_naive` | `seasonal_naive_beats_prophet_at_short_horizon` | 10.71 vs Prophet 12.54 |
+| 12 | `prophet` | `prophet_beats_seasonal_naive_at_long_horizon` | 9.92 vs naive 10.16 |
+
+Seasonal-naive predicts **the same calendar month one year earlier**. If that
+month is one of the series gaps, the horizon falls back to Prophet with
+`reason: "seasonal_naive_base_month_missing"`. For the current series the base
+months (2025-06 to 2025-11) are all present, so this does not occur today.
 
 **Query params**
 
@@ -308,27 +393,36 @@ Prophet forecast of MH+MP production.
 
 ```json
 {
-  "forecast_date": "2026-09-09",
+  "forecast_date": "2026-09-13",
   "target_period": "2026-06",
   "horizon_months": 1,
-  "predicted_tonnes": 201283.82,
-  "predicted_lower_ci": 176_000.0,
-  "predicted_upper_ci": 226_000.0,
+  "predicted_tonnes": 203731.48,
+  "predicted_lower_ci": 181379.63,
+  "predicted_upper_ci": 250086.88,
   "ci_level": 0.80,
-  "components": {"trend": 198500.0, "yearly": 0.014, "multiplicative_terms": 0.014},
+  "series": [
+    {"month": "2026-06", "month_label": "Jun 2026",
+     "p10": 181379.63, "p50": 203731.48, "p90": 250086.88}
+  ],
+  "components": {"same_month_last_year_tonnes": 203731.48},
   "model": {
-    "version": "prophet_baseline_v1.0",
-    "variant": "vanilla",
+    "version": "seasonal_naive_v1",
+    "variant": "seasonal_naive",
     "regressors": [],
     "trained_through": "2026-05",
-    "changepoint_prior_scale": 0.25,
-    "mcmc_samples": 300
+    "changepoint_prior_scale": null,
+    "mcmc_samples": null,
+    "interval_method": "empirical_backtest_ratio_quantiles"
   },
+  "model_used": "seasonal_naive",
+  "reason": "seasonal_naive_beats_prophet_at_short_horizon",
   "accuracy_at_horizon": {
-    "mape": 10.93,
+    "mape": 9.67,
     "naive_mape": 9.67,
-    "skill_vs_naive_pp": -1.26,
-    "ci80_coverage": 64.0,
+    "prophet_mape": 10.93,
+    "skill_vs_naive_pp": 0.0,
+    "ci80_coverage": 76.0,
+    "rmse": 21856.45,
     "n_origins": 25
   },
   "series": [
@@ -337,23 +431,63 @@ Prophet forecast of MH+MP production.
 }
 ```
 
-`series` has one row per month of the horizon, from the first forecast month
-to `target_period`, all from the same `predict()` call. `p10`/`p90` are the
-bounds of the 80% interval; `p50` is Prophet's point estimate. The last row
-equals the top-level `predicted_*` fields, which stay for older clients.
+At `horizon=12` the shape is identical, with Prophet's values:
+`model.version` `prophet_baseline_v1.0`, `variant` `vanilla`,
+`changepoint_prior_scale` `0.25`, `mcmc_samples` `300`, `interval_method`
+`mcmc_posterior`, and `components` holding Prophet's terms (`trend`, `yearly`,
+`additive_terms`, `multiplicative_terms`).
 
-`components` keys vary with the fitted model; the shipped vanilla variant has
-**no rainfall or capex component**, so the frontend must iterate whatever keys
-arrive rather than indexing fixed names.
+**`series`** carries one point per month of the horizon, oldest first, starting
+at the month after `trained_through` and ending at `target_period`. The last
+entry equals the top-level `predicted_tonnes` / `predicted_lower_ci` /
+`predicted_upper_ci`, so a chart can plot `series` alone. `p50` is the point
+estimate, `p10` and `p90` the bounds of the same 80% interval named by
+`ci_level`.
 
-`accuracy_at_horizon` is the backtest row for the requested horizon, so the UI
-can show honest error bars. **`skill_vs_naive_pp` is negative at horizons 1, 3
-and 6** — the model loses to seasonal-naive there and only wins at 12
-(`+0.24`). That is a real property of the series, and the frontend should not
-present the forecast as beating a naive benchmark at short horizons.
+Two properties worth knowing:
 
-`ci80_coverage` is 60–71%, below the nominal 80%. Intervals are known to be
-too tight; recalibration is open work.
+- **Intermediate months borrow the nearest backtested interval.** Only
+  horizons 1, 3, 6 and 12 were backtested, so month 2 uses the 1-month interval
+  ratios and month 5 the 3-month ones — always the nearest backtested horizon
+  *at or below* the month. Borrowing downward is the conservative direction: a
+  shorter horizon has the tighter interval, so no interval is widened on
+  evidence that does not exist.
+- **`series` is `[]` when a month inside the horizon has no base.**
+  Seasonal-naive needs the same calendar month a year earlier; if one of those
+  is a series gap, the whole series is withheld rather than served with a hole
+  in it. The terminal point is still returned, so `predicted_tonnes` remains
+  usable.
+
+`components` keys vary with the model. Seasonal-naive has one,
+`same_month_last_year_tonnes`. The shipped Prophet variant has **no rainfall or
+capex component**. The frontend must iterate whatever keys arrive rather than
+index fixed names.
+
+`accuracy_at_horizon` describes **the model actually served**: `mape`, `rmse`
+and `ci80_coverage` are that model's backtest figures. `naive_mape` and
+`prophet_mape` are always both present, so the UI can show the comparison.
+`skill_vs_naive_pp` is `naive_mape − mape`: `0.0` when seasonal-naive is
+served, `+0.24` at 12. In v1.6 these fields were always Prophet's; read
+`prophet_mape` for Prophet's figure.
+
+**Intervals** differ by model, and `model.interval_method` names which:
+
+- `mcmc_posterior` (Prophet): coverage 71.4% at 12 months against a nominal
+  80%; known to be too tight, and recalibration is open work.
+- `empirical_backtest_ratio_quantiles` (seasonal-naive): the 10th–90th
+  percentile of actual ÷ naive across the backtest origins at that horizon.
+  `ci80_coverage` is measured **leave-one-out** (76.0 / 73.9 / 70.0% at 1 / 3 /
+  6), not in-sample, where it would be ~80% by construction. The interval is
+  asymmetric: production has mostly run above the same month last year over
+  the backtest window, so the upper side is wider. The point forecast
+  deliberately excludes that growth. A trend-adjusted naive was backtested and
+  rejected; it scored 13.00 MAPE at horizon 1, worse than Prophet.
+
+**Shortfall is still defined against Prophet.** `/shortfall/risk` compares
+production with `prophet_forecast_tonnes`, because the classifier was trained
+on that definition. For 2026-06 the value `/forecast` serves (seasonal-naive)
+and the shortfall reference (Prophet) are different numbers. Do not render the
+shortfall threshold as 90% of `/forecast`'s `predicted_tonnes`.
 
 ```bash
 curl "http://127.0.0.1:8000/forecast?horizon=12"
@@ -363,7 +497,8 @@ curl "http://127.0.0.1:8000/forecast?horizon=12"
 
 ## 5. `GET /forecast/history`
 
-Backtest metrics per horizon for the shipped model.
+Backtest metrics per horizon for both models, so the routing in `/forecast`
+can be checked against the evidence.
 
 **No query params.**
 
@@ -372,22 +507,59 @@ Backtest metrics per horizon for the shipped model.
 ```json
 {
   "horizons": [
-    {"horizon_months": 1, "n_origins": 25, "mape": 10.93, "rmse": 25320.0,
-     "naive_mape": 9.67, "skill_vs_naive_pp": -1.26, "ci80_coverage": 64.0},
-    {"horizon_months": 12, "n_origins": 14, "mape": 9.92, "rmse": 25948.0,
-     "naive_mape": 10.16, "skill_vs_naive_pp": 0.24, "ci80_coverage": 71.4}
+    {"horizon_months": 1, "n_origins": 25, "mape": 10.93, "rmse": 25320.45,
+     "naive_mape": 9.67, "skill_vs_naive_pp": -1.26, "ci80_coverage": 64.0,
+     "comparison": {
+       "prophet_mape": 10.93, "seasonal_naive_mape": 9.67,
+       "prophet_rmse": 25320.45, "seasonal_naive_rmse": 21856.45,
+       "prophet_ci80_coverage": 64.0, "seasonal_naive_ci80_coverage": 76.0,
+       "better_model": "seasonal_naive", "model_used": "seasonal_naive",
+       "routing_matches_backtest": true
+     }},
+    {"horizon_months": 12, "n_origins": 14, "mape": 9.92, "rmse": 25948.46,
+     "naive_mape": 10.16, "skill_vs_naive_pp": 0.24, "ci80_coverage": 71.4,
+     "comparison": {
+       "prophet_mape": 9.92, "seasonal_naive_mape": 10.16,
+       "prophet_rmse": 25948.46, "seasonal_naive_rmse": 23416.10,
+       "prophet_ci80_coverage": 71.4, "seasonal_naive_ci80_coverage": 71.4,
+       "better_model": "prophet", "model_used": "prophet",
+       "routing_matches_backtest": true
+     }}
   ],
   "origins": [
-    {"horizon_months": 1, "origin_month": "2024-05", "target_month": "2024-06",
-     "actual_tonnes": 150644.0, "predicted_tonnes": 158200.0, "covered": true}
+    {"horizon_months": 1, "origin_month": "2024-04", "target_month": "2024-05",
+     "actual_tonnes": 168090.0, "predicted_tonnes": 213318.40,
+     "seasonal_naive_tonnes": 180112.0, "covered": false}
   ],
   "model": {"version": "prophet_baseline_v1.0", "variant": "vanilla"},
-  "benchmark": {"name": "seasonal_naive", "definition": "same calendar month one year earlier"}
+  "benchmark": {"name": "seasonal_naive", "definition": "same calendar month one year earlier"},
+  "routing": {
+    "seasonal_naive_max_horizon": 6,
+    "rule": "horizons <= 6 months are served by seasonal_naive, longer horizons by prophet"
+  }
 }
 ```
 
+Measured comparison, all four horizons:
+
+| horizon | Prophet MAPE | naive MAPE | Prophet RMSE | naive RMSE | Prophet CI80 | naive CI80 (LOO) | served |
+|---|---|---|---|---|---|---|---|
+| 1 | 10.93 | **9.67** | 25,320 | 21,856 | 64.0 | 76.0 | `seasonal_naive` |
+| 3 | 11.74 | **10.05** | 27,971 | 22,606 | 65.2 | 73.9 | `seasonal_naive` |
+| 6 | 12.54 | **10.71** | 29,973 | 23,992 | 60.0 | 70.0 | `seasonal_naive` |
+| 12 | **9.92** | 10.16 | 25,948 | 23,416 | 71.4 | 71.4 | `prophet` |
+
+At 12 months seasonal-naive has the lower RMSE but the higher MAPE. Routing
+follows MAPE, the metric the shipped backtest ranks by.
+
+The top-level horizon fields (`mape`, `rmse`, `naive_mape`,
+`skill_vs_naive_pp`, `ci80_coverage`) keep their v1.6 meaning: Prophet's
+backtest. `comparison` holds both models side by side.
+
 `origins` is the per-origin detail (82 rows across four horizons) for plotting
-actual-vs-predicted. If the frontend only needs the summary, read `horizons`.
+actual-vs-predicted. `predicted_tonnes` and `covered` are Prophet's;
+`seasonal_naive_tonnes` is the naive prediction for the same origin. If the
+frontend only needs the summary, read `horizons`.
 
 ```bash
 curl "http://127.0.0.1:8000/forecast/history"
@@ -516,8 +688,9 @@ One call for the landing view; composes the endpoints above.
   "generated_at": "2026-09-09T14:20:00Z",
   "latest_actual": {"month": "2026-05", "mh_plus_mp_tonnes": 214624.28, "all_india_tonnes": 439949.424},
   "next_forecast": {
-    "month": "2026-06", "predicted_tonnes": 201283.82,
-    "lower_ci": 176000.0, "upper_ci": 226000.0, "ci_level": 0.80
+    "month": "2026-06", "predicted_tonnes": 203731.48,
+    "lower_ci": 181379.63, "upper_ci": 250086.88, "ci_level": 0.80,
+    "model_used": "seasonal_naive"
   },
   "shortfall": {"month": "2026-06", "probability": 0.1073, "risk_level": "low"},
   "series_health": {
@@ -546,6 +719,9 @@ One call for the landing view; composes the endpoints above.
 }
 ```
 
+`next_forecast` is `/forecast?horizon=1`, which seasonal-naive serves;
+`model_used` says so. `model_health.forecast_version` still names the Prophet
+bundle, which serves horizon 12 and underlies `/shortfall/risk`.
 `data_provenance` is always present, and it decides how the screen labels
 itself. `synthetic: true` means artifacts failed to load and what is shown is
 NOT the shipped trained output; `note` then says which. The frontend treats a
@@ -766,7 +942,8 @@ shape compatibility and reports `404` for unknown ids.
 
 Gridded prospectivity scores for the map view.
 
-This endpoint exists because `POST /predict/bbox` cannot feed a map: it
+This endpoint exists because `POST /predict/points_in_bbox` (formerly
+`/predict/bbox`, section 11) cannot feed a map: it
 returns a score-sorted list whose cells do not lie on a lattice, and which
 includes cells outside the requested bbox. See `docs/known_issues.md`.
 Phase 2 is frozen, so this routes around it rather than fixing it.
@@ -782,7 +959,7 @@ Phase 2 is frozen, so this routes around it rather than fixing it.
 | `grid_size` | int | `32` | cells per side, 8..128; else `422` |
 | `mask` | string | `none` | `none`, `geological`, `occurrence_buffer`, `both`; else `422` |
 
-`mask` uses the **same vocabulary as `/predict/point` and `/predict/bbox`**
+`mask` uses the **same vocabulary as `/predict/point` and `/predict/points_in_bbox`**
 (`VALID_MASKS`), so one enum covers every prospectivity endpoint.
 
 `grid_size` is cells per side rather than a distance, so the client controls
@@ -821,12 +998,16 @@ the requested bbox with `origin: "top_left"` so it drops onto a Leaflet or
 MapLibre image overlay without flipping.
 
 **`null` means no data, and is distinct from `0.0`.** A cell is `null` when it
-falls outside the imagery footprint **or** when every feature extracted for it
-is null. The second case matters: `/predict/point` currently returns the
+falls outside the imagery footprint, **or** when any of its six Sentinel-2
+bands is missing or zero (a composite gap). The second case matters: under v1, `/predict/point` returned the
 capped score `0.990` for such cells, so Kandri and Beldongri - both just
-outside the footprint - score as maximum prospectivity on no data at all. A
+outside the footprint - scored as maximum prospectivity on no data at all. A
 heatmap that rendered those would put its two brightest hotspots where nothing
-was measured. See `docs/known_issues.md`.
+was measured. Before v1.8, v6 returned `0.0009` there from a blank
+national-tile patch. The API also scored from a mosaic whose gaps read as
+zero reflectance, fabricating about a quarter of the warm heatmap
+(`docs/known_issues.md` #6 and #7). Both are fixed: these cells are now `null`,
+and `/predict/point` answers `404 no_imagery_at_location`.
 
 ### Cell states — how to render each
 
@@ -843,10 +1024,14 @@ misreport absence of data as absence of prospectivity.
 `cells_masked_out` counts cells a mask zeroed; those are returned as `0.0`,
 not `null`, because "excluded by geology" is a finding, not missing data.
 
-**Colour-ramp note:** under the promoted v6 bundle, roughly **24.5% of cells
-score at or above 0.90**. A linear 0–0.99 ramp will render about a quarter of
-the map at maximum intensity. A percentile-based or non-linear ramp separates
-the top of the distribution far better.
+**Colour-ramp note:** under the promoted v6 bundle, **23.9–43.9% of cells
+score at or above 0.90** depending on the viewport, and 17–33% sit exactly at
+the 0.99 cap (measured on the corrected serving mosaic; the earlier 24.5%
+figure came from the wrong mosaic). A linear 0–0.99 ramp renders a large share
+of the map at one maximum colour. A percentile-based or non-linear ramp separates
+the top of the distribution far better. See
+`docs/frontend_heatmap_guidance.md` for measured distributions per viewport
+and recommended breakpoints.
 
 `score_range.cap` surfaces the 0.99 ceiling so the legend does not imply a
 true 1.0 maximum.
@@ -879,6 +1064,84 @@ Caching:
 ```bash
 curl "http://127.0.0.1:8000/prospectivity/heatmap?min_lon=79.53&min_lat=21.32&max_lon=80.57&max_lat=22.05&grid_size=32&mask=none"
 ```
+
+---
+
+## 11. `POST /predict/points_in_bbox` (renamed from `/predict/bbox`)
+
+A Phase 2 endpoint, renamed in v1.7 to say what it returns: a **score-sorted
+list of candidate points**, not a grid (`docs/known_issues.md` #1). Request
+and response bodies are unchanged.
+
+| path | status | behaviour |
+|---|---|---|
+| `POST /predict/points_in_bbox` | current | — |
+| `POST /predict/bbox` | deprecated alias | identical body, plus response header `X-Deprecated: use-predict-points-in-bbox`; `deprecated: true` in OpenAPI |
+
+The header is set on successful responses. A `422` from the old path carries
+FastAPI's standard error body without it.
+
+For map rendering use `GET /prospectivity/heatmap` (section 10).
+
+```bash
+curl -X POST "http://127.0.0.1:8000/predict/points_in_bbox" \
+  -H "Content-Type: application/json" \
+  -d '{"min_lon": 80.10, "min_lat": 21.75, "max_lon": 80.25, "max_lat": 21.85, "grid_resolution_m": 5000}'
+```
+
+
+---
+
+## 12. `POST /predict/point` — uncapped classifier output (v1.10)
+
+Two additive fields on the existing response body. Nothing else about the
+endpoint changes.
+
+| field | type | meaning |
+|---|---|---|
+| `raw_probability` | `float \| null` | `predict_proba` from the XGBoost bundle, **before** the Elkan-Noto PU adjustment and before the cap. Range `0–1`. |
+| `model_margin` | `float \| null` | The same prediction in log-odds (`output_margin=True`). Unbounded; measured `2.27` to `5.85` across the ten shortlisted targets. |
+
+They are related exactly: `raw_probability == 1 / (1 + exp(-model_margin))`,
+asserted by `test_predict_point_exposes_the_uncapped_classifier_output`.
+
+**Why they exist.** `prospectivity_score` divides the raw probability by the
+PU constant `c = 0.9049` and then caps the result at `0.99`, so **any raw
+probability at or above `0.8959` displays as `0.99`**. That is not a rounding
+artefact at the edge of the distribution — it is most of the interesting
+ground: all ten greenfield targets the Explorer shortlists sit on the cap
+while their raw probabilities span `0.907–0.997`. Ranked on the served score
+alone the list is a ten-way tie, and any order shown is the order the array
+happened to be in.
+
+`model_margin` is the field to rank on. It comes from the model rather than
+from a client-side heuristic, and it separates locations the cap has merged.
+`raw_probability` is the field to *display* beside the score when a user needs
+to see that two capped locations are not equally strong.
+
+Both are `null`-able in the contract and absent on a pre-v1.10 backend. A
+client must not reorder a list from a partial set of margins — either every
+entry has one or the existing order stands, otherwise the list mixes two
+orderings and reads as neither.
+
+```bash
+curl -X POST "http://127.0.0.1:8000/predict/point?mask=none"   -H "Content-Type: application/json"   -d '{"lat": 21.8000, "lon": 80.1900}'
+```
+
+```json
+{
+  "prospectivity_score": 0.99,
+  "raw_score": 0.99,
+  "final_score": 0.99,
+  "raw_probability": 0.9971,
+  "model_margin": 5.849,
+  "model_version": "prospectivity_v6"
+}
+```
+
+Neither field is a calibrated probability of mineralisation. They describe how
+far inside its positive class the classifier places a pixel, on training data
+of boreholes, NGDR occurrences and foreign analogues.
 
 
 ---

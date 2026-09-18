@@ -42,7 +42,27 @@ def _sources(tags: list[str]) -> list[dict[str, str]]:
     return [{"tag": tag, "url": SOURCE_URLS[tag]} for tag in tags if tag in SOURCE_URLS]
 
 
+#: Confidence tiers weak enough that the coordinate carries a caution.
+_LOW_CONFIDENCE = ("none", "low", "low_medium")
+
+
+def _coordinate_note(coordinate: dict[str, Any]) -> str | None:
+    """The source's own note, else a caution when the coordinate is weak."""
+    if coordinate.get("note"):
+        return str(coordinate["note"])
+    precision = coordinate.get("coordinate_precision")
+    approximate = bool(precision) and "approximate" in str(precision).lower()
+    if coordinate["confidence"] in _LOW_CONFIDENCE or approximate:
+        return (
+            f"Coordinate confidence is {coordinate['confidence']} "
+            f"({precision or coordinate['source']}). Treat as an approximate "
+            "location, not a surveyed mine boundary."
+        )
+    return None
+
+
 def _mine_payload(name: str, mine: dict[str, object]) -> dict[str, object]:
+    coordinate = settings.MOIL_MINES[name]
     return {
         "mine_name": name,
         "state": mine["state"],
@@ -55,6 +75,15 @@ def _mine_payload(name: str, mine: dict[str, object]) -> dict[str, object]:
         # Present on Kandri alone, so it is always emitted - as null elsewhere -
         # rather than making the frontend probe for an optional key.
         "type_note": mine.get("type_note"),
+        # Coordinate provenance from settings.MOIL_MINES. Every key is always
+        # present; source_url is null where no full URL has been provided.
+        "lat": coordinate["lat"],
+        "lon": coordinate["lon"],
+        "confidence": coordinate["confidence"],
+        "source": coordinate["source"],
+        "source_url": coordinate["source_url"],
+        "coordinate_precision": coordinate["coordinate_precision"],
+        "coordinate_note": _coordinate_note(coordinate),
     }
 
 
@@ -337,11 +366,22 @@ def compute_heatmap(
     """
     from src.data.masks.registry import apply_mask
     from src.models.prospectivity.autoencoder import encoder_fingerprint
-    from src.models.prospectivity.predict import active_model_version, heatmap_grid
+    from src.models.prospectivity.predict import (
+        ACTIVE_DEM_PATH,
+        ACTIVE_MODEL_PATH,
+        ACTIVE_S2_PATH,
+        active_model_version,
+        heatmap_grid,
+    )
 
-    # Both halves of the pipeline: a promoted bundle and a replaced encoder each
-    # change what a score means, so a tile from either is a different tile.
-    version = f"{active_model_version()}+ae{encoder_fingerprint()}"
+    # Everything that changes what a score means belongs in the key: the
+    # promoted bundle, the encoder behind its features, and the imagery those
+    # features are read from. A stale tile would otherwise be served for the
+    # full 24-hour TTL.
+    version = "|".join(
+        [f"{active_model_version()}+ae{encoder_fingerprint()}"]
+        + [Path(path).stem for path in (ACTIVE_MODEL_PATH, ACTIVE_S2_PATH, ACTIVE_DEM_PATH)]
+    )
     key = _cache_key((min_lon, min_lat, max_lon, max_lat), grid_size, mask, version)
     hit = _memory_read(key)
     if hit is not None:

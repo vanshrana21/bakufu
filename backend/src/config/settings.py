@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
 from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -18,6 +19,16 @@ MODELS_DIR: Path = PROJECT_ROOT / "models"
 # Smoke-test rasters used as the Phase 1 feature source.
 S2_SMOKE_TEST: Path = DATA_RAW / "satellite" / "s2_nagpur_smoke_test.tif"
 DEM_SMOKE_TEST: Path = DATA_RAW / "dem" / "dem_nagpur_smoke_test.tif"
+
+#: The mosaic prospectivity v6 was trained on. Read-only: never overwritten.
+S2_TRAINING_PATH: Path = DATA_RAW / "satellite" / "s2_sausar_v2.tif"
+
+#: What the prospectivity API scores from. The training mosaic byte-for-byte
+#: plus a western strip that brings Gumgaon inside the footprint, built by
+#: src/data/ingest/fetch_gumgaon_strip.py. The smoke-test rasters above stay
+#: the Phase 1 feature source for /boreholes and the feature tests.
+S2_SERVING_PATH: Path = DATA_RAW / "satellite" / "s2_moil_operational_v1.tif"
+DEM_SERVING_PATH: Path = DATA_RAW / "dem" / "dem_moil_operational.tif"
 
 #: Heatmap viewports pre-computed at API startup so demo-day first requests
 #: are already warm. Chosen for raster coverage: all three sit fully inside
@@ -45,25 +56,129 @@ BBOX: list[float] = [79.0, 21.3, 80.6, 22.1]
 # Sentinel-2 band order as stacked in the smoke-test GeoTIFF.
 S2_BANDS: list[str] = ["B02", "B03", "B04", "B08", "B11", "B12"]
 
-# MOIL manganese mines: {name: (lat, lon, block_name)}
-MOIL_MINES: dict[str, tuple[float, float, str]] = {
-    "Balaghat": (21.8167, 80.1833, "Balaghat"),
-    "Ukwa": (21.9500, 80.4667, "Ukwa"),
-    "Dongri Buzurg": (21.4667, 79.6333, "Dongri Buzurg"),
-    "Chikla": (21.4167, 79.7500, "Chikla"),
-    "Tirodi": (21.6667, 79.7167, "Tirodi"),
-    "Gumgaon": (21.2333, 78.9333, "Gumgaon"),
-    "Kandri": (21.2667, 79.0000, "Kandri"),
-    "Munsar": (21.3167, 79.1667, "Munsar"),
-    "Beldongri": (21.2833, 79.0500, "Beldongri"),
-    # Corrected 2026-09-09: was (21.3333, 79.2000), which falls in Maharashtra
-    # near the Nagpur cluster. Sitapatore is in Balaghat district, Madhya
-    # Pradesh - confirmed against the International Manganese Institute, MOIL's
-    # About page, the IBM 2022 yearbook and a MOIL CMD interview, and
-    # consistent with docs/moil_reference/equipment_deployment.md listing it
-    # under Madhya Pradesh. Coordinate is approximate to district level.
-    "Sitapatore": (21.8500, 80.2000, "Sitapatore"),
+# MOIL operating mines with coordinate provenance, reconciled 2026-09-13 from
+# docs/moil_coordinate_sources.md. Equipment, capacity and fleet notes stay in
+# src/reference/moil_mines.py; tests/test_mine_coordinates.py fails if the two
+# disagree on state, district or type.
+#
+# `source_url` is None where the submitted link was truncated: the source is
+# named, but no full URL has been provided, and a guessed address would be an
+# invented citation.
+#
+# Tirodi and Dongri Buzurg keep type "opencast" from the reference module. The
+# coordinate submission listed both as underground, but on Wikipedia settlement
+# proxies only, which is not a primary source for a mine's type.
+MOIL_MINES: dict[str, dict[str, Any]] = {
+    "Balaghat": {
+        "lat": 21.8333, "lon": 80.2333,
+        "state": "Madhya Pradesh", "district": "Balaghat",
+        "type": "underground",
+        "confidence": "high",
+        "source": "MoEFCC PFR boundary centroid + subsidence report (forestsclearance.nic.in)",
+        "source_url": None,
+        "coordinate_precision": None,
+        "note": None,
+    },
+    "Ukwa": {
+        "lat": 21.9667, "lon": 80.4667,
+        "state": "Madhya Pradesh", "district": "Balaghat",
+        "type": "underground",
+        "confidence": "high",
+        "source": "MoEFCC subsidence report + Wikipedia agree",
+        "source_url": "https://en.wikipedia.org/wiki/Ukwa",
+        "coordinate_precision": None,
+        "note": None,
+    },
+    "Dongri Buzurg": {
+        "lat": 21.5500, "lon": 79.6941,
+        "state": "Maharashtra", "district": "Bhandara",
+        "type": "opencast",
+        "confidence": "low_medium",
+        "source": "Wikipedia railway station proxy (no EC/PFR found)",
+        "source_url": "https://en.wikipedia.org/wiki/Dongri_Buzurg_railway_station",
+        "coordinate_precision": "approximate — 1-2 km from actual mine boundary",
+        "note": None,
+    },
+    "Chikla": {
+        "lat": 21.5443, "lon": 79.7614,
+        "state": "Maharashtra", "district": "Bhandara",
+        "type": "underground",
+        "confidence": "high",
+        "source": "MPCB EC Executive Summary boundary centroid (mpcb.gov.in)",
+        "source_url": None,
+        "coordinate_precision": None,
+        "note": None,
+    },
+    "Tirodi": {
+        "lat": 21.6830, "lon": 79.7310,
+        "state": "Madhya Pradesh", "district": "Balaghat",
+        "type": "opencast",
+        "confidence": "low_medium",
+        "source": "Wikipedia Tirodi town proxy (no mine-specific EC found)",
+        "source_url": "https://en.wikipedia.org/wiki/Tirodi",
+        "coordinate_precision": "approximate — town centroid, mine may be 1-3 km offset",
+        "note": None,
+    },
+    "Gumgaon": {
+        "lat": 21.400, "lon": 78.980,
+        "state": "Maharashtra", "district": "Nagpur",
+        "type": "underground",
+        "confidence": "high",
+        "source": "MoEFCC PFR 95-pillar boundary centroid (environmentclearance.nic.in)",
+        "source_url": None,
+        "coordinate_precision": None,
+        "note": None,
+    },
+    "Kandri": {
+        "lat": 21.4125, "lon": 79.2667,
+        "state": "Maharashtra", "district": "Nagpur",
+        "type": "underground",
+        "confidence": "high",
+        "source": "MPCB EC Executive Summary (overrides Wikipedia — different village)",
+        "source_url": None,
+        "coordinate_precision": None,
+        "note": "Wikipedia's Kandri entry refers to a different village at 19.98N 80.43E",
+    },
+    "Munsar": {
+        "lat": 21.3958, "lon": 79.2792,
+        "state": "Maharashtra", "district": "Nagpur",
+        "type": "underground",
+        "confidence": "medium_high",
+        "source": "MoEFCC PFR stated center of two lease blocks (environmentclearance.nic.in)",
+        "source_url": None,
+        "coordinate_precision": None,
+        "note": None,
+    },
+    "Beldongri": {
+        "lat": 21.3495, "lon": 79.3003,
+        "state": "Maharashtra", "district": "Nagpur",
+        "type": "underground",
+        "confidence": "low",
+        "source": "USGS MRDS via TheDiggings.com (no MoEFCC/AR/Wikipedia coord)",
+        "source_url": None,
+        "coordinate_precision": "approximate — USGS third-party database",
+        "note": None,
+    },
+    "Sitapatore": {
+        "lat": 21.7000, "lon": 79.6667,
+        "state": "Madhya Pradesh", "district": "Balaghat",
+        "type": "opencast",
+        "confidence": "high",
+        "source": "MOIL Mining Plan (forestsclearance.nic.in) + cross-referenced with MOIL AR 2025-26",
+        "source_url": "https://forestsclearance.nic.in/DownloadPdfFile.aspx?FileName=611712291216JLTFUMiningplan.pdf",
+        "coordinate_precision": None,
+        "note": (
+            "Village Sitapatore, PO Sukli, Tirodi tehsil. Located ~12 km from the "
+            "larger Tirodi Manganese Mine. Regional deposit area extends slightly "
+            "south (21.6667N 79.6667E per Mindat)."
+        ),
+    },
 }
+
+
+def get_verified_mines() -> dict[str, dict[str, Any]]:
+    """Returns only mines with confidence != 'none'."""
+    return {name: mine for name, mine in MOIL_MINES.items() if mine["confidence"] != "none"}
 
 
 class Settings(BaseSettings):
@@ -116,10 +231,13 @@ class Settings(BaseSettings):
     DATA_RAW: Path = DATA_RAW
     DATA_PROCESSED: Path = DATA_PROCESSED
     MODELS_DIR: Path = MODELS_DIR
+    S2_TRAINING_PATH: Path = S2_TRAINING_PATH
+    S2_SERVING_PATH: Path = S2_SERVING_PATH
+    DEM_SERVING_PATH: Path = DEM_SERVING_PATH
 
     BBOX: list[float] = BBOX
     S2_BANDS: list[str] = S2_BANDS
-    MOIL_MINES: dict[str, tuple[float, float, str]] = MOIL_MINES
+    MOIL_MINES: dict[str, dict[str, Any]] = MOIL_MINES
     HEATMAP_WARM_VIEWPORTS: list[dict[str, object]] = HEATMAP_WARM_VIEWPORTS
     SCENARIO_MONTHS: list[str] = SCENARIO_MONTHS
 

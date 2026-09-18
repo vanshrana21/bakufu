@@ -181,6 +181,13 @@ class PredictPointOut(BaseModel):
     mask_decision: str = "n/a"
     raw_score: float | None = None
     final_score: float | None = None
+    #: The classifier's own probability, before the Elkan-Noto division and the
+    #: 0.99 cap. Both compress the top of the range, so strong locations all
+    #: report 0.99 without this.
+    raw_probability: float | None = None
+    #: Log-odds from the same classifier - the quantity shap_top5 explains.
+    #: Orders locations the capped score cannot separate.
+    model_margin: float | None = None
 
 
 class PredictBboxIn(BaseModel):

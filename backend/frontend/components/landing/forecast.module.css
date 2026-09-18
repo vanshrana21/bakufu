@@ -1,0 +1,219 @@
+/* Chapter 05 only: the mineral-white type, steel light and copper value
+ * accents of chapters 01-03, scoped to this section. */
+.section.section {
+  isolation: isolate;
+  --forecast-ink: #E4E9E8;
+  --forecast-steel: #57717B;
+  padding: 32px clamp(22px, 4.2vw, 84px) 48px;
+  color: var(--forecast-ink);
+  background: var(--ground);
+  font-family: var(--font-forecast), sans-serif;
+}
+/* Ghost numeral, cropped at the right edge behind the intro. */
+.section > .index.index {
+  top: 64px;
+  right: -2vw;
+  font-size: clamp(180px, 24vw, 420px);
+  opacity: 0.06;
+  color: var(--forecast-ink);
+}
+.label {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid color-mix(in srgb, var(--paper) 18%, transparent);
+  font: 500 10px/1.7 var(--font-mono);
+  letter-spacing: 0.08em;
+  color: color-mix(in srgb, var(--paper) 75%, var(--forecast-ink));
+}
+.intro {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 32px;
+  padding-top: clamp(28px, 4vh, 44px);
+}
+.title {
+  margin: 0;
+  font: 400 clamp(36px, 4.4vw, 84px)/1.06 "Archivo Black", sans-serif;
+  letter-spacing: -0.025em;
+}
+.title span { display: block; color: var(--paper); }
+/* Scoped under .section to outrank the story's generic paragraph size. */
+.section .aside {
+  margin: 0;
+  padding-bottom: 8px;
+  text-align: right;
+  font: 500 clamp(16px, 1.25vw, 21px)/1.5 var(--font-forecast), sans-serif;
+  letter-spacing: -0.01em;
+  color: color-mix(in srgb, var(--forecast-ink) 83%, var(--forecast-steel));
+}
+.aside span { display: block; color: var(--forecast-ink); }
+.body {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.64fr) minmax(0, 1.6fr);
+  align-items: stretch;
+  gap: clamp(28px, 3.4vw, 64px);
+  padding-top: clamp(24px, 3.4vh, 40px);
+}
+.text {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 30px;
+  min-width: 0;
+}
+.stanza { border-top: 1px solid color-mix(in srgb, var(--paper) 18%, transparent); }
+.section .stanza p {
+  margin: 0;
+  padding-block: 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--paper) 18%, transparent);
+  font: 400 clamp(16px, 1.2vw, 21px)/1.45 var(--font-forecast), sans-serif;
+  color: color-mix(in srgb, var(--forecast-ink) 80%, var(--forecast-steel));
+  text-wrap: pretty;
+}
+.section .stanza p:last-child { color: var(--paper); font-weight: 500; }
+
+/* Data moments: a mono label and a giant numeral. */
+.moments { display: grid; gap: 26px; }
+.moment > span {
+  display: block;
+  font: 500 10px/1.6 var(--font-mono);
+  letter-spacing: 0.08em;
+  color: color-mix(in srgb, var(--paper) 75%, var(--forecast-ink));
+}
+.moment strong {
+  display: block;
+  margin-top: 6px;
+  font: 400 clamp(40px, 4.2vw, 76px)/1 "Archivo Black", sans-serif;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--paper);
+}
+.moment strong.riskValue { color: var(--ore); }
+.moment .range {
+  display: block;
+  margin-top: 8px;
+  font: 500 clamp(14px, 1.05vw, 17px)/1.4 var(--font-forecast), sans-serif;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+  color: var(--forecast-ink);
+}
+.section .gloss {
+  margin: 8px 0 0;
+  max-width: 40ch;
+  font: 400 12px/1.6 var(--font-forecast), sans-serif;
+  color: color-mix(in srgb, var(--forecast-ink) 62%, var(--forecast-steel));
+  transition: color 200ms ease-out;
+}
+.section[data-gauge-on="true"] .riskGloss { color: var(--paper); }
+
+/* The diagram, its legend and its sticker. */
+.visual { position: relative; min-width: 0; margin: 0; }
+.stage { position: relative; }
+.scene { display: block; width: 100%; height: auto; overflow: visible; }
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px 26px;
+  margin-top: 10px;
+  font: 400 10px/1.6 var(--font-mono);
+  letter-spacing: 0.04em;
+  color: color-mix(in srgb, var(--forecast-ink) 82%, var(--forecast-steel));
+}
+.legend > span { display: inline-flex; align-items: center; gap: 8px; }
+.legend i { display: inline-block; flex: none; }
+.swatchActual { width: 14px; height: 10px; background: linear-gradient(var(--forecast-ink), var(--forecast-steel) 45%, var(--shade-3)); }
+.swatchGuess { width: 22px; height: 0; border-top: 2px dashed var(--glow); }
+.swatchBand {
+  width: 18px;
+  height: 12px;
+  background: color-mix(in srgb, var(--forecast-steel) 45%, transparent);
+  border-block: 1px solid color-mix(in srgb, var(--forecast-ink) 60%, transparent);
+}
+.visual figcaption {
+  margin-top: 8px;
+  text-align: center;
+  font: 400 9px/1.7 var(--font-mono);
+  letter-spacing: 0.04em;
+  color: color-mix(in srgb, var(--forecast-ink) 70%, var(--forecast-steel));
+}
+.sticker {
+  position: absolute;
+  right: 1%;
+  top: 6%;
+  width: clamp(180px, 15.5vw, 230px);
+  padding: 20px 22px 22px;
+  background: var(--ore);
+  color: var(--paper);
+  transform: rotate(3deg);
+  box-shadow: 9px 10px 0 var(--ink);
+  font: 500 10px/1.5 var(--font-mono);
+  letter-spacing: 0.06em;
+  pointer-events: none;
+}
+.sticker strong {
+  display: block;
+  margin-top: 10px;
+  font: 400 clamp(20px, 1.7vw, 26px)/1.06 "Archivo Black", sans-serif;
+  letter-spacing: -0.025em;
+}
+.closing.closing { color: var(--forecast-ink); }
+
+/* Inside the scene. Text stays small; the shapes carry the story. */
+.scene text { font-family: var(--font-mono), monospace; }
+.groupLabel { font-size: 10px; letter-spacing: 1.2px; fill: var(--forecast-ink); }
+.subLabel { font-size: 9px; letter-spacing: 1px; fill: color-mix(in srgb, var(--forecast-ink) 62%, var(--forecast-steel)); }
+.leader { fill: none; stroke: var(--forecast-ink); stroke-opacity: 0.45; stroke-width: 1; }
+.leaderDot { fill: var(--forecast-ink); }
+.edge { fill: none; stroke: var(--forecast-ink); stroke-opacity: 0.32; stroke-width: 1; }
+.hit { fill: transparent; }
+.shadow { pointer-events: none; }
+.bandBack { fill: var(--forecast-steel); fill-opacity: 0.22; stroke: var(--forecast-ink); stroke-opacity: 0.25; }
+.bandLid { fill: var(--forecast-ink); fill-opacity: 0.2; }
+.bandFront { fill: var(--forecast-steel); fill-opacity: 0.42; transition: fill-opacity 200ms ease-out; }
+.bandEdge { fill: none; stroke: var(--forecast-ink); stroke-opacity: 0.85; stroke-width: 1.6; transition: stroke 200ms ease-out; }
+.guess { fill: none; stroke: var(--glow); stroke-width: 2.4; stroke-dasharray: 9 7; stroke-linecap: round; }
+.guessDot { fill: var(--glow); }
+.minMax { opacity: 0; transition: opacity 200ms ease-out; }
+.minMax text { font-size: 10px; letter-spacing: 0.4px; fill: var(--paper); }
+.ring { fill: var(--forecast-steel); fill-opacity: 0.55; }
+.risk { fill: var(--ore); }
+.tick { stroke: var(--paper); stroke-width: 2; stroke-linecap: round; transition: stroke 200ms ease-out, stroke-width 200ms ease-out; }
+.lineLabel { font-size: 9px; letter-spacing: 1px; fill: var(--paper); opacity: 0; transition: opacity 200ms ease-out; }
+.part[data-on="true"] .bandFront { fill-opacity: 0.58; }
+.part[data-on="true"] .bandEdge { stroke: var(--glow); stroke-opacity: 1; }
+.part[data-on="true"] .minMax { opacity: 1; }
+.part[data-on="true"] .tick { stroke: var(--glow); stroke-width: 3.4; }
+.part[data-on="true"] .lineLabel { opacity: 1; }
+
+@media (max-width: 1100px) {
+  .body { grid-template-columns: 1fr; }
+  .text { display: grid; grid-template-columns: 1fr 1fr; align-items: start; gap: 32px; }
+  .visual { justify-self: center; width: min(100%, 960px); }
+}
+@media (max-width: 700px) {
+  .section.section { padding-block: 28px 40px; }
+  .section > .index.index { top: 40px; font-size: 44vw; }
+  .label { flex-wrap: wrap; font-size: 9px; gap: 6px 12px; }
+  .intro { flex-direction: column; align-items: flex-start; gap: 18px; }
+  .title { font-size: clamp(28px, 8vw, 52px); }
+  .section .aside { text-align: left; }
+  .text { grid-template-columns: 1fr; }
+  /* The scene keeps a readable size and scrolls sideways inside its own frame. */
+  .stage {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    margin-inline: calc(clamp(22px, 4.2vw, 84px) * -1);
+    padding-inline: clamp(22px, 4.2vw, 84px);
+  }
+  .scene { width: 760px; max-width: none; }
+  .sticker { right: auto; left: calc(clamp(22px, 4.2vw, 84px) + 560px); top: 60px; width: 180px; }
+  .legend { justify-content: flex-start; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gloss, .bandFront, .bandEdge, .minMax, .tick, .lineLabel { transition: none; }
+}

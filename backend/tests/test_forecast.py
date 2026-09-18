@@ -206,3 +206,159 @@ def test_production_history_endpoint(api_headers: dict[str, str]) -> None:
             assert rows[0]["mh_plus_mp_qty_tonnes"] > 0
             periods = [r["report_month"] for r in rows]
             assert periods == sorted(periods)
+
+
+# --- horizon-adaptive routing -------------------------------------------
+
+
+def test_route_model_sends_short_horizons_to_seasonal_naive() -> None:
+    from src.api.routers.forecast import (
+        REASON_NAIVE,
+        REASON_PROPHET,
+        SEASONAL_NAIVE_MAX_HORIZON,
+        route_model,
+    )
+
+    assert SEASONAL_NAIVE_MAX_HORIZON == 6
+    for horizon in (1, 3, 6):
+        assert route_model(horizon) == ("seasonal_naive", REASON_NAIVE)
+    assert route_model(12) == ("prophet", REASON_PROPHET)
+    assert REASON_NAIVE == "seasonal_naive_beats_prophet_at_short_horizon"
+
+
+def test_routing_is_justified_by_the_shipped_backtest() -> None:
+    """Each horizon goes to whichever model had the lower backtest MAPE.
+
+    If a re-promoted model shifts the balance, this fails instead of letting
+    the API keep serving the worse forecast.
+    """
+    from src.api.routers.forecast import route_model, seasonal_naive_backtest
+    from src.api.state import SHIPPED_BACKTEST_ROWS, SHIPPED_FORECAST_METRICS
+
+    if not SHIPPED_BACKTEST_ROWS.exists() or not SHIPPED_FORECAST_METRICS.exists():
+        pytest.skip("shipped backtest artifacts not present")
+
+    rows = pd.read_parquet(SHIPPED_BACKTEST_ROWS)
+    metrics = pd.read_json(SHIPPED_FORECAST_METRICS).set_index("horizon_months")
+    for horizon in (1, 3, 6, 12):
+        naive = seasonal_naive_backtest(rows, horizon)
+        prophet_mape = float(metrics.loc[horizon, "mape"])
+        # The recomputed naive accuracy must match the artifact it is compared to.
+        assert naive["mape"] == pytest.approx(float(metrics.loc[horizon, "naive_mape"]))
+        winner = "seasonal_naive" if naive["mape"] < prophet_mape else "prophet"
+        assert route_model(horizon)[0] == winner, f"horizon {horizon}"
+
+
+def test_seasonal_naive_backtest_measures_coverage_out_of_sample() -> None:
+    """In-sample coverage of the 10-90 quantiles is ~80% by construction."""
+    from src.api.routers.forecast import seasonal_naive_backtest
+
+    ratios = np.linspace(0.8, 1.2, 21)
+    rows = pd.DataFrame(
+        {"horizon_months": 1, "naive": 100_000.0, "actual": 100_000.0 * ratios}
+    )
+    result = seasonal_naive_backtest(rows, 1)
+
+    assert result["n_origins"] == 21
+    assert result["ratio_lower"] == pytest.approx(np.quantile(ratios, 0.10))
+    assert result["ratio_upper"] == pytest.approx(np.quantile(ratios, 0.90))
+    assert result["mape"] == pytest.approx(np.mean(np.abs(ratios - 1) / ratios) * 100)
+
+    lower, upper = np.quantile(ratios, [0.10, 0.90])
+    in_sample = 100 * np.mean((ratios >= lower) & (ratios <= upper))
+    assert result["ci80_coverage"] < in_sample
+    assert seasonal_naive_backtest(rows, 12) is None, "no origins at that horizon"
+
+
+def _synthetic_series(drop: str | None = None) -> pd.DataFrame:
+    months = pd.period_range("2024-01", "2025-05", freq="M")
+    frame = pd.DataFrame(
+        {
+            "report_month": months,
+            "mh_plus_mp_qty_tonnes": 100_000.0 + np.arange(len(months)) * 1_000.0,
+        }
+    )
+    if drop is not None:
+        frame = frame[frame.report_month != pd.Period(drop, freq="M")]
+    return frame
+
+
+def test_seasonal_naive_forecast_uses_same_month_last_year() -> None:
+    from src.api.routers.forecast import _seasonal_naive_forecast
+
+    backtest = {"ratio_lower": 0.9, "ratio_upper": 1.2}
+    out = _seasonal_naive_forecast(_synthetic_series(), 3, backtest)
+
+    assert out["target_period"] == "2025-08"
+    base = 100_000.0 + 7 * 1_000.0  # 2024-08 is the eighth month
+    assert out["predicted_tonnes"] == pytest.approx(base)
+    assert out["predicted_lower_ci"] == pytest.approx(base * 0.9)
+    assert out["predicted_upper_ci"] == pytest.approx(base * 1.2)
+    assert out["model"]["trained_through"] == "2025-05"
+
+
+def test_seasonal_naive_series_reads_each_month_from_its_own_base() -> None:
+    """Every month of the horizon comes from that month a year earlier."""
+    from src.api.routers.forecast import _seasonal_naive_forecast
+
+    backtest = {"ratio_lower": 0.9, "ratio_upper": 1.2}
+    out = _seasonal_naive_forecast(_synthetic_series(), 3, backtest)
+    series = out["series"]
+
+    assert [point["month"] for point in series] == ["2025-06", "2025-07", "2025-08"]
+    # The synthetic series climbs 1,000 t a month from 100,000 at 2024-01.
+    assert [point["p50"] for point in series] == [105_000.0, 106_000.0, 107_000.0]
+    assert series[-1]["p50"] == pytest.approx(out["predicted_tonnes"])
+
+
+def test_seasonal_naive_series_is_dropped_when_an_intermediate_base_is_missing() -> None:
+    """A hole inside the horizon must not reach the chart as a gap.
+
+    The terminal point is still served: only the month-by-month series needs
+    every base month present.
+    """
+    from src.api.routers.forecast import _seasonal_naive_forecast
+
+    backtest = {"ratio_lower": 0.9, "ratio_upper": 1.2}
+    out = _seasonal_naive_forecast(_synthetic_series(drop="2024-07"), 3, backtest)
+
+    assert out is not None and out["predicted_tonnes"] > 0
+    assert out["series"] == []
+
+
+def test_seasonal_naive_declines_when_last_years_month_is_a_gap() -> None:
+    """The series has gaps (2016-03, 2023-03); the router falls back to Prophet."""
+    from src.api.routers.forecast import _seasonal_naive_forecast
+
+    backtest = {"ratio_lower": 0.9, "ratio_upper": 1.2}
+    assert _seasonal_naive_forecast(_synthetic_series(drop="2024-08"), 3, backtest) is None
+
+
+def test_forecast_endpoint_routes_by_horizon() -> None:
+    from fastapi.testclient import TestClient
+
+    from src.api.main import app
+    from src.api.state import PRODUCTION_SERIES
+
+    if not PRODUCTION_SERIES.exists():
+        pytest.skip("production series not present")
+
+    series = pd.read_parquet(PRODUCTION_SERIES)
+    tonnes = pd.Series(
+        series.mh_plus_mp_qty_tonnes.to_numpy(dtype="float64"),
+        index=pd.PeriodIndex(series.report_month, freq="M"),
+    )
+
+    with TestClient(app) as client:
+        for horizon in (1, 3, 6):
+            body = client.get("/forecast", params={"horizon": horizon}).json()
+            assert body["model_used"] == "seasonal_naive"
+            assert body["reason"] == "seasonal_naive_beats_prophet_at_short_horizon"
+            last_year = pd.Period(body["target_period"], freq="M") - 12
+            assert body["predicted_tonnes"] == pytest.approx(float(tonnes.loc[last_year]))
+            assert body["predicted_lower_ci"] < body["predicted_tonnes"] < body["predicted_upper_ci"]
+
+        body = client.get("/forecast", params={"horizon": 12}).json()
+        assert body["model_used"] == "prophet"
+        assert body["reason"] == "prophet_beats_seasonal_naive_at_long_horizon"
+        assert "trend" in body["components"]

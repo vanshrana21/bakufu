@@ -112,11 +112,14 @@ def get_dashboard_summary(request: Request) -> dict[str, Any]:
     try:
         forecast = get_forecast(request, horizon=1)
         next_forecast = {
-            "month": forecast.target_period,
-            "predicted_tonnes": forecast.predicted_tonnes,
-            "lower_ci": forecast.predicted_lower_ci,
-            "upper_ci": forecast.predicted_upper_ci,
-            "ci_level": forecast.ci_level,
+            "month": forecast["target_period"],
+            "predicted_tonnes": forecast["predicted_tonnes"],
+            "lower_ci": forecast["predicted_lower_ci"],
+            "upper_ci": forecast["predicted_upper_ci"],
+            "ci_level": forecast["ci_level"],
+            # Horizon 1 is served by seasonal-naive, not Prophet; the landing
+            # page has to be able to say which model produced the number.
+            "model_used": forecast["model_used"],
         }
         metrics = artifacts.require("forecast_metrics")
         best = metrics.loc[metrics.skill_vs_naive_pp.idxmax()]
