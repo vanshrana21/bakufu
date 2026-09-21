@@ -1,122 +1,150 @@
-/** The model's top greenfield exploration targets beside the known mines.
+"use client";
+
+/** The model's top greenfield targets, with navigable coordinates.
  *
- * A Server Component streamed in under <Suspense>: the ranking takes twenty-two
- * backend calls, so it runs on the server with the API key (no proxy budget to
- * exhaust, nothing exposed to the browser) and the map paints without waiting
- * for it. */
+ * The ranking is computed on the server (components/explorer/targets-feed.tsx)
+ * and streamed into the Explorer store, so the map and this list render the
+ * same ten targets from one computation. Ported from the team lead's Explorer
+ * (yashnimde-ship-it/Spin-off, 35e464a, 0f99c67).
+ */
 
-import { LIVE_MODE } from "@/lib/api/client";
-import { loadMineLocations, loadTopTargets } from "@/lib/api/load";
-import { BeltLocator } from "@/components/mines/belt-locator";
-import s from "@/components/mines/mines.module.css";
+import { useState } from "react";
+import { Check, Copy, Crosshair, ExternalLink } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import type { Target } from "@/lib/contracts";
+import { useExplorerStore } from "./explorer-provider";
 
-function Heading({ tag }: { tag?: string }) {
+const coordinates = (target: Target) =>
+  `${target.location.latitude.toFixed(4)}, ${target.location.longitude.toFixed(4)}`;
+
+function TargetRow({ target, selected, onSelect }: { target: Target; selected: boolean; onSelect: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const text = coordinates(target);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard can be blocked; the coordinate is on screen to read off.
+    }
+  }
+
   return (
-    <div className={s.targetsHead}>
-      <div>
-        <h2 id="targets-heading">Top greenfield targets</h2>
+    <li className="target-row" data-selected={selected}>
+      <button
+        type="button"
+        className="target-row-head"
+        aria-expanded={selected}
+        data-testid={`target-${target.id.toLowerCase()}`}
+        onClick={onSelect}
+      >
+        <span className="target-row-rank" data-top={target.rank <= 3}>{target.id}</span>
+        <span className="target-row-label">{target.label}</span>
+        {/* The score is capped and identical across the shortlist; the margin
+            is what separates them, so both are shown. */}
+        <span className="target-row-numbers">
+          <span data-kind="model">{target.score.toFixed(2)}</span>
+          {target.margin !== null && <span className="target-row-margin">{target.margin.toFixed(1)}</span>}
+        </span>
+      </button>
+      {selected && (
+        <div className="target-row-detail">
+          <p className="font-mono text-xs tabular-nums">{text} · ± {target.precision_m} m</p>
+          <div className="target-row-actions">
+            <Button variant="outline" size="sm" onClick={copy}>
+              {copied ? <Check size={13} aria-hidden="true" /> : <Copy size={13} aria-hidden="true" />}
+              {copied ? "Copied" : "Copy"}
+            </Button>
+            <Button variant="outline" size="sm" asChild>
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${target.location.latitude},${target.location.longitude}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <ExternalLink size={13} aria-hidden="true" />
+                Open in Maps
+              </a>
+            </Button>
+          </div>
+          <dl className="target-row-facts">
+            <div>
+              <dt>Distance</dt>
+              <dd>{Math.round(target.km_to_nearest_mine)} km {target.bearing_from_mine} of {target.nearest_mine}</dd>
+            </div>
+            <div>
+              <dt>Neighbourhood</dt>
+              <dd>{target.neighbourhood_score.toFixed(2)} mean of adjacent cells</dd>
+            </div>
+            {target.margin !== null && (
+              <div>
+                <dt>Classifier margin</dt>
+                <dd>
+                  {target.margin.toFixed(2)} log-odds
+                  {target.raw_probability !== null ? ` · p ${target.raw_probability.toFixed(3)} uncapped` : ""}
+                </dd>
+              </div>
+            )}
+            <div>
+              <dt>Status</dt>
+              <dd>Outside the 5 km occurrence buffer</dd>
+            </div>
+          </dl>
+        </div>
+      )}
+    </li>
+  );
+}
+
+export function TargetPanel() {
+  const state = useExplorerStore((s) => s.targets);
+  const selected = useExplorerStore((s) => s.selected);
+  const select = useExplorerStore((s) => s.select);
+
+  return (
+    <section className="target-panel" aria-labelledby="targets-heading" aria-busy={state.status === "loading"}>
+      <div className="target-panel-intro">
+        <h2 id="targets-heading" className="section-label">
+          <Crosshair size={13} aria-hidden="true" /> Model targets
+        </h2>
         <p>
-          Where the model reads the strongest coherent signal on basement ground that no known occurrence explains —
-          outside every 5 km buffer, at least 10 km apart. Candidates for a field visit, not proven ore.
+          The ten strongest places the model picks out on ground nobody already mines or has logged: outside every
+          5 km occurrence buffer, at least 10 km apart. Candidates for a field visit, not proven ore.
         </p>
       </div>
-      {tag && <span className={s.rankingTag}>{tag}</span>}
-    </div>
-  );
-}
 
-export function TargetPanelFallback() {
-  return (
-    <section className={s.targets} aria-labelledby="targets-heading" aria-busy="true">
-      <Heading />
-      <p className={s.targetsState} role="status">
-        Ranking targets: reading the belt under the geological and occurrence-buffer masks, refining each winner to
-        ~350 m, then asking the classifier for its margin at each one…
-      </p>
-    </section>
-  );
-}
-
-export async function TargetPanel() {
-  if (!LIVE_MODE) {
-    return (
-      <section className={s.targets} aria-labelledby="targets-heading">
-        <Heading />
-        <p className={s.targetsState} role="note">
-          Targets are ranked by the live model; this demonstration build has no backend, and no target is invented.
+      {state.status === "loading" && (
+        <p className="note" role="status">
+          Ranking targets: reading the belt under the geological and occurrence-buffer masks, refining each winner,
+          then asking the classifier for its margin at each one…
         </p>
-      </section>
-    );
-  }
+      )}
+      {state.status === "unavailable" && <p className="note" role="alert">{state.reason}</p>}
 
-  const [result, mines] = await Promise.all([loadTopTargets(), loadMineLocations()]);
-  if (!result.data) {
-    return (
-      <section className={s.targets} aria-labelledby="targets-heading">
-        <Heading />
-        <p className={s.targetsState} data-state="error" role="alert">Targets could not be ranked — {result.error}</p>
-      </section>
-    );
-  }
-
-  const data = result.data;
-  return (
-    <section className={s.targets} aria-labelledby="targets-heading">
-      <Heading tag={data.ranking === "classifier_margin" ? "Ranked by classifier margin" : "Ranked by neighbourhood coherence"} />
-      <BeltLocator
-        caption={`${data.targets.length} targets (numbered circles) and the MOIL mines (diamonds) at their true positions`}
-        points={[
-          ...(mines.data ?? []).map((mine) => ({
-            id: `mine-${mine.name}`,
-            label: mine.name,
-            latitude: mine.location.latitude,
-            longitude: mine.location.longitude,
-            kind: "mine" as const,
-          })),
-          ...data.targets.map((target) => ({
-          id: target.id,
-          label: `${target.id} · ${target.label}`,
-          latitude: target.location.latitude,
-          longitude: target.location.longitude,
-          kind: "target" as const,
-          rank: target.rank,
-        })),
-        ]}
-      />
-      <div>
-        <table className={s.targetTable}>
-          <caption className="sr-only">Top greenfield targets, ranked</caption>
-          <thead>
-            <tr>
-              <th scope="col">#</th>
-              <th scope="col">Where</th>
-              <th scope="col">Score</th>
-              <th scope="col">Nbhd</th>
-              <th scope="col">Margin</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.targets.map((target) => (
-              <tr key={target.id}>
-                <td><span className={s.rank}>{target.rank}</span></td>
-                <th scope="row" style={{ fontWeight: 500 }}>
-                  {target.label}
-                  <span className={s.coord}>
-                    {target.location.latitude.toFixed(4)}° N · {target.location.longitude.toFixed(4)}° E · ±{Math.round(target.precision_m / 2)} m
-                  </span>
-                </th>
-                <td className={s.num} data-kind="model">{target.score.toFixed(2)}</td>
-                <td className={s.num}>{target.neighbourhood_score.toFixed(2)}</td>
-                <td className={s.num}>{target.margin === null ? "—" : target.margin.toFixed(2)}</td>
-              </tr>
+      {state.status === "ready" && (
+        <>
+          <ul className="target-list">
+            {state.list.targets.map((target) => (
+              <TargetRow
+                key={target.id}
+                target={target}
+                selected={selected?.kind === "target" && selected.id === target.id}
+                onSelect={() =>
+                  select(selected?.kind === "target" && selected.id === target.id ? null : { kind: "target", id: target.id })
+                }
+              />
             ))}
-          </tbody>
-        </table>
-      </div>
-      <p className={s.targetsFoot}>
-        {data.ranking_note} {data.candidates_considered} greenfield cells were considered. Score is the served screening
-        index (capped at 0.99); Nbhd is the mean of the eight surrounding cells; “—” means not measured, never zero.
-      </p>
+          </ul>
+          <p className="target-panel-foot">
+            {state.list.ranking === "classifier_margin"
+              ? `Every target reads the ${state.list.targets[0]?.score.toFixed(2) ?? "0.99"} cap, so they are ordered by the classifier's margin in log-odds (the small grey figure). `
+              : `${state.list.ranking_note} `}
+            {state.list.candidates_considered} greenfield cells qualified; shortlisted by how strongly their neighbours
+            also score, so a lone hot pixel beside cold ground does not make the list.
+          </p>
+        </>
+      )}
     </section>
   );
 }

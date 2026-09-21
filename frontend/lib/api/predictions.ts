@@ -1,21 +1,20 @@
+/** Adapter for POST /predict/point: the evidence behind one coordinate.
+ *
+ * The Explorer explains two kinds of place, an operating MOIL mine and one of
+ * the model's greenfield targets. Both are coordinates, so one call serves
+ * both, under whichever mask the Explorer has active - which is also why the
+ * mask toggles change what the inspector reports, not just the surface.
+ */
+
 import type { MaskMode, PredictionResponse } from "@/lib/contracts";
 import { PredictionResponseSchema } from "@/lib/contracts";
-import { DEMO_SITES, buildPredictionFixture, type SiteFixture } from "@/fixtures/predictions";
 import type { WirePredictPoint } from "./wire";
-import { ApiRequestError, ContractMismatchError, LIVE_MODE, PREDICT_POINT_TIMEOUT_MS, apiPost } from "./client";
+import { ApiRequestError, ContractMismatchError, PREDICT_POINT_TIMEOUT_MS, apiPost } from "./client";
 import { parseWire, WirePredictPointSchema } from "./wire-schemas";
 
-export interface PredictionClient {
-  predict(siteId: string, mask: MaskMode, signal: AbortSignal): Promise<PredictionResponse>;
-}
-
-function delay(ms: number, signal: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (signal.aborted) { reject(new DOMException("Aborted", "AbortError")); return; }
-    const abort = () => { clearTimeout(timer); reject(new DOMException("Aborted", "AbortError")); };
-    const timer = setTimeout(() => { signal.removeEventListener("abort", abort); resolve(); }, ms);
-    signal.addEventListener("abort", abort, { once: true });
-  });
+export interface Coordinate {
+  latitude: number;
+  longitude: number;
 }
 
 /** Which mask results the contract expects to be present for a given request. */
@@ -68,43 +67,33 @@ function maskResultsFrom(wire: WirePredictPoint, mask: MaskMode): PredictionResp
   }));
 }
 
-/** Live scores on a SYNTHETIC asset inventory.
- *
- * The backend scores coordinates; it has no waste-dump or slag inventory, and
- * neither does the project. The asset identity, buffer membership and scope
- * gating therefore still come from the fixture, and only the numbers are live.
- * `provenance.source` states that split, because a "live" badge over a
- * synthetic inventory would be the most misleading thing this screen could do.
- */
-function composeLive(site: SiteFixture, wire: WirePredictPoint, mask: MaskMode): PredictionResponse {
-  const allNull = Object.values(wire.features_extracted).every((value) => value === null);
-  const outsideFootprint = allNull;
-
-  const base = {
-    prediction_id: wire.prediction_id === null ? `live:${site.id}:${mask}` : String(wire.prediction_id),
-    provenance: {
-      data_origin: "live" as const,
-      source: `Score from ${wire.model_version} at ${wire.lat.toFixed(4)}, ${wire.lon.toFixed(4)}. Asset identity and 5 km buffer membership are synthetic fixture metadata; no verified waste inventory exists.`,
-      model_version: wire.model_version,
-      generated_at: new Date().toISOString(),
-    },
+/** No score, and the reason there is none. A missing measurement must never
+ * reach the screen as a zero. */
+function unscored(location: Coordinate, mask: MaskMode, source: string, reason: string, interpretation: string): PredictionResponse {
+  return PredictionResponseSchema.parse({
+    prediction_id: `live:${location.latitude.toFixed(5)},${location.longitude.toFixed(5)}:${mask}`,
+    provenance: { data_origin: "live", source, model_version: "unavailable", generated_at: new Date().toISOString() },
     asset: null,
-    location: site.location,
-    validated_scope: "Sausar Belt" as const,
-    mask_requested: mask,
-  };
+    location,
+    validated_scope: "Sausar Belt",
+    scope_status: "unknown",
+    scope_reason: reason,
+    raw_score: null, final_score: null, mask_requested: mask, mask_applied: "none", mask_results: [],
+    shap: null, model_margin: null, raw_probability: null,
+    interpretation,
+  });
+}
 
+/** Maps one /predict/point response onto the frontend contract. Pure, so the
+ * scientific rules it enforces are tested without a backend. */
+export function adaptPointPrediction(wire: WirePredictPoint, mask: MaskMode, location: Coordinate): PredictionResponse {
   // Inside the belt but outside the imagery footprint: every feature came back
-  // null. The model produced no evidence, so no score is surfaced. This is the
-  // documented Kandri/Beldongri case.
-  if (outsideFootprint) {
-    return PredictionResponseSchema.parse({
-      ...base,
-      scope_status: "unknown",
-      scope_reason: "Inside the Sausar Belt, but outside the model's current imagery footprint.",
-      raw_score: null, final_score: null, mask_applied: "none", mask_results: [], shap: null,
-      interpretation: "Every feature for this location was null, so no score is produced. This is missing data, not an absence of manganese.",
-    });
+  // null. The model produced no evidence, so no score is surfaced.
+  if (Object.values(wire.features_extracted).every((value) => value === null)) {
+    return unscored(location, mask,
+      `Queried ${wire.model_version} at ${wire.lat.toFixed(4)}, ${wire.lon.toFixed(4)}; no feature had a value there.`,
+      "Inside the Sausar Belt, but outside the model's current imagery footprint.",
+      "Every feature for this location was null, so no score is produced. This is missing data, not an absence of manganese.");
   }
 
   // Mask results are derived from the backend's decision, so they are only
@@ -114,17 +103,30 @@ function composeLive(site: SiteFixture, wire: WirePredictPoint, mask: MaskMode):
   }
   const maskResults = maskResultsFrom(wire, mask);
   const excluded = maskResults.some((result) => result.outcome === "excluded");
+  const raw = wire.raw_score ?? wire.prospectivity_score;
   return PredictionResponseSchema.parse({
-    ...base,
+    prediction_id: wire.prediction_id === null
+      ? `live:${location.latitude.toFixed(5)},${location.longitude.toFixed(5)}:${mask}`
+      : String(wire.prediction_id),
+    provenance: {
+      data_origin: "live",
+      source: `Scored by ${wire.model_version} at ${wire.lat.toFixed(4)}, ${wire.lon.toFixed(4)}.`,
+      model_version: wire.model_version,
+      generated_at: new Date().toISOString(),
+    },
+    asset: null,
+    location,
+    validated_scope: "Sausar Belt",
     scope_status: "in_scope",
     scope_reason: "Inside the Sausar Belt, the model's validated geographic scope.",
-    raw_score: wire.raw_score ?? wire.prospectivity_score,
-    final_score: excluded ? 0 : (wire.final_score ?? wire.raw_score ?? wire.prospectivity_score),
+    raw_score: raw,
+    final_score: excluded ? 0 : (wire.final_score ?? raw),
+    mask_requested: mask,
     mask_applied: mask,
     mask_results: maskResults,
     interpretation: excluded
       ? "A screening mask excluded this location. The zero is a policy result, not a model score — the raw score beside it is what the model actually produced."
-      : `Screening score ${(wire.raw_score ?? wire.prospectivity_score).toFixed(2)} on a 0–0.99 scale. This is a screening index, not a recovery probability or an ore quantity.`,
+      : `Screening index ${raw.toFixed(2)} on a 0–0.99 scale for this pixel. Values move sharply within a kilometre, so read the surface around it too. Not a recovery probability or an ore quantity.`,
     shap: wire.shap_top5.length === 0 ? null : {
       output_scale: "raw_margin",
       explains: "underlying_classifier_before_pu_adjustment_and_masks",
@@ -136,57 +138,42 @@ function composeLive(site: SiteFixture, wire: WirePredictPoint, mask: MaskMode):
         contribution: row.shap_value,
       })),
     },
+    model_margin: typeof wire.model_margin === "number" ? wire.model_margin : null,
+    raw_probability: typeof wire.raw_probability === "number" ? wire.raw_probability : null,
   });
 }
 
-export const predictionClient: PredictionClient = {
-  async predict(siteId, mask, signal) {
-    const site = DEMO_SITES.find((candidate) => candidate.id === siteId);
-    if (!site) throw new Error("No fixture exists for this location. A live point-query API is required.");
+/** The backend refuses to serve a score it cannot write to its audit table
+ * (503). Said in words an operator can act on: the model is fine, the database
+ * connection is not. */
+export function explainFailure(error: unknown): string {
+  if (error instanceof ApiRequestError && error.status === 503 && /audit record/i.test(error.message)) {
+    return "The model scored this point, but the backend will not serve a score it cannot audit, and its database is unreachable. " +
+      "Restore DATABASE_URL in backend/.env and restart the backend.";
+  }
+  return error instanceof Error ? error.message : "Scoring failed.";
+}
 
-    // SAUSAR SCOPE GATE: runs BEFORE inference, in both modes. An out-of-scope
-    // location never reaches the model, so no score can exist to be shown.
-    if (site.scope_status !== "in_scope" || !site.location) {
-      return buildPredictionFixture(siteId, mask);
+/** Score, mask outcomes and SHAP drivers at one coordinate, live. */
+export async function explainPoint(location: Coordinate, mask: MaskMode, signal: AbortSignal): Promise<PredictionResponse> {
+  try {
+    // `mask` is a QUERY parameter on the backend; PredictPointIn carries only
+    // lat/lon, so a mask in the body is silently dropped and "none" applied.
+    const raw = await apiPost<unknown>(
+      "/predict/point",
+      { lat: location.latitude, lon: location.longitude },
+      { signal, query: { mask }, timeoutMs: PREDICT_POINT_TIMEOUT_MS },
+    );
+    return adaptPointPrediction(parseWire(WirePredictPointSchema, raw, "/predict/point"), mask, location);
+  } catch (error) {
+    // A 404 here is the backend's honest "no imagery at this coordinate", not a
+    // failure. Surface it as unknown scope with null scores.
+    if (error instanceof ApiRequestError && error.status === 404) {
+      return unscored(location, mask,
+        "Backend reports no Sentinel-2 imagery at this coordinate.",
+        "Outside the available imagery footprint.",
+        "The served mosaic has no pixels here, so no score is produced. That is missing data, not an absence of manganese.");
     }
-    if (!LIVE_MODE) {
-      await delay(250, signal);
-      return PredictionResponseSchema.parse(buildPredictionFixture(siteId, mask));
-    }
-
-    try {
-      // `mask` is a QUERY parameter on the backend; PredictPointIn carries only
-      // lat/lon, so a mask in the body is silently dropped and "none" applied.
-      const rawPrediction = await apiPost<unknown>(
-        "/predict/point",
-        { lat: site.location.latitude, lon: site.location.longitude },
-        { signal, query: { mask }, timeoutMs: PREDICT_POINT_TIMEOUT_MS },
-      );
-    const wire = parseWire(WirePredictPointSchema, rawPrediction, "/predict/point");
-      return composeLive(site, wire, mask);
-    } catch (error) {
-      // A 404 here is the backend's honest "outside the imagery footprint"
-      // answer, not a failure. Surface it as unknown scope with null scores.
-      if (error instanceof ApiRequestError && error.status === 404) {
-        return PredictionResponseSchema.parse({
-          prediction_id: `live:${site.id}:${mask}`,
-          provenance: {
-            data_origin: "live" as const,
-            source: "Backend reports this location falls outside the available imagery footprint.",
-            model_version: "unavailable",
-            generated_at: new Date().toISOString(),
-          },
-          asset: null,
-          location: site.location,
-          validated_scope: "Sausar Belt" as const,
-          scope_status: "unknown",
-          scope_reason: "Outside the available imagery footprint.",
-          raw_score: null, final_score: null,
-          mask_requested: mask, mask_applied: "none", mask_results: [], shap: null,
-          interpretation: error.message,
-        });
-      }
-      throw error;
-    }
-  },
-};
+    throw error;
+  }
+}

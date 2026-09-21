@@ -7,7 +7,7 @@
  *   2. GET /prospectivity/heatmap mask=occurrence_buffer  which cells are already known
  *   3. the ten MOIL mines                                  (props; the browser never calls /mines)
  *
- * then refines each winner with a small local heatmap over its own cell, and
+ * then refines each winner with a small local heatmap over its own cell (to ~±320 m), and
  * orders the ten by the classifier's own margin from POST /predict/point.
  *
  * Why the ranking is not simply "highest score": close to two hundred of the
@@ -37,7 +37,7 @@ import { parseWire, WireHeatmapSchema, WirePredictPointSchema } from "./wire-sch
 /** The pre-warmed belt viewport: a cold heatmap is ~38s, a warm one is instant. */
 export const TARGET_BBOX: [number, number, number, number] = [79.0, 21.3, 80.6, 22.1];
 export const TARGET_GRID = 32;
-/** 8 is the backend minimum; over one cell it lands at ~350 m. */
+/** 8 is the backend minimum; over one cell it lands at ~650 × 350 m. */
 export const REFINE_GRID = 8;
 /** Without a floor, ten cells of one anomaly would fill the list. */
 export const MIN_SEPARATION_KM = 10;
@@ -68,6 +68,17 @@ export function bearingFrom(lat1: number, lon1: number, lat2: number, lon2: numb
 }
 
 export interface Cell { row: number; col: number; lat: number; lon: number; score: number | null }
+
+/** How far a cell centre can be from any point in its cell along either axis:
+ * half the longer side, in metres. A cell is wider than it is tall here (a
+ * degree of longitude is shorter than one of latitude only by cos(lat)), so
+ * quoting half the height alone would overstate the precision east-west. */
+export function halfCellMetres(widthDeg: number, heightDeg: number, lat: number): number {
+  const metresPerDegree = 111_320;
+  const width = widthDeg * metresPerDegree * Math.cos((lat * Math.PI) / 180);
+  const height = heightDeg * metresPerDegree;
+  return Math.round(Math.max(width, height) / 2);
+}
 
 /** Cell centres in WGS84. The lattice is row-major from the top-left corner. */
 export function cellsOf(wire: WireHeatmap): Cell[] {
@@ -166,7 +177,7 @@ export async function fetchTopTargets(mines: readonly MineLocation[], signal?: A
   const { candidates, chosen } = shortlist(basement, buffered, mines);
 
   // Refine: a 32x32 cell is ~5 x 3 km, too coarse to navigate to. Re-score the
-  // winner's own cell at 8x8 and take its best sub-cell, ~350 m.
+  // winner's own cell at 8x8 and take its best sub-cell, ~650 x 350 m.
   const { cell_width_deg: width, cell_height_deg: height } = basement.grid;
   const refined = await Promise.all(
     chosen.map(async (candidate) => {
@@ -183,11 +194,11 @@ export async function fetchTopTargets(mines: readonly MineLocation[], signal?: A
           lat: best?.lat ?? candidate.lat,
           lon: best?.lon ?? candidate.lon,
           score: (best?.score as number | undefined) ?? candidate.score,
-          precision_m: Math.round(local.grid.cell_height_deg * 111_320),
+          precision_m: halfCellMetres(local.grid.cell_width_deg, local.grid.cell_height_deg, best?.lat ?? candidate.lat),
         };
       } catch {
         // An unrefined target keeps its cell centre and says so through precision.
-        return { candidate, lat: candidate.lat, lon: candidate.lon, score: candidate.score, precision_m: Math.round(height * 111_320) };
+        return { candidate, lat: candidate.lat, lon: candidate.lon, score: candidate.score, precision_m: halfCellMetres(width, height, candidate.lat) };
       }
     }),
   );

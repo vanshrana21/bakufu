@@ -1,47 +1,36 @@
 import { expect, test } from "@playwright/test";
 
-test("Search, evidence and masks preserve their independent truth states", async ({ page }) => {
+test("Selection, masks and the inspector keep their independent truth states", async ({ page }) => {
   await page.goto("/explorer");
-  const search = page.getByRole("textbox", { name: "Search fixture sites, Sandur or Bonai" });
-  const inspector = page.getByRole("complementary", { name: "Site inspector" });
-  await expect(page.getByTestId("raw-score")).toHaveText("0.84");
-
-  await search.fill("unlisted location");
-  await expect(page.getByText("No fixture found. Scope has not been inferred.")).toBeVisible();
-  await search.press("Escape");
-  await expect(search).toHaveValue("");
-  await expect(page.getByTestId("raw-score")).toHaveText("0.84");
-
-  await page.getByRole("switch", { name: "Ghost Reserves", exact: true }).click();
-  await search.fill("dump C");
-  await page.getByRole("button", { name: "Demo waste dump C · outside buffer Inspect" }).click();
-  await expect(page.getByText("This site is outside the Ghost Reserve filter. Turn Ghost Reserves off to inspect it.")).toBeVisible();
-  await expect(page.getByTestId("site-demo-dump-c")).toHaveCount(0);
-  await expect(page.getByTestId("raw-score")).toHaveText("0.84");
-
-  // Scope queries remain available while the material filter is enabled.
-  await search.fill("Sandur");
-  await page.getByRole("button", { name: "Sandur Outside scope", exact: true }).click();
-  await expect(page.getByTestId("scope-message")).toHaveText("Outside validated scope (Sausar Belt)");
-  await expect(page.getByTestId("final-score")).toHaveCount(0);
-  await page.getByRole("button", { name: "Clear selection", exact: true }).click();
+  const inspector = page.getByRole("complementary", { name: "Selection inspector" });
+  // Nothing is preselected: the inspector waits for a choice.
   await expect(inspector.getByRole("heading", { name: "Inspect a location" })).toBeVisible();
 
-  await page.getByTestId("site-demo-slag-b").click();
-  await expect(page.getByTestId("raw-score")).toHaveText("0.62");
-  await expect(inspector.getByText("Processed slag differs from the geology used for training.", { exact: false })).toBeVisible();
+  await page.getByTestId("mine-balaghat").click();
+  await expect(inspector.getByRole("heading", { name: "Balaghat", exact: true })).toBeVisible();
+  await expect(inspector.getByText("Balaghat, Madhya Pradesh · underground")).toBeVisible();
+  await expect(inspector.getByText("geological mask", { exact: true })).toBeVisible();
+  // Without the model there is no score to show, and none is made up.
+  await expect(inspector.getByText("Scoring a coordinate needs the live model", { exact: false })).toBeVisible();
+  await expect(page.getByTestId("final-score")).toHaveCount(0);
+
+  // The masks change what is inspected under, never what is selected.
+  await page.getByRole("switch", { name: "5km buffer", exact: true }).click();
+  await expect(inspector.getByText("both masks", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("mine-balaghat")).toHaveAttribute("aria-pressed", "true");
   await page.getByRole("switch", { name: "Geological", exact: true }).click();
   await page.getByRole("switch", { name: "5km buffer", exact: true }).click();
-  await expect(page.getByTestId("final-score")).toHaveText("0.62");
-  await inspector.getByRole("tab", { name: "Constraints", exact: true }).click();
-  await expect(inspector.getByText("No screening mask is active.")).toBeVisible();
-  await expect(inspector.getByText("Mask inclusion is not environmental approval.", { exact: false })).toBeVisible();
-  await expect(page.getByTestId("site-demo-dump-c")).toHaveCount(0);
-  await page.getByRole("switch", { name: "Ghost Reserves", exact: true }).click();
-  await page.getByTestId("site-farmland-control").click();
-  await expect(page.getByTestId("raw-score")).toHaveText("0.99");
-  await inspector.getByRole("tab", { name: "Why?", exact: true }).click();
-  await expect(inspector.getByText("No numeric SHAP payload was provided for this diagnostic.", { exact: false })).toBeVisible();
+  await expect(inspector.getByText("no mask", { exact: true })).toBeVisible();
+
+  // Rapid selections leave only the last one standing.
+  await page.getByTestId("mine-kandri").click();
+  await page.getByTestId("mine-tirodi").click();
+  await expect(inspector.getByRole("heading", { name: "Tirodi", exact: true })).toBeVisible();
+  await expect(page.locator('[data-testid^="mine-"][aria-pressed="true"]')).toHaveCount(1);
+
+  await page.getByRole("button", { name: "Clear selection", exact: true }).click();
+  await expect(inspector.getByRole("heading", { name: "Inspect a location" })).toBeVisible();
+  await expect(page.locator('[data-testid^="mine-"][aria-pressed="true"]')).toHaveCount(0);
 });
 
 test("Review register links preserve selected evidence and never create approvals", async ({ page }) => {
@@ -98,6 +87,7 @@ test("Every workspace view remains navigable at a narrow viewport", async ({ pag
     { label: "Production & Risk", path: "/production" },
     { label: "Corrective Actions", path: "/actions" },
     { label: "Command Center", path: "/operations" },
+    { label: "Mine Fleet", path: "/mines" },
     { label: "Assets & Inventory", path: "/assets" },
     { label: "Geologist Feedback", path: "/feedback" },
     { label: "Data Pipeline", path: "/pipeline" },

@@ -4,10 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import type mapboxgl from "mapbox-gl";
 import type { GeoJSONSource } from "mapbox-gl";
 import type { FeatureCollection, Polygon } from "geojson";
-import type { SiteFixture } from "@/fixtures/predictions";
-import type { CellProperties } from "@/fixtures/prospectivity-surface";
+import type { CellProperties } from "@/lib/api/heatmap";
 import { installMapboxLayers } from "@/lib/map/mapbox-layers";
-import { MAP_IDS, renderedCounts, sameCounts, siteFeatures } from "@/lib/map/sites";
+import { MAP_IDS, renderedCounts, sameCounts, type LngLatExtent } from "@/lib/map/sites";
 import type { MapboxEngine } from "./use-mapbox-engine";
 
 /** How long after a source settles the counts are re-read. Long enough that a
@@ -15,9 +14,10 @@ import type { MapboxEngine } from "./use-mapbox-engine";
 const COUNT_SETTLE_MS = 250;
 
 export interface MapboxSurfaces {
-  sites: readonly SiteFixture[];
-  /** Prospectivity cells: fixture blobs or the live heatmap, same layer spec. */
+  /** Prospectivity cells: the live /prospectivity/heatmap lattice. */
   surface: FeatureCollection<Polygon, CellProperties>;
+  /** Where the first frame looks. Only read when the layers are first installed. */
+  extent: LngLatExtent;
 }
 
 export interface MapboxSync {
@@ -25,31 +25,30 @@ export interface MapboxSync {
    * 0 means nothing is drawn yet. */
   layersRevision: number;
   /** What the engine actually drew, counted by unique id once the map is idle. */
-  rendered: { cells: number; excluded: number; waste: number };
+  rendered: { cells: number; excluded: number };
   /** A style/source installation failure, kept separate from tile failures. */
   failure: string | null;
 }
 
-/** Keeps the map's sources and layers in step with the data.
+/** Keeps the map's surface in step with the data.
  *
  * Layers are installed when a style loads and reinstalled if one ever replaces
  * it; data changes only replace source contents, so the camera stays where the
- * user put it. The Ghost Reserve filter is computed once in ExplorerWorkspace
- * and passed to map and list alike.
+ * user put it. Mines and targets are DOM markers and are not drawn here.
  */
 export function useMapboxSync(
   { map, styleRevision }: Pick<MapboxEngine, "map" | "styleRevision">,
-  { sites, surface }: MapboxSurfaces,
+  { surface, extent }: MapboxSurfaces,
 ): MapboxSync {
   const [layersRevision, setLayersRevision] = useState(0);
-  const [rendered, setRendered] = useState({ cells: 0, excluded: 0, waste: 0 });
+  const [rendered, setRendered] = useState({ cells: 0, excluded: 0 });
   const [failure, setFailure] = useState<string | null>(null);
-  const latest = useRef({ sites, surface });
+  const latest = useRef({ surface, extent });
   const pending = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    latest.current = { sites, surface };
-  }, [sites, surface]);
+    latest.current = { surface, extent };
+  }, [surface, extent]);
 
   // Counts settle asynchronously, so they are read once the map goes idle.
   // Subscribed before any layer exists, so no idle pass is missed.
@@ -94,7 +93,7 @@ export function useMapboxSync(
         setLayersRevision(styleRevision);
       }
     } catch {
-      if (active) setFailure("Map layers could not be installed after the map style changed. The site list remains available.");
+      if (active) setFailure("Map layers could not be installed after the map style changed. The lists beside the map remain available.");
     }
     return () => { active = false; };
   }, [map, styleRevision]);
@@ -106,15 +105,14 @@ export function useMapboxSync(
     // failure reported after unmount is a stale update, not information.
     let active = true;
     try {
-      (map.getSource(MAP_IDS.sites) as GeoJSONSource | undefined)?.setData(siteFeatures(sites));
       (map.getSource(MAP_IDS.surface) as GeoJSONSource | undefined)?.setData(surface);
     } catch {
-      if (active) setFailure("Map data could not be updated. The site list remains available.");
+      if (active) setFailure("Map data could not be updated. The lists beside the map remain available.");
     }
     return () => {
       active = false;
     };
-  }, [map, layersRevision, sites, surface]);
+  }, [map, layersRevision, surface]);
 
   return { layersRevision, rendered, failure };
 }

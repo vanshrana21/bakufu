@@ -5,28 +5,26 @@ import * as maplibregl from "maplibre-gl";
 import type { GeoJSONSource } from "maplibre-gl";
 import { NASA_CONTEXT_SOURCE, addNasaContext, installMaplibreLayers } from "@/lib/map/maplibre-layers";
 import {
-  MAP_IDS, SITE_LABEL_MARKER, framingPadding, prefersReducedMotion, renderedCounts, sameCounts,
-  siteExtent, siteFeatures, siteLabelElement,
+  MAP_IDS, framingPadding, initialExtent, markerPoints, pointsExtent, prefersReducedMotion, renderedCounts, sameCounts,
 } from "@/lib/map/sites";
 import type { MapCanvasProps } from "./map-canvas";
+import { renderMarkers, type MarkerConstructor } from "./map-markers";
 import { MapFitControl } from "./map-fit-control";
 import { MapLegend } from "./map-legend";
 
-const CLICKABLE_LAYERS = [MAP_IDS.wasteLayer, MAP_IDS.diagnosticLayer];
-
 /** Mapbox v3 requires a token even for local data. This open renderer is used
- * ONLY when no token is configured; it consumes the same fixtures + layer spec.
- * NASA Blue Marble is geographic context, not Sentinel imagery or ML evidence.
+ * ONLY when no token is configured; it draws the same layer spec and the same
+ * markers. NASA Blue Marble is geographic context, not Sentinel imagery or
+ * model evidence.
  */
 export default function TokenlessMapCanvas(props: MapCanvasProps) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
-  const markerRef = useRef<maplibregl.Marker | null>(null);
   const latest = useRef(props);
   const [ready, setReady] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [imagery, setImagery] = useState(false);
-  const [rendered, setRendered] = useState({ cells: 0, excluded: 0, waste: 0 });
+  const [rendered, setRendered] = useState({ cells: 0, excluded: 0 });
 
   useEffect(() => {
     latest.current = props;
@@ -48,7 +46,7 @@ export default function TokenlessMapCanvas(props: MapCanvasProps) {
         attributionControl: false,
       });
     } catch {
-      guard(() => setFailure("WebGL is unavailable. Use the screening locations below; scores remain accessible."));
+      guard(() => setFailure("WebGL is unavailable. Use the lists beside the map; scores remain accessible."));
       return;
     }
     mapRef.current = map;
@@ -60,18 +58,19 @@ export default function TokenlessMapCanvas(props: MapCanvasProps) {
 
     const onLoad = () => {
       try {
-        installMaplibreLayers(map, latest.current);
+        const { mines, targets, surface } = latest.current;
+        installMaplibreLayers(map, { surface, extent: initialExtent(markerPoints(mines, targets)) });
         guard(() => setReady(true)); // Local data is ready independently of the basemap network.
         addNasaContext(map);
       } catch {
-        guard(() => setFailure("Map layers could not be installed. Use the screening locations below."));
+        guard(() => setFailure("Map layers could not be installed. Use the lists beside the map."));
       }
     };
     // Counted when the map settles, not on every frame: queryRenderedFeatures
     // on each render turns a pan into continuous query work for a number that
     // only matters once drawing has stopped.
     const onIdle = () => {
-      if (!map.getLayer(MAP_IDS.wasteLayer)) return;
+      if (!map.getLayer("prospectivity-screened")) return;
       const next = renderedCounts(
         (layers) => map.queryRenderedFeatures({ layers }),
         (id) => Boolean(map.getLayer(id)),
@@ -85,87 +84,59 @@ export default function TokenlessMapCanvas(props: MapCanvasProps) {
     };
     const onError = (event: maplibregl.ErrorEvent) => {
       if ("sourceId" in event && event.sourceId === NASA_CONTEXT_SOURCE) {
-        guard(() => setFailure("Satellite context unavailable. Synthetic screening layers remain usable."));
+        guard(() => setFailure("Satellite context unavailable. The model surface remains usable."));
       } else {
-        guard(() => setFailure("A map resource could not load. Use the location list to inspect the same evidence."));
+        guard(() => setFailure("A map resource could not load. Use the lists beside the map to inspect the same evidence."));
       }
     };
-    const onClick = (event: maplibregl.MapMouseEvent) => {
-      if (!map.getLayer(MAP_IDS.wasteLayer)) return;
-      const features = map.queryRenderedFeatures(event.point, { layers: CLICKABLE_LAYERS });
-      const id: unknown = features[0]?.properties.id;
-      if (typeof id === "string") latest.current.onSelect(id);
-      else latest.current.onUnmappedClick();
-    };
-    const onEnter = () => {
-      map.getCanvas().style.cursor = "pointer";
-    };
-    const onLeave = () => {
-      map.getCanvas().style.cursor = "";
-    };
+    // Markers stop their own clicks, so anything arriving here is empty ground.
+    const onClick = () => latest.current.onUnmappedClick();
 
     map.on("load", onLoad);
     map.on("idle", onIdle);
     map.on("sourcedata", onSourceData);
     map.on("error", onError);
     map.on("click", onClick);
-    for (const layer of CLICKABLE_LAYERS) {
-      map.on("mouseenter", layer, onEnter);
-      map.on("mouseleave", layer, onLeave);
-    }
     return () => {
       active = false;
       observer.disconnect();
-      markerRef.current?.remove();
-      markerRef.current = null;
       map.off("load", onLoad);
       map.off("idle", onIdle);
       map.off("sourcedata", onSourceData);
       map.off("error", onError);
       map.off("click", onClick);
-      for (const layer of CLICKABLE_LAYERS) {
-        map.off("mouseenter", layer, onEnter);
-        map.off("mouseleave", layer, onLeave);
-      }
       map.remove();
       mapRef.current = null;
     };
   }, []);
 
-  // Data and selection: new source contents, the selection highlight and the
-  // name tag. The camera is left where the user put it.
+  // Data: new surface contents. The camera is left where the user put it.
   useEffect(() => {
     const map = mapRef.current;
     if (!ready || !map) return;
-    const sitesSource = map.getSource(MAP_IDS.sites) as GeoJSONSource | undefined;
-    const surfaceSource = map.getSource(MAP_IDS.surface) as GeoJSONSource | undefined;
-    if (!sitesSource || !surfaceSource) return;
     try {
-      sitesSource.setData(siteFeatures(props.sites));
-      surfaceSource.setData(props.surface);
-      map.removeFeatureState({ source: MAP_IDS.sites });
+      (map.getSource(MAP_IDS.surface) as GeoJSONSource | undefined)?.setData(props.surface);
     } catch {
-      setFailure("Map data could not be updated. Use the screening locations below.");
-      return;
+      setFailure("Map data could not be updated. Use the lists beside the map.");
     }
-    markerRef.current?.remove();
-    markerRef.current = null;
-    const site = props.sites.find((s) => s.id === props.selectedSiteId);
-    if (site?.location) {
-      try {
-        map.setFeatureState({ source: MAP_IDS.sites, id: site.id }, { selected: true });
-        markerRef.current = new maplibregl.Marker({ element: siteLabelElement(site.name), ...SITE_LABEL_MARKER })
-          .setLngLat([site.location.longitude, site.location.latitude])
-          .addTo(map);
-      } catch {
-        markerRef.current = null;
-      }
-    }
-  }, [props.sites, props.activeMask, props.surface, props.selectedSiteId, ready]);
+  }, [props.surface, ready]);
 
+  // Markers: redrawn when the mines, the targets or the selection change.
+  const { mines, targets, selected } = props;
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!ready || !map) return;
+    return renderMarkers(map, maplibregl.Marker as unknown as MarkerConstructor, {
+      mines,
+      targets,
+      selected,
+      onSelect: (selection) => latest.current.onSelect(selection),
+    });
+  }, [mines, targets, selected, ready]);
+
+  const extent = pointsExtent(markerPoints(mines, targets));
   const refit = () => {
     const map = mapRef.current;
-    const extent = siteExtent(props.sites, { inScopeOnly: true });
     if (!map || !extent) return;
     map.fitBounds(extent, {
       duration: prefersReducedMotion() ? 0 : 500,
@@ -182,12 +153,12 @@ export default function TokenlessMapCanvas(props: MapCanvasProps) {
       data-imagery={imagery}
       data-rendered-cells={rendered.cells}
       data-rendered-excluded={rendered.excluded}
-      data-rendered-waste={rendered.waste}
+      data-rendered-markers={mines.length + targets.length}
     >
       <div
         ref={container}
         className="absolute inset-0"
-        aria-label="Sausar geographic context with synthetic prospectivity and waste markers"
+        aria-label="Sausar geographic context with the model surface, MOIL mines and model targets"
       />
       <div className="map-token-notice" role="status">
         <Satellite size={14} />
@@ -195,7 +166,7 @@ export default function TokenlessMapCanvas(props: MapCanvasProps) {
           {failure ??
             (imagery
               ? "NASA Blue Marble · low-resolution geographic context, not model input"
-              : "Loading NASA context · synthetic screening layers")}
+              : "Loading NASA context · model surface active")}
           <span className="map-context-secondary">
             <strong>Map token required</strong> for Mapbox satellite · open
             renderer active
@@ -204,11 +175,11 @@ export default function TokenlessMapCanvas(props: MapCanvasProps) {
       </div>
       {!ready && (
         <p role="status" className="absolute inset-x-5 top-28 text-sm text-[var(--canvas-ink)]">
-          {failure ?? "Loading local screening layers…"}
+          {failure ?? "Loading the map…"}
         </p>
       )}
-      <MapFitControl disabled={!ready || siteExtent(props.sites, { inScopeOnly: true }) === null} onFit={refit} />
-      <MapLegend />
+      <MapFitControl disabled={!ready || extent === null} onFit={refit} />
+      <MapLegend origin={props.surfaceOrigin} />
     </div>
   );
 }

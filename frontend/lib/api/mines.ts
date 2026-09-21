@@ -141,9 +141,17 @@ export function fixtureRoster(mines: readonly WireMine[], generatedAt: string): 
   });
 }
 
+/** Positions and provenance only, for the Explorer's markers and roster. No
+ * scoring here: see MineLocationSchema. */
 export const mineLocations = (mines: readonly WireMine[]): MineLocation[] =>
   mines.map((mine) => MineLocationSchema.parse({
     name: mine.mine_name,
+    state: STATE_NAMES[mine.state] ?? mine.state,
+    district: mine.district,
     mine_type: mine.mine_type,
     location: { longitude: mine.lon, latitude: mine.lat },
+    coordinate_confidence: mine.confidence,
+    coordinate_source: mine.source,
+    coordinate_source_url: mine.source_url,
+    coordinate_note: mine.coordinate_note,
   }));

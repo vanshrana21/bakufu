@@ -68,9 +68,21 @@ describe("mine roster adapter", () => {
     expect(MineSchema.safeParse(blank).success).toBe(false);
   });
 
-  it("hands the Explorer only where each mine is", () => {
+  it("hands the Explorer each mine's position and the provenance of that coordinate, unscored", () => {
     const locations = mineLocations(MINES_REFERENCE);
     expect(locations).toHaveLength(10);
-    expect(locations[0]).toEqual({ name: "Balaghat", mine_type: "underground", location: { longitude: balaghat.lon, latitude: balaghat.lat } });
+    expect(locations[0]).toEqual({
+      name: "Balaghat",
+      state: "Madhya Pradesh",
+      district: balaghat.district,
+      mine_type: "underground",
+      location: { longitude: balaghat.lon, latitude: balaghat.lat },
+      coordinate_confidence: balaghat.confidence,
+      coordinate_source: balaghat.source,
+      coordinate_source_url: balaghat.source_url,
+      coordinate_note: balaghat.coordinate_note,
+    });
+    // Drawing ten markers must not cost ten model runs.
+    expect(locations[0]).not.toHaveProperty("score");
   });
 });

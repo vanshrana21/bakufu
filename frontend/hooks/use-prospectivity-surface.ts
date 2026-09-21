@@ -1,12 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FeatureCollection, Polygon } from "geojson";
 import type { MaskMode } from "@/lib/contracts";
-import type { SiteFixture } from "@/fixtures/predictions";
-import { buildProspectivitySurface, type CellProperties } from "@/fixtures/prospectivity-surface";
 import { LIVE_MODE } from "@/lib/api/client";
-import { WARM_VIEWPORTS, fetchHeatmap } from "@/lib/api/heatmap";
+import { WARM_VIEWPORTS, fetchHeatmap, type CellProperties } from "@/lib/api/heatmap";
 
 export interface SurfaceState {
   surface: FeatureCollection<Polygon, CellProperties>;
@@ -24,15 +22,18 @@ export interface SurfaceState {
 
 const EMPTY: FeatureCollection<Polygon, CellProperties> = { type: "FeatureCollection", features: [] };
 
+/** Said instead of drawing anything when no backend is configured: a synthetic
+ * surface would look exactly like model output, and that is the one thing this
+ * map must never show. */
+const NO_API_NOTE = "No model surface: this build has no backend configured, so no cells are drawn.";
+
 /** The prospectivity surface for the map.
  *
- * Fixture mode returns the synthetic blobs immediately. Live mode fetches the
- * pre-warmed `full_bbox` viewport, which the backend warms at startup — the
- * documented cold path is ~38s, and requesting a viewport it did not warm is
- * what makes the map look hung.
+ * Live mode fetches the pre-warmed `full_bbox` viewport, which the backend warms
+ * at startup — the documented cold path is ~38s, and requesting a viewport it
+ * did not warm is what makes the map look hung. With no backend, nothing is drawn.
  */
-export function useProspectivitySurface(sites: readonly SiteFixture[], mask: MaskMode): SurfaceState {
-  const fixtureSurface = useMemo(() => buildProspectivitySurface(sites, mask), [sites, mask]);
+export function useProspectivitySurface(mask: MaskMode): SurfaceState {
   const [state, setState] = useState<Omit<SurfaceState, "surface"> & { surface: FeatureCollection<Polygon, CellProperties> | null }>({
     surface: null, loading: LIVE_MODE, error: null, origin: LIVE_MODE ? "live" : "fixture",
     cached: false, note: null, cellsScored: null, cellsNoData: null,
@@ -75,8 +76,8 @@ export function useProspectivitySurface(sites: readonly SiteFixture[], mask: Mas
 
   if (!LIVE_MODE) {
     return {
-      surface: fixtureSurface, loading: false, error: null, origin: "fixture",
-      cached: false, note: null, cellsScored: null, cellsNoData: null,
+      surface: EMPTY, loading: false, error: null, origin: "fixture",
+      cached: false, note: NO_API_NOTE, cellsScored: null, cellsNoData: null,
     };
   }
   return { ...state, surface: state.surface ?? EMPTY };

@@ -1,36 +1,56 @@
 import { describe, expect, it } from "vitest";
-import { DEMO_SITES } from "@/fixtures/predictions";
-import { MAP_IDS, fallbackPlotPosition, framingPadding, renderedCounts, siteExtent, siteFeatures } from "@/lib/map/sites";
+import { MINES_REFERENCE } from "@/fixtures/mines";
+import { mineLocations } from "@/lib/api/mines";
+import {
+  BELT_EXTENT, fallbackPlotPosition, framingPadding, initialExtent, markerPoints, pointsExtent, renderedCounts,
+} from "@/lib/map/sites";
 
-describe("siteFeatures", () => {
-  const collection = siteFeatures(DEMO_SITES);
+const MINES = mineLocations(MINES_REFERENCE);
+const target = (longitude: number, latitude: number) => ({ location: { longitude, latitude } });
 
-  it("draws only located, in-scope sites", () => {
-    expect(collection.features.map((f) => f.id)).toEqual(["demo-dump-a", "demo-slag-b", "demo-dump-c", "farmland-control"]);
-  });
-
-  it("marks waste dumps and slag heaps, not diagnostics", () => {
-    const waste = Object.fromEntries(collection.features.map((f) => [f.id, f.properties.waste]));
-    expect(waste).toEqual({ "demo-dump-a": true, "demo-slag-b": true, "demo-dump-c": true, "farmland-control": false });
-  });
-
-  it("uses lon/lat order", () => {
-    expect(collection.features[0]?.geometry.coordinates).toEqual([79.52, 21.73]);
+describe("markerPoints", () => {
+  it("lists every mine then every target, in lon/lat order", () => {
+    const points = markerPoints(MINES.slice(0, 2), [target(79.05, 21.6)]);
+    expect(points).toEqual([
+      [MINES[0]!.location.longitude, MINES[0]!.location.latitude],
+      [MINES[1]!.location.longitude, MINES[1]!.location.latitude],
+      [79.05, 21.6],
+    ]);
   });
 });
 
-describe("siteExtent", () => {
-  it("pads every located site and ignores unlocated ones", () => {
-    const [[west, south], [east, north]] = siteExtent(DEMO_SITES, { inScopeOnly: true })!;
+describe("pointsExtent", () => {
+  it("pads every point, so no marker sits on the frame edge", () => {
+    const [[west, south], [east, north]] = pointsExtent([[79.25, 21.65], [80.05, 21.82], [79.3, 21.55]])!;
     expect(west).toBeCloseTo(79.25 - 0.08);
     expect(east).toBeCloseTo(80.05 + 0.08);
     expect(south).toBeCloseTo(21.55 - 0.07);
     expect(north).toBeCloseTo(21.82 + 0.07);
   });
 
-  it("is null when nothing can be framed", () => {
-    expect(siteExtent(DEMO_SITES.filter((site) => site.location === null), { inScopeOnly: false })).toBeNull();
-    expect(siteExtent([], { inScopeOnly: true })).toBeNull();
+  it("is null when there is nothing to frame", () => {
+    expect(pointsExtent([])).toBeNull();
+  });
+
+  it("frames all ten reference mines inside the served belt, give or take the pad", () => {
+    const [[west, south], [east, north]] = pointsExtent(markerPoints(MINES, []))!;
+    const [[beltWest, beltSouth], [beltEast, beltNorth]] = BELT_EXTENT;
+    expect(west).toBeGreaterThan(beltWest - 0.2);
+    expect(east).toBeLessThan(beltEast + 0.2);
+    expect(south).toBeGreaterThan(beltSouth - 0.2);
+    expect(north).toBeLessThan(beltNorth + 0.2);
+  });
+});
+
+describe("initialExtent", () => {
+  it("frames the whole served belt before any target exists, widened to hold every mine", () => {
+    expect(initialExtent([])).toEqual(BELT_EXTENT);
+    const [[west, south], [east, north]] = initialExtent(markerPoints(MINES, []));
+    // Gumgaon at 78.98 E, padded, lies west of the belt's 79.0 E edge.
+    expect(west).toBeCloseTo(78.98 - 0.08);
+    expect(south).toBeLessThanOrEqual(BELT_EXTENT[0][1]);
+    expect(east).toBe(BELT_EXTENT[1][0]);
+    expect(north).toBe(BELT_EXTENT[1][1]);
   });
 });
 
@@ -44,26 +64,36 @@ describe("framingPadding", () => {
 });
 
 describe("fallbackPlotPosition", () => {
-  it("clamps sites into the plot and skips unlocated ones", () => {
-    // Demo waste dump A at 79.52 E, 21.73 N on the 79.15-80.15 / 21.45-21.95 plot.
-    const position = fallbackPlotPosition(DEMO_SITES[0]!)!;
-    expect(Number.parseFloat(position.left)).toBeCloseTo(18 + 0.37 * 64);
-    expect(Number.parseFloat(position.top)).toBeCloseTo(76 - (0.28 / 0.5) * 52);
-    // Far outside the plot, a site is clamped to the plot edge rather than lost.
-    expect(Number.parseFloat(fallbackPlotPosition({ ...DEMO_SITES[0]!, location: { longitude: 75, latitude: 30 } })!.left)).toBe(10);
-    expect(Number.parseFloat(fallbackPlotPosition({ ...DEMO_SITES[0]!, location: { longitude: 75, latitude: 30 } })!.top)).toBe(16);
-    expect(fallbackPlotPosition(DEMO_SITES.find((site) => site.id === "sandur")!)).toBeNull();
+  it("places points inside the plot frame, west left and north up", () => {
+    const gumgaon = MINES.find((mine) => mine.name === "Gumgaon")!;
+    const ukwa = MINES.find((mine) => mine.name === "Ukwa")!;
+    const west = fallbackPlotPosition(gumgaon);
+    const east = fallbackPlotPosition(ukwa);
+    expect(Number.parseFloat(west.left)).toBeLessThan(Number.parseFloat(east.left));
+    // Ukwa is the northernmost mine, so it plots highest.
+    expect(Number.parseFloat(east.top)).toBeLessThan(Number.parseFloat(west.top));
+    for (const mine of MINES) {
+      const { left, top } = fallbackPlotPosition(mine);
+      expect(Number.parseFloat(left)).toBeGreaterThanOrEqual(18);
+      expect(Number.parseFloat(left)).toBeLessThanOrEqual(82);
+      expect(Number.parseFloat(top)).toBeGreaterThanOrEqual(24);
+      expect(Number.parseFloat(top)).toBeLessThanOrEqual(76);
+    }
+  });
+
+  it("clamps a point far outside the plot to its edge rather than losing it", () => {
+    expect(fallbackPlotPosition(target(75, 30))).toEqual({ left: "10%", top: "16%" });
   });
 });
 
 describe("renderedCounts", () => {
-  it("counts unique ids per layer group and zero for missing layers", () => {
+  it("counts unique cell ids per layer group and zero for missing layers", () => {
     const drawn: Record<string, Array<{ properties: { id: string } }>> = {
       "prospectivity-screened": [{ properties: { id: "a" } }, { properties: { id: "a" } }, { properties: { id: "b" } }],
       "prospectivity-excluded": [{ properties: { id: "b" } }],
     };
     const counts = renderedCounts((layers) => layers.flatMap((layer) => drawn[layer] ?? []), (id) => id in drawn);
-    expect(counts).toEqual({ cells: 2, excluded: 1, waste: 0 });
-    expect(MAP_IDS.wasteLayer in drawn).toBe(false);
+    expect(counts).toEqual({ cells: 2, excluded: 1 });
+    expect(renderedCounts(() => [], () => false)).toEqual({ cells: 0, excluded: 0 });
   });
 });

@@ -65,11 +65,18 @@ export const PredictionResponseSchema = z.object({
   mask_results: z.array(MaskResultSchema),
   interpretation: Nonempty,
   shap: ShapSchema.nullable(),
+  /** The classifier's log-odds and probability before the Elkan-Noto division
+   * and the 0.99 cap (backend contract v1.10). Strong locations all read 0.99
+   * once capped; these keep the model's own ordering visible. Null when the
+   * backend predates v1.10 or produced no score. */
+  model_margin: Finite.nullable(),
+  raw_probability: Fraction.nullable(),
 }).strict().superRefine((r, ctx) => {
   const issue = (path: string, message: string) =>
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
   if (r.scope_status !== "in_scope") {
-    if (r.raw_score !== null || r.final_score !== null || r.shap !== null)
+    if (r.raw_score !== null || r.final_score !== null || r.shap !== null ||
+        r.model_margin !== null || r.raw_probability !== null)
       issue("scope_status", "Outside/unknown scope must not contain model scores or SHAP.");
     if (r.mask_applied !== "none" || r.mask_results.length)
       issue("mask_applied", "No masks are applied to an unassessed location.");
@@ -240,8 +247,22 @@ export const MineRosterSchema = z.object({
 });
 export type MineRoster = z.infer<typeof MineRosterSchema>;
 
-/** The slice of a mine the Explorer needs: where it is and what kind it is. */
-export const MineLocationSchema = z.object({ name: Nonempty, mine_type: Nonempty, location: LocationSchema });
+/** A mine's identity and cited coordinate, without a score. The Explorer needs
+ * ten positions, not ten model runs: scoring every mine to draw a marker would
+ * cost ten /predict/point calls (and ten audit rows) on every load. The
+ * inspector scores the one that is selected. */
+export const MineLocationSchema = z.object({
+  name: Nonempty,
+  state: Nonempty,
+  district: Nonempty,
+  mine_type: Nonempty,
+  location: LocationSchema,
+  /** The researcher's confidence in the cited coordinate, not the model's. */
+  coordinate_confidence: Nonempty,
+  coordinate_source: Nonempty,
+  coordinate_source_url: z.string().nullable(),
+  coordinate_note: z.string().nullable(),
+}).strict();
 export type MineLocation = z.infer<typeof MineLocationSchema>;
 
 export const TargetSchema = z.object({
@@ -256,7 +277,8 @@ export const TargetSchema = z.object({
   nearest_mine: Nonempty,
   km_to_nearest_mine: Finite.min(0),
   bearing_from_mine: z.enum(["N", "NE", "E", "SE", "S", "SW", "W", "NW"]),
-  /** Ground size of the sub-cell the target was refined to. */
+  /** Half the longer side of the sub-cell the target was refined to, in
+   * metres: the coordinate is good to about ± this along either axis. */
   precision_m: Finite.min(0),
   margin: Finite.nullable(),
   raw_probability: Finite.nullable(),

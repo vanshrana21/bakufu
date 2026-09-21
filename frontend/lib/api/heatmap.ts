@@ -13,11 +13,22 @@
  */
 
 import type { FeatureCollection, Polygon } from "geojson";
-import type { MaskMode } from "@/lib/contracts";
-import type { CellProperties } from "@/fixtures/prospectivity-surface";
+import type { MaskMode, PredictionResponse } from "@/lib/contracts";
 import type { WireHeatmap } from "./wire";
 import { HEATMAP_TIMEOUT_MS, apiGet } from "./client";
 import { parseWire, WireHeatmapSchema } from "./wire-schemas";
+
+/** One lattice cell as the map draws it. The committed layer spec
+ * (public/styles/prospectivity.layers.json) filters on scope_status,
+ * mask_excluded and final_score, so those names are part of its contract. */
+export interface CellProperties {
+  id: string;
+  raw_score: number | null;
+  final_score: number | null;
+  mask_applied: MaskMode;
+  mask_excluded: boolean;
+  scope_status: PredictionResponse["scope_status"];
+}
 
 export interface HeatmapResult {
   surface: FeatureCollection<Polygon, CellProperties>;
@@ -90,8 +101,6 @@ export function adaptHeatmap(wire: WireHeatmap): HeatmapResult {
         id,
         properties: {
           id,
-          site_id: id,
-          synthetic: false,
           // The heatmap serves post-mask scores, so raw and final agree here.
           // /predict/point is the surface that separates them per location.
           raw_score: score,

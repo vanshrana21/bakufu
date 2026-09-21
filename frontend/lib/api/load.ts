@@ -153,8 +153,8 @@ export async function loadMineRoster(): Promise<LoadResult<MineRoster>> {
   }
 }
 
-/** Where the mines are, for the Explorer's target panel. Loaded on the server
- * and handed down as props, so the browser never requests /mines. */
+/** Where the mines are, for the Explorer's markers and roster. Loaded on the
+ * server and handed down as props, so the browser never requests /mines. */
 export async function loadMineLocations(): Promise<LoadResult<MineLocation[]>> {
   if (!LIVE_MODE) return fixtureResult(mineLocations(MINES_REFERENCE));
   try {
@@ -168,19 +168,28 @@ export async function loadMineLocations(): Promise<LoadResult<MineLocation[]>> {
  * per-target refinements, ten point queries — far past what the browser proxy's
  * per-visitor budget allows, and none of it needs the browser). A complete
  * ranking is kept for ten minutes: the model and the imagery do not change
- * between page views, and each view would otherwise write ten audit records. */
+ * between page views, and each view would otherwise write ten audit records.
+ * One ordered by the fallback is kept for one minute only, so it is retried soon
+ * after the point queries recover, and concurrent views share one computation. */
 const TARGETS_TTL_MS = 10 * 60 * 1000;
-let targetsCache: { at: number; data: TargetList } | null = null;
+const FALLBACK_TARGETS_TTL_MS = 60 * 1000;
+let targetsCache: { at: number; ttl: number; data: TargetList } | null = null;
+let targetsInFlight: Promise<TargetList> | null = null;
 
 export async function loadTopTargets(): Promise<LoadResult<TargetList>> {
-  if (targetsCache && Date.now() - targetsCache.at < TARGETS_TTL_MS) return liveResult(targetsCache.data);
+  if (targetsCache && Date.now() - targetsCache.at < targetsCache.ttl) return liveResult(targetsCache.data);
   try {
-    const mines = mineLocations((await fetchMines()).mines);
-    const data = await fetchTopTargets(mines);
-    // Only a complete ranking is worth keeping: one ordered by the fallback
-    // should be retried as soon as the point queries recover.
-    if (data.ranking === "classifier_margin") targetsCache = { at: Date.now(), data };
-    return liveResult(data);
+    targetsInFlight ??= (async () => {
+      const mines = mineLocations((await fetchMines()).mines);
+      const data = await fetchTopTargets(mines);
+      targetsCache = {
+        at: Date.now(),
+        ttl: data.ranking === "classifier_margin" ? TARGETS_TTL_MS : FALLBACK_TARGETS_TTL_MS,
+        data,
+      };
+      return data;
+    })().finally(() => { targetsInFlight = null; });
+    return liveResult(await targetsInFlight);
   } catch (error) {
     return failedResult<TargetList>(error);
   }

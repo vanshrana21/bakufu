@@ -28,19 +28,6 @@
   color: var(--paper);
   font-weight: 500;
 }
-.map-presentation .map-site-label {
-  padding: 7px 10px;
-  border: 1px solid var(--glow);
-  border-radius: 2px;
-  background: var(--ground);
-  color: var(--paper);
-  font:
-    600 11px/1.4 var(--font-sans),
-    sans-serif;
-  letter-spacing: -0.01em;
-  white-space: nowrap;
-  pointer-events: none;
-}
 .map-presentation .map-legend {
   position: absolute;
   right: 14px;
@@ -223,3 +210,38 @@
     animation: none;
   }
 }
+
+/* Mine and target markers. DOM markers, because no style here loads a glyph
+ * source and these have to carry readable labels. Colours are palette tokens:
+ * paper for a mine that exists, glow for a place the model proposes. */
+.map-marker { display: flex; align-items: center; gap: 4px; padding: 0; background: none; border: 0; cursor: pointer; line-height: 1; }
+.map-marker-icon { display: flex; filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.55)); }
+.map-marker--mine .map-marker-icon { color: var(--paper); }
+.map-marker--target .map-marker-icon { color: var(--glow); }
+.map-marker-tag {
+  font: 500 10px/1.5 var(--font-sans); white-space: nowrap; padding: 1px 5px; border-radius: 2px;
+  color: var(--paper); background: color-mix(in srgb, var(--ground) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--paper) 22%, transparent);
+}
+.map-marker--target .map-marker-tag { color: var(--glow); border-color: color-mix(in srgb, var(--glow) 45%, transparent); }
+.map-marker:hover .map-marker-tag { background: var(--ground); }
+.map-marker[data-selected="true"] .map-marker-icon { color: var(--paper); }
+.map-marker[data-selected="true"] .map-marker-tag { background: var(--ore); color: var(--paper); border-color: var(--glow); }
+/* A selected marker sits above its neighbours, so its tag is never covered. */
+.map-marker[data-selected="true"] { z-index: 2; }
+.map-marker:focus-visible { outline: 2px solid var(--glow); outline-offset: 3px; border-radius: 3px; }
+
+/* Legend glyphs share the marker colours so the map and the key agree. The
+   legend is paper, so the mine glyph takes ink rather than paper to stay visible. */
+.map-legend-glyph { display: inline-flex; }
+.map-legend-glyph--mine { color: var(--ink); }
+.map-legend-glyph--target { color: var(--ore); }
+
+/* Compact legend. At 278px with a three-line caveat it covered a quarter of
+   the map; the key itself needs far less. */
+.map-presentation .map-legend { width: 216px; padding: 9px 10px 8px; bottom: 26px; }
+.map-presentation .map-legend-scale { height: 6px; margin-top: 7px; }
+.map-presentation .map-legend-values { margin-top: 3px; font-size: 9px; }
+.map-presentation .map-legend-symbols { gap: 4px 10px; margin-top: 8px; font-size: 9px; }
+.map-presentation .map-legend-symbols > span { gap: 4px; }
+.map-presentation .map-legend-caveat { margin-top: 7px; padding-top: 6px; font-size: 9px; line-height: 1.4; }

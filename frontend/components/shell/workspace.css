@@ -122,11 +122,38 @@
 .workspace .survey-grid { grid-template-columns: 310px minmax(0,1fr); gap: 16px; }
 .workspace .survey-left, .workspace .survey-map-column { border-radius: 8px; }
 .workspace .survey-intro { padding: 16px; }
-.workspace .ghost-control { padding: 12px; border-radius: 5px; }
 .workspace .survey-map-toolbar { padding: 14px 16px; }
 .workspace .map-surface { min-height: 500px; }
 .workspace .survey-location-list { padding: 14px 16px; }
 .workspace .survey-left .editorial-title { font-size: 24px; }
+/* Model targets: the ranked list beside the map (components/explorer/target-panel.tsx).
+   Same rhythm as .survey-intro above it; every colour is an existing token, and the
+   score takes --signal because it is a model estimate. */
+.workspace .target-panel { display: flex; flex-direction: column; gap: 10px; padding: 16px; border-bottom: 1px solid var(--border); }
+.workspace .target-panel-intro .section-label { font-size: 12px; margin-bottom: 8px; gap: 6px; }
+.workspace .target-panel-intro p { font-size: 11px; line-height: 1.6; color: var(--metadata); }
+.workspace .target-panel .note { font-size: 11px; padding: 10px; }
+.workspace .target-list { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--border); }
+.workspace .target-row { border-bottom: 1px solid var(--border); }
+.workspace .target-row[data-selected="true"] { background: var(--primary-soft); }
+.workspace .target-row-head { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 4px; border: 0; background: none; color: inherit; text-align: left; cursor: pointer; transition: background-color 160ms var(--ease-out); }
+.workspace .target-row-head:hover { background: var(--row-hover); }
+.workspace .target-row-head:focus-visible { outline: 2px solid var(--glow); outline-offset: -2px; }
+.workspace .target-row-rank { flex-shrink: 0; min-width: 30px; padding: 2px 0; border: 1px solid color-mix(in srgb, var(--glow) 40%, transparent); border-radius: 3px; font: 600 10px var(--font-mono); letter-spacing: 0.04em; text-align: center; color: var(--glow); }
+.workspace .target-row-rank[data-top="true"] { background: color-mix(in srgb, var(--glow) 16%, transparent); }
+.workspace .target-row-label { flex: 1; min-width: 0; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.workspace .target-row-numbers { display: flex; flex-shrink: 0; align-items: baseline; gap: 6px; font: 600 11px var(--font-mono); font-variant-numeric: tabular-nums; color: var(--signal); }
+.workspace .target-row-margin { font-size: 10px; font-weight: 500; color: var(--metadata); }
+.workspace .target-row-detail { display: flex; flex-direction: column; gap: 8px; padding: 2px 4px 12px; }
+.workspace .target-row-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.workspace .target-row-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; margin: 0; }
+.workspace .target-row-facts dt { font: 500 9px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--metadata); }
+.workspace .target-row-facts dd { margin: 2px 0 0; font-size: 11px; line-height: 1.5; }
+.workspace .target-panel-foot { font: 10px/1.6 var(--font-mono); color: var(--metadata); }
+/* Ten mines, where the old fixture list had six sites. The map column has a fixed
+   height, so a longer roster would squeeze the map; the list scrolls instead, as
+   the left panel already does. */
+.workspace .survey-location-list { max-height: 236px; overflow-y: auto; scrollbar-width: thin; }
 .workspace .feedback-layout { display: grid; grid-template-columns: minmax(240px,.7fr) minmax(0,1.3fr); gap: 20px; align-items: start; }
 .workspace .feedback-context { min-height: 300px; }
 .workspace .reports-layout { display: grid; grid-template-columns: 310px minmax(0,1fr); gap: 20px; align-items: start; }
@@ -160,6 +187,7 @@
   .workspace .actions-layout .instrument-metadata { margin-left: 0; }
   .workspace .survey-grid { grid-template-columns: 290px minmax(0,1fr); }
 }
+@media (max-width: 720px) { .workspace .target-row-facts { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 900px) {
   .workspace .production-layout > .forecast-risk-layout { grid-template-columns: minmax(0,1fr); }
   .workspace .operations-page .actions-layout { grid-template-columns: minmax(0,1fr); }

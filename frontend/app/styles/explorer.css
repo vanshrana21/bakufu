@@ -96,20 +96,6 @@
 .survey-intro fieldset label {
   font-size: 11px;
 }
-.ghost-control {
-  padding: 12px !important;
-  border: 1px solid var(--border-strong) !important;
-  border-radius: 3px !important;
-}
-.ghost-control label {
-  font-size: 12px;
-}
-.ghost-control p {
-  font-size: 10px;
-}
-.ghost-control svg {
-  width: 15px;
-}
 .survey-left .inspector {
   border: 0;
   overflow: visible;
@@ -210,17 +196,6 @@
 .survey-outlook > h2 {
   font-size: 21px;
   letter-spacing: -0.025em;
-}
-.map-site-label {
-  display: block;
-  background: var(--ground);
-  border: 1px solid var(--glow);
-  border-radius: 2px;
-  color: var(--foreground);
-  padding: 6px 9px;
-  font: 600 11px var(--font-sans);
-  white-space: nowrap;
-  pointer-events: none;
 }
 .map-token-notice {
   position: absolute;

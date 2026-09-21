@@ -49,7 +49,8 @@ export const API_ROUTES: readonly RouteSpec[] = [
     query: ["min_lon", "min_lat", "max_lon", "max_lat", "grid_size", "mask"],
     calledBy:
       "lib/api/heatmap.ts via hooks/use-prospectivity-surface.ts — the Explorer refetches on every mask change; " +
-      "lib/api/targets.ts via lib/api/load.ts — the greenfield shortlist, server-side (too many calls for the proxy budget)",
+      "lib/api/targets.ts via lib/api/load.ts — the greenfield shortlist for the Explorer and the Command Center, " +
+      "server-side (too many calls for the proxy budget)",
   },
   {
     path: "/predict/point",
@@ -59,7 +60,7 @@ export const API_ROUTES: readonly RouteSpec[] = [
     // mask placed in the body is dropped and "none" silently applied.
     query: ["mask"],
     calledBy:
-      "lib/api/predictions.ts via hooks/use-prediction.ts — scores the selected site; " +
+      "lib/api/predictions.ts via hooks/use-point-explanation.ts — explains the mine or target selected in the Explorer; " +
       "lib/api/targets.ts and lib/api/mines.ts via lib/api/load.ts — each target's margin and each mine's score, server-side",
   },
   {
@@ -67,8 +68,8 @@ export const API_ROUTES: readonly RouteSpec[] = [
     method: "GET",
     surface: "server",
     calledBy:
-      "lib/api/mines.ts via lib/api/load.ts — the Mine Fleet page and the Explorer's target ranking, " +
-      "both server-side, so the browser never requests it",
+      "lib/api/mines.ts via lib/api/load.ts — the Mine Fleet page, the Explorer's mine markers and its target " +
+      "ranking, all server-side, so the browser never requests it",
   },
   {
     path: "/dashboard/summary",

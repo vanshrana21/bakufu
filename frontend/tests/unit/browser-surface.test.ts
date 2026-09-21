@@ -149,7 +149,7 @@ describe("what the browser can actually reach", () => {
     // assertion passing would mean nothing.
     const names = [...modules].map((file) => relative(ROOT, file));
     expect(names).toContain("hooks/use-prospectivity-surface.ts");
-    expect(names).toContain("hooks/use-prediction.ts");
+    expect(names).toContain("hooks/use-point-explanation.ts");
     expect(names).toContain("lib/api/heatmap.ts");
     expect(names).toContain("lib/api/predictions.ts");
   });

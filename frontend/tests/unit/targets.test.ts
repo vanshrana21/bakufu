@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { MineLocation } from "@/lib/contracts";
 import type { WireHeatmap } from "@/lib/api/wire";
-import { MIN_SEPARATION_KM, bearingFrom, cellsOf, haversineKm, shortlist } from "@/lib/api/targets";
+import { MIN_SEPARATION_KM, bearingFrom, cellsOf, halfCellMetres, haversineKm, shortlist } from "@/lib/api/targets";
 
 /** A square lattice over a real-sized bbox, row-major from the top-left. */
 function lattice(scores: (number | null)[][], bbox: [number, number, number, number] = [79.0, 21.3, 80.6, 22.1]): WireHeatmap {
@@ -20,10 +20,11 @@ function lattice(scores: (number | null)[][], bbox: [number, number, number, num
   } as WireHeatmap;
 }
 
-const MINES: MineLocation[] = [
-  { name: "West mine", mine_type: "underground", location: { longitude: 79.1, latitude: 21.7 } },
-  { name: "East mine", mine_type: "opencast", location: { longitude: 80.5, latitude: 21.7 } },
-];
+const mine = (name: string, mine_type: string, longitude: number): MineLocation => ({
+  name, state: "Maharashtra", district: "Nagpur", mine_type, location: { longitude, latitude: 21.7 },
+  coordinate_confidence: "high", coordinate_source: "test", coordinate_source_url: null, coordinate_note: null,
+});
+const MINES: MineLocation[] = [mine("West mine", "underground", 79.1), mine("East mine", "opencast", 80.5)];
 
 describe("geometry helpers", () => {
   it("measures a degree of latitude as about 111 km", () => {
@@ -34,6 +35,13 @@ describe("geometry helpers", () => {
     expect(bearingFrom(21.5, 80, 21.9, 80)).toBe("N");
     expect(bearingFrom(21.5, 80, 21.5, 80.4)).toBe("E");
     expect(bearingFrom(21.5, 80, 21.2, 79.7)).toBe("SW");
+  });
+
+  it("quotes a refined target's precision as half the longer side of its sub-cell", () => {
+    // The served 8x8 refinement of one 32x32 belt cell: 0.00625 x 0.003125 deg.
+    // At 21.6 N that is ~647 m wide and ~348 m tall, so +/- ~323 m, not +/- 174 m.
+    expect(halfCellMetres(1.6 / 32 / 8, 0.8 / 32 / 8, 21.6)).toBe(323);
+    expect(halfCellMetres(0.001, 0.01, 21.6)).toBe(557);
   });
 
   it("places cell centres from the top-left corner, latitude falling with the row", () => {
