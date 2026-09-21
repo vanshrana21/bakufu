@@ -20,6 +20,7 @@ const coordinates = (target: Target) =>
 function TargetRow({ target, selected, onSelect }: { target: Target; selected: boolean; onSelect: () => void }) {
   const [copied, setCopied] = useState(false);
   const text = coordinates(target);
+  const rankingScore = target.raw_probability ?? target.score;
 
   async function copy() {
     try {
@@ -42,10 +43,12 @@ function TargetRow({ target, selected, onSelect }: { target: Target; selected: b
       >
         <span className="target-row-rank" data-top={target.rank <= 3}>{target.id}</span>
         <span className="target-row-label">{target.label}</span>
-        {/* The score is capped and identical across the shortlist; the margin
-            is what separates them, so both are shown. */}
+        {/* The served score remains capped at 0.99. The classifier probability
+            preserves the differentiation used to rank strong targets. */}
         <span className="target-row-numbers">
-          <span data-kind="model">{target.score.toFixed(2)}</span>
+          <span data-kind="model" title="Uncapped classifier probability">
+            {rankingScore.toFixed(3)}
+          </span>
           {target.margin !== null && <span className="target-row-margin">{target.margin.toFixed(1)}</span>}
         </span>
       </button>
@@ -138,7 +141,7 @@ export function TargetPanel() {
           </ul>
           <p className="target-panel-foot">
             {state.list.ranking === "classifier_margin"
-              ? `Every target reads the ${state.list.targets[0]?.score.toFixed(2) ?? "0.99"} cap, so they are ordered by the classifier's margin in log-odds (the small grey figure). `
+              ? "Primary values are uncapped classifier probabilities; targets are ordered by classifier margin in log-odds (the small grey figure). The served prospectivity index remains capped at 0.99. "
               : `${state.list.ranking_note} `}
             {state.list.candidates_considered} greenfield cells qualified; shortlisted by how strongly their neighbours
             also score, so a lone hot pixel beside cold ground does not make the list.
