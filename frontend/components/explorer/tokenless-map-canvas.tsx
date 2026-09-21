@@ -90,7 +90,11 @@ export default function TokenlessMapCanvas(props: MapCanvasProps) {
       }
     };
     // Markers stop their own clicks, so anything arriving here is empty ground.
-    const onClick = () => latest.current.onUnmappedClick();
+    const onClick = (event: maplibregl.MapMouseEvent) =>
+      latest.current.onUnmappedClick({
+        latitude: event.lngLat.lat,
+        longitude: event.lngLat.lng,
+      });
 
     map.on("load", onLoad);
     map.on("idle", onIdle);

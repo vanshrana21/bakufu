@@ -1,15 +1,20 @@
 import { createStore } from "zustand/vanilla";
 import type { MaskMode, TargetList } from "@/lib/contracts";
 
-/** What the Explorer can have selected. The two kinds are kept apart rather
- * than flattened into one id space: a mine is a place that exists, a target is
- * the model's proposal, and the inspector says which it is looking at. */
+/** What the Explorer can have selected. Mines and targets use stable ids;
+ * empty-ground clicks carry their exact map coordinate. */
 export type SelectionKind = "mine" | "target";
-export interface Selection {
-  kind: SelectionKind;
-  /** Mine name, or target id ("T1"). Unique within its kind. */
-  id: string;
-}
+export type Selection =
+  | {
+      kind: SelectionKind;
+      /** Mine name, or target id ("T1"). Unique within its kind. */
+      id: string;
+    }
+  | {
+      kind: "point";
+      id: string;
+      location: { latitude: number; longitude: number };
+    };
 
 /** The ranked targets arrive after the page: the server computes them (twenty-two
  * backend calls) and streams the result in, so the map never waits for them. */

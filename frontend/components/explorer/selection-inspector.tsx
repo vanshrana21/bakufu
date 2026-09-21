@@ -1,7 +1,7 @@
 "use client";
 
-/** Evidence for whatever the map has selected: an operating MOIL mine, or one
- * of the model's greenfield targets.
+/** Evidence for whatever the map has selected: an operating MOIL mine, one of
+ * the model's greenfield targets, or an empty-ground coordinate.
  *
  * Both selections are coordinates, so the same /predict/point call explains
  * either, under the mask the Explorer has active. Ported from the team lead's
@@ -47,14 +47,21 @@ function MaskExplanationPanel({ prediction }: { prediction: PredictionResponse }
   );
 }
 
-function ScoreTile({ label, value, tone = "neutral" }: { label: string; value: number | null; tone?: "neutral" | "primary" }) {
+function ScoreTile({ label, detail, value, testId, tone = "neutral" }: {
+  label: string;
+  detail: string;
+  value: number | null;
+  testId: string;
+  tone?: "neutral" | "primary";
+}) {
   return (
     <div className={tone === "primary" ? "border-b-2 border-primary pb-4" : "border-b pb-4"}>
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <p className="mt-1 text-[10px] leading-4 text-metadata">{detail}</p>
       <p
         className="mt-2 text-[34px] font-semibold leading-none tracking-tight tabular-nums"
         data-kind="model"
-        data-testid={label.toLowerCase().includes("raw") ? "raw-score" : "final-score"}
+        data-testid={testId}
       >
         {value?.toFixed(2) ?? "—"}
       </p>
@@ -78,7 +85,8 @@ export function SelectionInspector({ mines, targets }: { mines: readonly MineLoc
 
   const mine = selected?.kind === "mine" ? (mines.find((m) => m.name === selected.id) ?? null) : null;
   const target = selected?.kind === "target" ? (targets.find((t) => t.id === selected.id) ?? null) : null;
-  const location = mine?.location ?? target?.location ?? null;
+  const point = selected?.kind === "point" ? selected : null;
+  const location = mine?.location ?? target?.location ?? point?.location ?? null;
   const { data, loading, error, unavailable } = usePointExplanation(location, mask);
 
   // The inspector sits below the target list, so a choice made on the map or in
@@ -117,13 +125,15 @@ export function SelectionInspector({ mines, targets }: { mines: readonly MineLoc
             <div className="mb-4 flex items-center justify-between gap-3">
               <span className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
                 {mine ? <MapPin size={14} aria-hidden="true" /> : <Crosshair size={14} aria-hidden="true" />}
-                {mine ? "Operating MOIL mine" : `Model target · rank ${target!.rank}`}
+                {mine ? "Operating MOIL mine" : target ? `Model target · rank ${target.rank}` : "Scored map point"}
               </span>
               <span className="text-xs text-metadata">{maskLabel(mask)}</span>
             </div>
-            <h2 className="text-[24px] font-semibold leading-tight tracking-tight">{mine?.name ?? target!.id}</h2>
+            <h2 className="text-[24px] font-semibold leading-tight tracking-tight">
+              {mine?.name ?? target?.id ?? "Ground point"}
+            </h2>
             <p className="mt-2 text-xs text-muted-foreground">
-              {mine ? `${mine.district}, ${mine.state} · ${mine.mine_type}` : target!.label}
+              {mine ? `${mine.district}, ${mine.state} · ${mine.mine_type}` : target?.label ?? "Empty-ground map selection"}
             </p>
             <p className="mt-2 font-mono text-xs tabular-nums text-muted-foreground">
               {location.latitude.toFixed(4)}° N · {location.longitude.toFixed(4)}° E
@@ -150,8 +160,29 @@ export function SelectionInspector({ mines, targets }: { mines: readonly MineLoc
             {data && data.scope_status === "in_scope" && (
               <>
                 <div className="my-6 grid grid-cols-2 gap-3">
-                  <ScoreTile label="Raw model score" value={data.raw_score} />
-                  <ScoreTile label="Screened score" value={data.final_score} tone="primary" />
+                  <ScoreTile
+                    label="Model confidence"
+                    detail="Uncapped classifier probability"
+                    value={data.raw_probability ?? data.raw_score}
+                    testId="raw-score"
+                  />
+                  <ScoreTile
+                    label="Prospectivity index"
+                    detail="0–0.99, honestly capped"
+                    value={data.final_score}
+                    testId="final-score"
+                    tone="primary"
+                  />
+                </div>
+                <div className="mb-5 border-y py-3" data-testid="mask-state">
+                  <p className="text-[10px] font-semibold uppercase text-metadata">Mask state</p>
+                  <p className="mt-1 text-sm font-semibold">
+                    {data.mask_results.length === 0
+                      ? "No mask active"
+                      : data.mask_results.some((result) => result.outcome === "excluded")
+                        ? "Excluded by active mask"
+                        : "Passed active masks"}
+                  </p>
                 </div>
                 <div className="py-1">
                   <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
@@ -181,7 +212,10 @@ export function SelectionInspector({ mines, targets }: { mines: readonly MineLoc
                   </TabsList>
                   <TabsContent value="why">
                     {data.shap ? (
-                      <ShapBarChart shap={data.shap} />
+                      <>
+                        <h3 className="mb-2 text-xs font-semibold">Top 3 reasons</h3>
+                        <ShapBarChart shap={data.shap} limit={3} />
+                      </>
                     ) : (
                       <p className="text-sm leading-6 text-muted-foreground">No feature contributions were returned for this coordinate.</p>
                     )}
@@ -212,6 +246,7 @@ export function SelectionInspector({ mines, targets }: { mines: readonly MineLoc
                           <Fact label="Known ground">Outside the 5 km occurrence buffer</Fact>
                         </>
                       )}
+                      {point && <Fact label="Selection">Empty-ground map click</Fact>}
                     </dl>
                     {mine?.coordinate_note && <p className="note mt-5">{mine.coordinate_note}</p>}
                     {target && (

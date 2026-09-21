@@ -53,9 +53,11 @@ test("Explorer draws the real mines, states what needs the model, and invents no
   await expect(inspector.getByText("Scoring a coordinate needs the live model", { exact: false })).toBeVisible();
   await expect(page.getByTestId("raw-score")).toHaveCount(0);
 
-  // Empty ground is not a place: the map says how to inspect one instead.
+  // Empty ground becomes a coordinate selection and asks the live model for a score.
   await map.click({ position: { x: 40, y: 260 } });
-  await expect(page.getByText("Scoring an arbitrary coordinate needs a point query.", { exact: false })).toBeVisible();
+  await expect(inspector.getByRole("heading", { name: "Ground point", exact: true })).toBeVisible();
+  await expect(inspector.getByText("Empty-ground map selection", { exact: true })).toBeVisible();
+  await expect(inspector.getByText("Scoring a coordinate needs the live model", { exact: false })).toBeVisible();
 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await settle(page);

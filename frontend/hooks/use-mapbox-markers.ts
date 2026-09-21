@@ -5,9 +5,11 @@ import mapboxgl from "mapbox-gl";
 import { renderMarkers, type MarkerConstructor, type MarkerLayerOptions } from "@/components/explorer/map-markers";
 
 export interface MapboxMarkers extends MarkerLayerOptions {
-  /** A click that hit no marker: scoring an arbitrary coordinate is a backend
-   * decision, so the Explorer says how to inspect one instead. */
-  onUnmappedClick: () => void;
+  /** A click that hit no marker, forwarded to point scoring. */
+  onUnmappedClick: (location: {
+    latitude: number;
+    longitude: number;
+  }) => void;
 }
 
 /** Draws the mine and target markers and turns clicks into selections.
@@ -29,7 +31,11 @@ export function useMapboxMarkers(
   // Markers stop their own clicks, so anything reaching the map is empty ground.
   useEffect(() => {
     if (!map) return;
-    const onClick = () => handlers.current.onUnmappedClick();
+    const onClick = (event: mapboxgl.MapMouseEvent) =>
+      handlers.current.onUnmappedClick({
+        latitude: event.lngLat.lat,
+        longitude: event.lngLat.lng,
+      });
     map.on("click", onClick);
     return () => {
       map.off("click", onClick);

@@ -21,8 +21,11 @@ export interface MapCanvasProps {
   activeMask: MaskMode;
   selected: Selection | null;
   onSelect: (selection: Selection) => void;
-  /** A click on empty ground: arbitrary coordinates are not scored from here. */
-  onUnmappedClick: () => void;
+  /** A click on empty ground, ready for the live point-scoring endpoint. */
+  onUnmappedClick: (location: {
+    latitude: number;
+    longitude: number;
+  }) => void;
   /** Prospectivity cells: the live /prospectivity/heatmap lattice as polygons. */
   surface: FeatureCollection<Polygon, CellProperties>;
   /** Whether the cells are served model output or nothing at all (no backend). */

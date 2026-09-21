@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { ArrowUpRight, Crosshair, MapPin } from "lucide-react";
 import type { MaskMode, MineLocation, Target } from "@/lib/contracts";
 import type { Selection } from "@/stores/explorer-store";
@@ -89,16 +89,17 @@ export function ExplorerWorkspace({ mines, minesError, minesOrigin }: {
   const select = useExplorerStore((s) => s.select);
   const targetsState = useExplorerStore((s) => s.targets);
   const targets = targetsState.status === "ready" ? targetsState.list.targets : NO_TARGETS;
-  const [mapNotice, setMapNotice] = useState<string | null>(null);
-
   const prospectivity = useProspectivitySurface(mask);
   const choose = useCallback((selection: Selection) => {
     select(selection);
-    setMapNotice(null);
   }, [select]);
-  const unmapped = useCallback(() => setMapNotice(
-    "Scoring an arbitrary coordinate needs a point query. Choose a mine or a model target to inspect one.",
-  ), []);
+  const scoreGround = useCallback((location: { latitude: number; longitude: number }) => {
+    select({
+      kind: "point",
+      id: `${location.latitude.toFixed(5)},${location.longitude.toFixed(5)}`,
+      location,
+    });
+  }, [select]);
 
   const surfaceLine = prospectivity.origin === "fixture"
     ? "No model surface without the backend"
@@ -167,7 +168,7 @@ export function ExplorerWorkspace({ mines, minesError, minesOrigin }: {
                 surfaceOrigin={prospectivity.origin}
                 selected={selected}
                 onSelect={choose}
-                onUnmappedClick={unmapped}
+                onUnmappedClick={scoreGround}
               />
             </InsetBoundary>
             {/* The backend documents 5s warm / 45s cold for /prospectivity/heatmap.
@@ -203,11 +204,6 @@ export function ExplorerWorkspace({ mines, minesError, minesOrigin }: {
                 Select to inspect
               </span>
             </div>
-            {mapNotice && (
-              <p role="status" className="note mb-3">
-                {mapNotice}
-              </p>
-            )}
             {minesError && (
               <p role="alert" className="note mb-3">
                 Mine roster unavailable — {minesError}
