@@ -7,6 +7,8 @@ src/reference/moil_mines.py, so these tests also stop the two drifting apart.
 
 from __future__ import annotations
 
+import os
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -32,7 +34,7 @@ requires_serving_rasters = pytest.mark.skipif(
 
 @pytest.fixture(scope="module")
 def client() -> TestClient:
-    with TestClient(app) as test_client:
+    with TestClient(app, headers={"X-API-Key": os.environ["API_KEY"]}) as test_client:
         yield test_client
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 
 import numpy as np
 import pandas as pd
@@ -349,7 +350,7 @@ def test_forecast_endpoint_routes_by_horizon() -> None:
         index=pd.PeriodIndex(series.report_month, freq="M"),
     )
 
-    with TestClient(app) as client:
+    with TestClient(app, headers={"X-API-Key": os.environ["API_KEY"]}) as client:
         for horizon in (1, 3, 6):
             body = client.get("/forecast", params={"horizon": horizon}).json()
             assert body["model_used"] == "seasonal_naive"

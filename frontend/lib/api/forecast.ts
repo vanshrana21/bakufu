@@ -42,6 +42,18 @@ function cutoffFrom(model: WireForecast["model"], fallback: string): string {
   try { return monthToIso(addMonths(model.trained_through, 1)); } catch { return fallback; }
 }
 
+/** Names the interval the model actually produced. Seasonal-naive serves the
+ * short horizons and has no MCMC posterior, so it must not be described as one. */
+function intervalMethod(model: WireForecast["model"]): string {
+  if (model.mcmc_samples !== null && model.changepoint_prior_scale !== null) {
+    return `Prophet MCMC posterior, ${model.mcmc_samples} samples, changepoint_prior_scale ${model.changepoint_prior_scale}`;
+  }
+  if (model.variant === "seasonal_naive") {
+    return "Seasonal-naive (same month last year), 80% band from backtest error quantiles";
+  }
+  return model.interval_method ?? "unspecified";
+}
+
 export function adaptForecast(wire: WireForecast, lastObservedMonth: string): ForecastResponse {
   const horizon = wire.horizon_months;
   if (horizon !== 1 && horizon !== 3 && horizon !== 6 && horizon !== 12) {
@@ -96,7 +108,7 @@ export function adaptForecast(wire: WireForecast, lastObservedMonth: string): Fo
     interval: {
       level: wire.ci_level,
       kind: "prediction",
-      method: `Prophet MCMC posterior, ${wire.model.mcmc_samples} samples, changepoint_prior_scale ${wire.model.changepoint_prior_scale}`,
+      method: intervalMethod(wire.model),
     },
     points: rows.map((row) => ({
       month: row.month,

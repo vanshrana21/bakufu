@@ -182,3 +182,96 @@ export const ActionResponseSchema = z.object({
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Review state must agree with audit fields." });
 });
 export type ActionResponse = z.infer<typeof ActionResponseSchema>;
+
+/* ---------------------------------------------------------------------------
+ * Mine fleet and greenfield targets (backend contract v1.9–v1.10).
+ * ------------------------------------------------------------------------- */
+
+/** What the model reads at one cited coordinate. `value` is the served score,
+ * capped at 0.99; `raw_probability` and `margin` are the classifier's own output
+ * before the Elkan-Noto adjustment and the cap, which is what still separates
+ * two locations that both read 0.99. */
+export const MineScoreSchema = z.object({
+  value: ProspectivityScore,
+  raw_probability: Finite.nullable(),
+  margin: Finite.nullable(),
+  drivers: z.array(z.object({ label: Nonempty, contribution: Finite, value: Finite.nullable() })),
+  model_version: Nonempty,
+});
+export type MineScore = z.infer<typeof MineScoreSchema>;
+
+export const MineSchema = z.object({
+  name: Nonempty,
+  state: Nonempty,
+  district: Nonempty,
+  mine_type: Nonempty,
+  location: LocationSchema,
+  coordinate: z.object({
+    confidence: Nonempty,
+    source: Nonempty,
+    source_url: z.string().nullable(),
+    precision: z.string().nullable(),
+    note: z.string().nullable(),
+  }),
+  equipment: z.array(z.string()),
+  capacity_target_tonnes: Finite.nullable(),
+  notes: z.string().nullable(),
+  score: MineScoreSchema.nullable(),
+  /** Why there is no score. Null exactly when a score is present. */
+  score_unavailable: z.string().nullable(),
+  /** A measured caution specific to this mine, from the score analysis. */
+  caveat: z.string().nullable(),
+}).superRefine((mine, ctx) => {
+  // Either a score or the stated reason there is none. Both null would render
+  // as an empty card, which reads as "nothing here" rather than "not measured".
+  if ((mine.score === null) === (mine.score_unavailable === null)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "A mine must carry either a score or the reason it has none." });
+  }
+});
+export type Mine = z.infer<typeof MineSchema>;
+
+export const MineRosterSchema = z.object({
+  provenance: ProvenanceSchema,
+  counts: z.object({
+    total: z.number().int(), underground: z.number().int(), opencast: z.number().int(),
+    maharashtra: z.number().int(), madhya_pradesh: z.number().int(),
+  }),
+  mines: z.array(MineSchema).min(1),
+});
+export type MineRoster = z.infer<typeof MineRosterSchema>;
+
+/** The slice of a mine the Explorer needs: where it is and what kind it is. */
+export const MineLocationSchema = z.object({ name: Nonempty, mine_type: Nonempty, location: LocationSchema });
+export type MineLocation = z.infer<typeof MineLocationSchema>;
+
+export const TargetSchema = z.object({
+  id: Nonempty,
+  rank: z.number().int().min(1),
+  /** "12 km NE of Tirodi": a location a geologist can navigate to. */
+  label: Nonempty,
+  location: LocationSchema,
+  score: ProspectivityScore,
+  /** Mean score of the eight neighbouring cells: a coherent anomaly, not a lone pixel. */
+  neighbourhood_score: Finite.min(0).max(1),
+  nearest_mine: Nonempty,
+  km_to_nearest_mine: Finite.min(0),
+  bearing_from_mine: z.enum(["N", "NE", "E", "SE", "S", "SW", "W", "NW"]),
+  /** Ground size of the sub-cell the target was refined to. */
+  precision_m: Finite.min(0),
+  margin: Finite.nullable(),
+  raw_probability: Finite.nullable(),
+});
+export type Target = z.infer<typeof TargetSchema>;
+
+export const TargetListSchema = z.object({
+  provenance: ProvenanceSchema,
+  bbox: z.tuple([Finite, Finite, Finite, Finite]),
+  candidates_considered: z.number().int().min(0),
+  min_separation_km: Finite.min(0),
+  /** How the shortlist was ordered. Margins decide when every one arrived;
+   * otherwise the shortlist keeps its coherence order and says so. */
+  ranking: z.enum(["classifier_margin", "neighbourhood_coherence"]),
+  ranking_note: Nonempty,
+  targets: z.array(TargetSchema),
+});
+export type TargetList = z.infer<typeof TargetListSchema>;

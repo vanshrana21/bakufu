@@ -33,9 +33,11 @@ describe("no backend payload reaches an adapter unparsed", () => {
       "dashboard.ts",
       "forecast.ts",
       "heatmap.ts",
+      "mines.ts",
       "predictions.ts",
       "recommendations.ts",
       "shortfall.ts",
+      "targets.ts",
     ]);
   });
 

@@ -54,11 +54,17 @@ export interface WireForecast {
   model: {
     version: string; variant: string; regressors: string[];
     trained_through: string;         // "2026-05"
-    changepoint_prior_scale: number; mcmc_samples: number;
+    /** Prophet's settings; null when seasonal-naive serves the horizon (contract v1.9). */
+    changepoint_prior_scale: number | null; mcmc_samples: number | null;
+    interval_method?: string;
   };
   accuracy_at_horizon: WireForecastAccuracy | null;
   /** Added in contract v1.7. Absent on older backends — see FORECAST_SERIES_REQUIRED. */
   series?: WireForecastPoint[];
+  /** Which model served this horizon and why (contract v1.9): seasonal-naive up
+   * to six months, where it beats Prophet in the backtest; Prophet at twelve. */
+  model_used?: string;
+  reason?: string;
 }
 
 export interface WireShapContribution {
@@ -162,6 +168,36 @@ export interface WirePredictPoint {
   mask_decision: string;
   raw_score: number | null;
   final_score: number | null;
+  /** The classifier's own output before the Elkan-Noto adjustment and the 0.99
+   * cap (contract v1.10). Every strong location reads 0.99 once capped; these
+   * keep the model's ordering visible. Absent on older backends. */
+  raw_probability?: number | null;
+  model_margin?: number | null;
+}
+
+/** GET /mines — the ten MOIL mines with cited coordinates (contract v1.9). */
+export interface WireMine {
+  mine_name: string;
+  state: string;                       // "MH" | "MP"
+  district: string;
+  mine_type: string;                   // "underground" | "opencast" | "mixed"
+  equipment: string[];
+  capacity_target_tonnes: number | null;
+  notes: string | null;
+  sources: Array<{ tag: string; url: string | null }>;
+  type_note: string | null;
+  lat: number;
+  lon: number;
+  /** How far the cited coordinate can be trusted, e.g. "high", "low_medium". */
+  confidence: string;
+  source: string;
+  source_url: string | null;
+  coordinate_precision: string | null;
+  coordinate_note: string | null;
+}
+export interface WireMines {
+  mines: WireMine[];
+  counts: Record<string, number>;
 }
 
 export interface WireMaskInfo {

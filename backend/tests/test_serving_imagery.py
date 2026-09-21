@@ -16,7 +16,11 @@ from src.config.settings import settings
 from src.data.preprocess.extract_features import BAND_FEATURES
 
 requires_serving_rasters = pytest.mark.skipif(
-    not (settings.S2_SERVING_PATH.exists() and settings.DEM_SERVING_PATH.exists()),
+    not (
+        settings.S2_TRAINING_PATH.exists()
+        and settings.S2_SERVING_PATH.exists()
+        and settings.DEM_SERVING_PATH.exists()
+    ),
     reason="operational rasters missing - run python -m src.data.ingest.fetch_gumgaon_strip",
 )
 
