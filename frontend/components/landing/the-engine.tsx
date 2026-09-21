@@ -22,7 +22,7 @@ export function TheEngine() {
       <span className={`${s.chapterIndex} ${e.index}`} aria-hidden="true">03</span>
       <header className={e.label}>
         <span>03 / FIELD NOTES</span>
-        <span>HOW IT WORKS / 機</span>
+        <span>HOW IT WORKS / यन्त्र</span>
       </header>
       <div className={e.intro}>
         <h2 id="engine-heading" className={e.title}>

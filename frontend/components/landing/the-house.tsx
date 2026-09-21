@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useEffect, useRef } from "react";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import { BakufuMark } from "@/components/brand/logo-b";
+import { AvneshMark } from "@/components/brand/logo-b";
 import { ChapterLabel } from "./shared";
 import s from "./story.module.css";
 import d from "./house-deck.module.css";
@@ -66,14 +66,14 @@ function PixelGlyph({ rows }: { rows: readonly string[] }) {
   </svg>;
 }
 
-/** BAKUFU's own back: strata, an off-centre mon crest, one exclusion hatch
+/** AVNESH's own back: strata, an off-centre yantra crest, one exclusion hatch
  * band, vertical microtext and a tiny index. */
 function CardBack({ index }: { index: number }) {
   return <span className={d.back} aria-hidden="true">
     <span className={d.strata}><i /><i /><i /><i /></span>
     <span className={d.hatch} />
-    <BakufuMark size={48} className={d.backCrest} />
-    <span className={d.micro}>BAKUFU 幕府 — SCREENED MATERIAL</span>
+    <AvneshMark size={48} className={d.backCrest} />
+    <span className={d.micro}>AVNESH अवनीश — SCREENED MATERIAL</span>
     <span className={d.backIndex}>{pad(index)}</span>
   </span>;
 }

@@ -22,7 +22,7 @@ export function TheForecast() {
       <span className={`${s.chapterIndex} ${f.index}`} aria-hidden="true">05</span>
       <header className={f.label}>
         <span>05 / FIELD NOTES</span>
-        <span>MVP 02 / HOW MUCH WILL WE DIG? / 予</span>
+        <span>MVP 02 / HOW MUCH WILL WE DIG? / अनुमान</span>
       </header>
       <div className={f.intro}>
         <h2 id="forecast-heading" className={f.title}>

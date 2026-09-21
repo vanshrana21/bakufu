@@ -21,7 +21,7 @@ export function TheWaste() {
       <TerrainAtmosphere variant="waste" />
       <header className={w.label}>
         <span>01 / FIELD NOTES</span>
-        <span>THE WASTE / 廃</span>
+        <span>THE WASTE / ख</span>
       </header>
       <div className={w.body}>
         <div className={w.content}>

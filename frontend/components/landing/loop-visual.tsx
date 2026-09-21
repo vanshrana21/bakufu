@@ -108,14 +108,14 @@ export function LoopVisual() {
       place(0);
       gsap.timeline({
         defaults: { ease: "power2.out" },
-        scrollTrigger: { id: "bakufu-loop-entry", trigger: svg, start: entry.start, end: entry.end, scrub: 0.7, invalidateOnRefresh: true },
+        scrollTrigger: { id: "avnesh-loop-entry", trigger: svg, start: entry.start, end: entry.end, scrub: 0.7, invalidateOnRefresh: true },
       })
         .fromTo(stations, { opacity: 0 }, { opacity: 1, duration: fade.duration, stagger: fade.stagger }, 0)
         .fromTo(svg.querySelector("[data-v6]"), { y: v6.y, opacity: 0 }, { y: 0, opacity: 1, duration: v6.duration }, v6.at)
         .fromTo(svg.querySelector("[data-v7]"), { y: v7.y, opacity: 0 }, { y: 0, opacity: 1, duration: v7.duration }, v7.at)
         .fromTo(token, { opacity: 0 }, { opacity: 1, duration: 0.08 }, 0.92);
       gsap.timeline({
-        scrollTrigger: { id: "bakufu-loop-orbit", trigger: svg, start: orbit.start, end: orbit.end, scrub: 0.7, invalidateOnRefresh: true },
+        scrollTrigger: { id: "avnesh-loop-orbit", trigger: svg, start: orbit.start, end: orbit.end, scrub: 0.7, invalidateOnRefresh: true },
       }).fromTo(state, { progress: 0 }, { progress: 1, ease: "none", duration: 1, onUpdate: () => place(state.progress) });
       return () => place(1);
     });

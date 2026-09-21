@@ -5,5 +5,7 @@
 .scan { stroke: var(--mark-core, #D39858); }
 .lockup { display: inline-flex; align-items: center; gap: 10px; color: var(--mark-ink, #EACEAA); white-space: nowrap; }
 .name { font: 700 16px/1 var(--font-mono, monospace); letter-spacing: 0.16em; }
-.japanese { font-size: 10px; line-height: 1; letter-spacing: 0.12em; color: var(--mark-core, #D39858); }
+/* Devanagari: a named fallback chain so it never renders as tofu, and no
+ * letter-spacing, which would break the shirorekha joining the letters. */
+.devanagari { font-size: 10px; line-height: 1; letter-spacing: 0; font-family: "Noto Sans Devanagari", "Kohinoor Devanagari", "Nirmala UI", system-ui, sans-serif; color: var(--mark-core, #D39858); }
 .sealObject { display: block; width: min(100%, 470px); height: auto; margin: 0 auto; }

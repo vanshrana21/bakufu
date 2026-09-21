@@ -117,7 +117,7 @@ export function ForecastVisual() {
       gsap.timeline({
         defaults: { ease: "power2.out" },
         scrollTrigger: {
-          id: "bakufu-forecast", trigger: svg, start: "top 88%", end: "center 70%",
+          id: "avnesh-forecast", trigger: svg, start: "top 88%", end: "center 70%",
           scrub: 0.7, invalidateOnRefresh: true,
         },
       })

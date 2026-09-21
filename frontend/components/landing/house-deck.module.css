@@ -27,8 +27,8 @@
 .lift { transition: transform 260ms ease-out; }
 .back, .face { position: absolute; inset: 0; border-radius: 0.8em; overflow: hidden; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
 
-/* Back: BAKUFU's own grammar. Ground, one thin paper rule, strata in the lower
- * two-thirds, the mon crest off-centre, one exclusion hatch across a corner. */
+/* Back: AVNESH's own grammar. Ground, one thin paper rule, strata in the lower
+ * two-thirds, the yantra crest off-centre, one exclusion hatch across a corner. */
 .back { transform: rotateY(180deg); background: var(--ground); border: 1px solid var(--paper); }
 .strata { position: absolute; inset: 0; }
 .strata i { position: absolute; height: 1px; background: var(--paper); }

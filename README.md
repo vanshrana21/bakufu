@@ -1,8 +1,16 @@
-# BAKUFU 幕府
+# AVNESH अवनीश
 
 > The house that commands the ground.
+>
+> Read the earth. Question the signal.
+>
+> Evidence before action.
 
-Mineral intelligence for MOIL, built for Smart India Hackathon problem statement **SIH26009** (Ministry of Steel). BAKUFU screens the historical waste dumps of the Sausar Belt, India, for manganese Ghost Reserves: ore that decades of mining moved aside and never processed. It pairs that screen with a production forecast, a shortfall risk and corrective actions that wait for a human decision. A second mine, already dug.
+Avnesh (अवनीश): avanī = earth, īśa = command.
+
+A Sanskrit name for a tool built on Indian ground: the Sausar manganese belt of Maharashtra and Madhya Pradesh. The crest is a yantra, a gold reserve seated on a strata cut, and each chapter of the story carries its idea in Devanagari.
+
+Mineral intelligence for MOIL, built for Smart India Hackathon problem statement **SIH26009** (Ministry of Steel). AVNESH screens the historical waste dumps of the Sausar Belt, India, for manganese Ghost Reserves: ore that decades of mining moved aside and never processed. It pairs that screen with a production forecast, a shortfall risk and corrective actions that wait for a human decision. A second mine, already dug.
 
 ## What it does
 
@@ -150,7 +158,7 @@ Open [http://localhost:3000](http://localhost:3000). Leave `NEXT_PUBLIC_API_BASE
 ## Repo structure
 
 ```
-bakufu/
+avnesh/
 ├── README.md
 ├── backend/
 │   ├── src/
@@ -177,7 +185,7 @@ bakufu/
     │   └── contracts.ts   Zod response contracts
     ├── fixtures/          labelled demonstration data
     ├── hooks/  stores/
-    ├── public/brand/      BAKUFU marks
+    ├── public/brand/      AVNESH marks
     ├── tests/             Vitest unit and Playwright e2e
     ├── docs/  DESIGN.md  PRODUCT.md
     └── .env.example
@@ -197,4 +205,4 @@ Backend: `cd backend && python -m pytest`. Tests that need rasters, PDFs or a da
 
 ## Disclaimer
 
-BAKUFU is an independent hackathon prototype. It is not affiliated with or endorsed by MOIL Limited, the Ministry of Steel or the Government of India. Demonstration data, simulated workflows and scientific limitations are labelled in each module. Screening scores are an index for investigation, not a recovery probability, an ore quantity or an environmental clearance.
+AVNESH is an independent hackathon prototype. It is not affiliated with or endorsed by MOIL Limited, the Ministry of Steel or the Government of India. Demonstration data, simulated workflows and scientific limitations are labelled in each module. Screening scores are an index for investigation, not a recovery probability, an ore quantity or an environmental clearance.

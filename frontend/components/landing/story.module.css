@@ -92,13 +92,13 @@
   pointer-events: none;
 }
 .waste::before {
-  content: "廃";
+  content: "ख";
 }
 .ghost::before {
-  content: "探";
+  content: "निधि";
 }
 .loop::before {
-  content: "巡";
+  content: "चक्र";
 }
 .display {
   font:

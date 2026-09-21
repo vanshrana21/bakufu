@@ -6,7 +6,7 @@ export function TheDecision() {
       className={s.chapter + " " + s.paper + " " + s.decision}
       aria-labelledby="decision-heading"
     >
-      <ChapterLabel number="06">MVP 03 / CORRECTIVE ACTIONS / 決</ChapterLabel>
+      <ChapterLabel number="06">MVP 03 / CORRECTIVE ACTIONS / निर्णय</ChapterLabel>
       <div className={s.twoColumn}>
         <div>
           <h2 id="decision-heading" className={s.display}>

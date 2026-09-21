@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { BakufuMark } from "@/components/brand/logo-b";
+import { AvneshMark } from "@/components/brand/logo-b";
 
 /** Fired on window when the loader has gone. The hero picks the seal up from here. */
-export const PRELOADER_DONE = "bakufu:preloader-done";
+export const PRELOADER_DONE = "avnesh:preloader-done";
 
 /** True while the loader covers the page. */
 export function isPreloaderRunning() {
@@ -25,9 +25,9 @@ export function Preloader() {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    if (sessionStorage.getItem("bakufu-preloader-shown")) return;
+    if (sessionStorage.getItem("avnesh-preloader-shown")) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      sessionStorage.setItem("bakufu-preloader-shown", "1");
+      sessionStorage.setItem("avnesh-preloader-shown", "1");
       return;
     }
 
@@ -36,7 +36,7 @@ export function Preloader() {
     setMounted(true);
 
     const finish = () => {
-      sessionStorage.setItem("bakufu-preloader-shown", "1");
+      sessionStorage.setItem("avnesh-preloader-shown", "1");
       root.dataset.preloader = "done";
       setMounted(false);
       window.dispatchEvent(new Event(PRELOADER_DONE));
@@ -61,17 +61,17 @@ export function Preloader() {
   if (!mounted) return null;
 
   return (
-    <div className="bakufu-preloader" aria-hidden="true">
-      <div className="bakufu-preloader__scan" />
-      <div className="bakufu-preloader__stage">
-        <BakufuMark size={140} variant="hero" className="bakufu-preloader__crest" />
-        <div className="bakufu-preloader__wordmark">
-          <span>BAKUFU</span>
-          <span lang="ja">幕府</span>
+    <div className="avnesh-preloader" aria-hidden="true">
+      <div className="avnesh-preloader__scan" />
+      <div className="avnesh-preloader__stage">
+        <AvneshMark size={140} variant="hero" className="avnesh-preloader__crest" />
+        <div className="avnesh-preloader__wordmark">
+          <span>AVNESH</span>
+          <span lang="hi">अवनीश</span>
         </div>
       </div>
       <style>{`
-        .bakufu-preloader {
+        .avnesh-preloader {
           position: fixed;
           inset: 0;
           z-index: 50;
@@ -82,22 +82,22 @@ export function Preloader() {
           color: var(--paper);
           --mark-ink: var(--paper);
           --mark-core: var(--glow);
-          animation: bakufuOverlayExit 400ms cubic-bezier(.22,.61,.36,1) 1900ms forwards;
+          animation: avneshOverlayExit 400ms cubic-bezier(.22,.61,.36,1) 1900ms forwards;
           pointer-events: auto;
         }
 
-        .bakufu-preloader::before,
-        .bakufu-preloader::after {
+        .avnesh-preloader::before,
+        .avnesh-preloader::after {
           content: "";
           position: absolute;
           inset: 12%;
           border: 1px solid var(--paper);
           opacity: .34;
           transform: scale(.92);
-          animation: bakufuSurveyFrame 900ms cubic-bezier(.22,.61,.36,1) forwards;
+          animation: avneshSurveyFrame 900ms cubic-bezier(.22,.61,.36,1) forwards;
         }
 
-        .bakufu-preloader::after {
+        .avnesh-preloader::after {
           inset: 22%;
           border-color: var(--paper);
           opacity: .18;
@@ -106,39 +106,39 @@ export function Preloader() {
 
         /* The crest is the only in-flow child, so it sits at the exact centre of
            the viewport: the hero seal waits at the same point underneath. */
-        .bakufu-preloader__stage {
+        .avnesh-preloader__stage {
           position: relative;
           display: grid;
           place-items: center;
-          animation: bakufuStageExit 400ms cubic-bezier(.22,.61,.36,1) 1900ms forwards;
+          animation: avneshStageExit 400ms cubic-bezier(.22,.61,.36,1) 1900ms forwards;
         }
 
-        .bakufu-preloader__crest {
+        .avnesh-preloader__crest {
           overflow: visible;
           filter: drop-shadow(0 0 22px var(--glow));
           opacity: .92;
         }
 
-        .bakufu-preloader__crest [data-logo="body"] {
+        .avnesh-preloader__crest [data-logo="body"] {
           opacity: 0;
-          animation: bakufuPeakIn 500ms cubic-bezier(.22,.61,.36,1) 600ms forwards;
+          animation: avneshPeakIn 500ms cubic-bezier(.22,.61,.36,1) 600ms forwards;
         }
 
-        .bakufu-preloader__crest [data-logo="frame"],
-        .bakufu-preloader__crest [data-logo="strata"] {
+        .avnesh-preloader__crest [data-logo="frame"],
+        .avnesh-preloader__crest [data-logo="strata"] {
           stroke-dasharray: 88;
           stroke-dashoffset: 88;
-          animation: bakufuStrataDraw 700ms cubic-bezier(.22,.61,.36,1) forwards;
+          animation: avneshStrataDraw 700ms cubic-bezier(.22,.61,.36,1) forwards;
         }
 
-        .bakufu-preloader__crest [data-logo="reserve-core"] {
+        .avnesh-preloader__crest [data-logo="reserve-core"] {
           transform-box: fill-box;
           transform-origin: center;
           opacity: 0;
-          animation: bakufuCorePulse 600ms cubic-bezier(.22,.61,.36,1) 700ms forwards;
+          animation: avneshCorePulse 600ms cubic-bezier(.22,.61,.36,1) 700ms forwards;
         }
 
-        .bakufu-preloader__scan {
+        .avnesh-preloader__scan {
           position: absolute;
           top: 50%;
           left: 50%;
@@ -148,10 +148,10 @@ export function Preloader() {
           opacity: 0;
           transform: translate(-50%, -50%) rotate(-24deg) translateX(-190px);
           transform-origin: center;
-          animation: bakufuScan 400ms cubic-bezier(.22,.61,.36,1) 1300ms forwards;
+          animation: avneshScan 400ms cubic-bezier(.22,.61,.36,1) 1300ms forwards;
         }
 
-        .bakufu-preloader__scan::after {
+        .avnesh-preloader__scan::after {
           content: "";
           position: absolute;
           top: -3px;
@@ -161,7 +161,7 @@ export function Preloader() {
           background: var(--glow);
         }
 
-        .bakufu-preloader__wordmark {
+        .avnesh-preloader__wordmark {
           position: absolute;
           top: calc(100% + 24px);
           left: 50%;
@@ -176,53 +176,56 @@ export function Preloader() {
           letter-spacing: .34em;
           opacity: 0;
           transform: translate(-50%, 10px);
-          animation: bakufuWordmarkIn 200ms cubic-bezier(.22,.61,.36,1) 1700ms forwards;
+          animation: avneshWordmarkIn 200ms cubic-bezier(.22,.61,.36,1) 1700ms forwards;
         }
 
-        .bakufu-preloader__wordmark span:last-child {
+        .avnesh-preloader__wordmark span:last-child {
           color: var(--glow);
-          letter-spacing: .12em;
+          /* Devanagari: named fallbacks (never tofu), and no letter-spacing,
+             which would break the shirorekha joining the letters. */
+          font-family: "Noto Sans Devanagari", "Kohinoor Devanagari", "Nirmala UI", system-ui, sans-serif;
+          letter-spacing: 0;
         }
 
-        @keyframes bakufuStrataDraw {
+        @keyframes avneshStrataDraw {
           to { stroke-dashoffset: 0; }
         }
 
-        @keyframes bakufuPeakIn {
+        @keyframes avneshPeakIn {
           to { opacity: 1; }
         }
 
-        @keyframes bakufuCorePulse {
+        @keyframes avneshCorePulse {
           0% { transform: scale(.72); opacity: .7; filter: drop-shadow(0 0 0 var(--glow)); }
           48% { transform: scale(1.28); opacity: 1; filter: drop-shadow(0 0 20px var(--glow)); }
           100% { transform: scale(1); opacity: 1; filter: drop-shadow(0 0 9px var(--glow)); }
         }
 
-        @keyframes bakufuScan {
+        @keyframes avneshScan {
           0% { opacity: 0; transform: translate(-50%, -50%) rotate(-24deg) translateX(-190px); }
           22% { opacity: .8; }
           100% { opacity: 0; transform: translate(-50%, -50%) rotate(-24deg) translateX(190px); }
         }
 
-        @keyframes bakufuWordmarkIn {
+        @keyframes avneshWordmarkIn {
           to { opacity: 1; transform: translate(-50%, 0); }
         }
 
-        @keyframes bakufuSurveyFrame {
+        @keyframes avneshSurveyFrame {
           to { transform: scale(1); opacity: .26; }
         }
 
         /* Exit is a pure fade, no scale: the identical seal underneath stays put. */
-        @keyframes bakufuStageExit {
+        @keyframes avneshStageExit {
           to { opacity: 0; }
         }
 
-        @keyframes bakufuOverlayExit {
+        @keyframes avneshOverlayExit {
           to { opacity: 0; pointer-events: none; }
         }
 
         @media (prefers-reduced-motion: reduce) {
-          .bakufu-preloader {
+          .avnesh-preloader {
             display: none;
           }
         }

@@ -1,4 +1,4 @@
-# BAKUFU landing story
+# AVNESH landing story
 
 Only app/page.tsx composes these ten chapters. story.module.css is isolated from
 workspace styles; the new global variables do not replace workspace tokens.
@@ -28,14 +28,14 @@ links and both workspace entrances use the existing routes.
 ## Verification (2026-09-13)
 
 - TypeScript check passed in the source checkout.
-- Production build passed in /tmp/bakufu-landing-verify, isolated from live dev.
+- Production build passed in /tmp/avnesh-landing-verify, isolated from live dev.
 - 15 existing unit tests passed.
 - All ten workspace routes on port 3001 returned 200 and rendered their headings
   with no uncaught browser errors. Live-data pages retain existing API delays.
 - Desktop 1920×1080: all three pins active, no horizontal overflow.
 - Mobile 390×844 / reduced motion: no pins, no horizontal overflow.
 - Protected routes, API code, contracts, hooks, stores and shell matched pre-edit hashes.
-- Screenshots: output/playwright/bakufu/.
+- Screenshots: output/playwright/avnesh/.
 
 ## Local preview note
 

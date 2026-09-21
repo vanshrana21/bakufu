@@ -135,7 +135,7 @@ export function EngineVisual() {
       gsap.timeline({
         defaults: { ease: "power2.out" },
         scrollTrigger: {
-          id: "bakufu-engine", trigger: svg, start: "top 88%", end: "center 70%",
+          id: "avnesh-engine", trigger: svg, start: "top 88%", end: "center 70%",
           scrub: 0.7, invalidateOnRefresh: true,
         },
       })

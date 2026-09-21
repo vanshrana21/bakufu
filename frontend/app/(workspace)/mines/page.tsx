@@ -5,7 +5,7 @@ import { MineCard } from "@/components/mines/mine-card";
 import { loadMineRoster } from "@/lib/api/load";
 import s from "@/components/mines/mines.module.css";
 
-export const metadata: Metadata = { title: "Mine Fleet | BAKUFU" };
+export const metadata: Metadata = { title: "Mine Fleet | AVNESH" };
 
 /** Ten model invocations per render, so this page is never prerendered. */
 export const dynamic = "force-dynamic";

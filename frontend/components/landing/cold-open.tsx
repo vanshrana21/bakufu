@@ -1,7 +1,7 @@
 import Link from "next/link";
 import localFont from "next/font/local";
 import { Preloader } from "@/components/intro/preloader";
-import { BakufuLockup } from "@/components/brand/logo-b";
+import { AvneshLockup } from "@/components/brand/logo-b";
 import { HeroSeal } from "./hero-seal";
 import { HeroMotion } from "./hero-motion";
 import { CinematicMotion } from "./cinematic-motion";
@@ -26,8 +26,8 @@ export function ColdOpen() {
       <HeroMotion />
       <CinematicMotion />
       <header className={h.nav}>
-        <a href="#story" className={h.brand} aria-label="Bakufu home">
-          <BakufuLockup size={30} />
+        <a href="#story" className={h.brand} aria-label="Avnesh home">
+          <AvneshLockup size={30} />
         </a>
         <span className={h.context}>Mineral intelligence<span>Sausar Belt, India</span></span>
         <Link href="/operations" className={h.workspace}>

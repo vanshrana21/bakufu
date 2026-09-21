@@ -22,13 +22,13 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { BakufuLockup } from "@/components/brand/logo-b";
+import { AvneshLockup } from "@/components/brand/logo-b";
 import { LIVE_MODE } from "@/lib/api/client";
 import { SheetFrame } from "./sheet-frame";
 import styles from "./app-shell.module.css";
 
 /** Remembers a collapsed sidebar across visits; a per-viewer convenience only. */
-const COLLAPSE_KEY = "bakufu-sidebar-collapsed";
+const COLLAPSE_KEY = "avnesh-sidebar-collapsed";
 
 /** Routes whose figures come from the FastAPI backend in live mode. */
 const LIVE_ROUTES = new Set(["/operations", "/mines", "/production", "/actions", "/explorer"]);
@@ -150,10 +150,10 @@ export function AppShell({ children }: { children: ReactNode }) {
         <Link
           href="/"
           className={styles.brand}
-          aria-label="BAKUFU home"
+          aria-label="AVNESH home"
           onClick={navigate}
         >
-          <BakufuLockup size={28} />
+          <AvneshLockup size={28} />
         </Link>
         <button
           type="button"

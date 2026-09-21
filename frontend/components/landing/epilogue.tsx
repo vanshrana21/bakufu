@@ -1,4 +1,4 @@
-import { BakufuLockup } from "@/components/brand/logo-b";
+import { AvneshLockup } from "@/components/brand/logo-b";
 import { ChapterLabel, Crest } from "./shared";
 import { RollLink } from "./roll-link";
 import s from "./story.module.css";
@@ -32,13 +32,15 @@ export function Epilogue() {
         </div>
       </div>
       <footer className={s.footer}>
-        <BakufuLockup size={28} />
+        <AvneshLockup size={28} />
         <p>
           Mineral intelligence for MOIL’s challenge.
           <br />
           SIH26009 · Ministry of Steel problem statement.
           <br />
           Independent hackathon prototype. No official endorsement.
+          <br />
+          Avnesh (अवनीश): avanī = earth, īśa = command.
         </p>
         <a href="#story">BACK TO THE SURFACE ↑</a>
       </footer>

@@ -1,5 +1,5 @@
 import { useId } from "react";
-import { BAKUFU_COLORS as C, BAKUFU_PATHS as P, BAKUFU_VIEWBOX } from "./mark-geometry";
+import { AVNESH_COLORS as C, AVNESH_PATHS as P, AVNESH_VIEWBOX } from "./mark-geometry";
 import s from "./logo-b.module.css";
 
 /** Body with the strata cut and core seat removed, as one even-odd shape. */
@@ -18,9 +18,9 @@ type MarkProps = {
 };
 
 /** Benched kikkō with a gold reserve seated on its strata cut. */
-export function BakufuMark({ size = 28, variant = "mark", monochrome = false, className, title }: MarkProps) {
+export function AvneshMark({ size = 28, variant = "mark", monochrome = false, className, title }: MarkProps) {
   const hero = variant === "hero";
-  return <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox={BAKUFU_VIEWBOX}
+  return <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox={AVNESH_VIEWBOX}
     className={`${s.mark} ${className ?? ""}`} data-variant={variant}
     role={title ? "img" : undefined} aria-hidden={title ? undefined : true}>
     {title && <title>{title}</title>}
@@ -42,8 +42,8 @@ const kikko = (r: number) => {
 /** The ch00 medallion: a coin with a tick ring and a hairline kikkō (maru ni
  * kikkō), carrying the mark carved into it. The shade copies under the body show
  * through the cut as depth. Seal colours are fixed: it only appears on a dark ground. */
-export function BakufuSeal({ size = 470, className, title }: { size?: number; className?: string; title?: string }) {
-  const glow = `bakufu-core-${useId().replace(/:/g, "")}`;
+export function AvneshSeal({ size = 470, className, title }: { size?: number; className?: string; title?: string }) {
+  const glow = `avnesh-core-${useId().replace(/:/g, "")}`;
   return <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 100 100"
     className={`${s.mark} ${className ?? ""}`} data-variant="seal"
     role={title ? "img" : undefined} aria-hidden={title ? undefined : true}>
@@ -68,10 +68,10 @@ export function BakufuSeal({ size = 470, className, title }: { size?: number; cl
   </svg>;
 }
 
-export function BakufuLockup({ size = 32, className }: { size?: number; className?: string }) {
+export function AvneshLockup({ size = 32, className }: { size?: number; className?: string }) {
   return <span className={`${s.lockup} ${className ?? ""}`}>
-    <BakufuMark size={size} />
-    <span className={s.name}>BAKUFU</span>
-    <span className={s.japanese} lang="ja">幕府</span>
+    <AvneshMark size={size} />
+    <span className={s.name}>AVNESH</span>
+    <span className={s.devanagari} lang="hi">अवनीश</span>
   </span>;
 }

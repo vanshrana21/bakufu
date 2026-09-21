@@ -22,7 +22,7 @@ export function TheLoop() {
       <span className={`${s.chapterIndex} ${l.index}`} aria-hidden="true">07</span>
       <header className={l.label}>
         <span>07 / FIELD NOTES</span>
-        <span>STAGE 9 / HOW IT LEARNS / 巡</span>
+        <span>STAGE 9 / HOW IT LEARNS / चक्र</span>
       </header>
       <div className={l.intro}>
         <h2 id="loop-heading" className={l.title}>

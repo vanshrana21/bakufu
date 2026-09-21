@@ -21,7 +21,7 @@ export function CinematicMotion() {
           const timeline = gsap.timeline({
             defaults: { ease: "power2.inOut" },
             scrollTrigger: {
-              id: "bakufu-waste-cutaway", trigger: waste.querySelector("figure") ?? waste,
+              id: "avnesh-waste-cutaway", trigger: waste.querySelector("figure") ?? waste,
               start: "top 90%", end: "center 45%", scrub: 0.7,
               invalidateOnRefresh: true,
             },
@@ -38,7 +38,7 @@ export function CinematicMotion() {
           const timeline = gsap.timeline({
             defaults: { ease: "power2.out" },
             scrollTrigger: {
-              id: "bakufu-screening", trigger: ghost.querySelector("figure") ?? ghost,
+              id: "avnesh-screening", trigger: ghost.querySelector("figure") ?? ghost,
               start: "top 90%", end: "center 40%", scrub: 0.65,
               invalidateOnRefresh: true,
             },

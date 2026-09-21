@@ -1,5 +1,5 @@
 import { useId } from "react";
-import { BAKUFU_PATHS as paths } from "@/components/brand/mark-geometry";
+import { AVNESH_PATHS as paths } from "@/components/brand/mark-geometry";
 
 /** Chapter 00 material treatment; the shared brand geometry stays unchanged. */
 export function HeroSeal({ className }: { className?: string }) {

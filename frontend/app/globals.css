@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* BAKUFU palette. These twelve are the only solid colours in the product; every
+/* AVNESH palette. These twelve are the only solid colours in the product; every
  * other colour is one of them at an opacity. Landing and workspace share them.
  * Mineral and steel are the hero's cool half - its type and its terrain light -
  * so the workspace can carry the same warm/cool balance as the landing. */
