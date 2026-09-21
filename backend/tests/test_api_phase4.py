@@ -36,6 +36,22 @@ def test_lifespan_loads_every_served_artifact(client: TestClient) -> None:
     assert client.get("/").status_code == 200, "health must work regardless"
 
 
+def test_shap_is_fully_imported_before_warming_starts(client: TestClient) -> None:
+    """Concurrent first imports of shap left IPython half-initialised.
+
+    The warming thread and a request thread both import shap lazily; when
+    they overlapped, matplotlib.pyplot hit a partially initialised IPython
+    and the heatmap endpoint raised AttributeError. The lifespan now imports
+    it on the main thread first.
+    """
+    import sys
+
+    assert "shap" in sys.modules
+    assert "matplotlib.pyplot" in sys.modules
+    ipython = sys.modules.get("IPython")
+    assert ipython is None or hasattr(ipython, "get_ipython"), "IPython left partially initialised"
+
+
 def test_shipped_artifacts_are_the_promoted_ones() -> None:
     """Endpoints must read promoted files, never the training scratch path.
 
@@ -155,6 +171,8 @@ def test_mines_shape_matches_contract(client: TestClient) -> None:
     assert set(mine) == {
         "mine_name", "state", "district", "mine_type", "equipment",
         "capacity_target_tonnes", "notes", "sources", "type_note",
+        "lat", "lon", "confidence", "source", "source_url",
+        "coordinate_precision", "coordinate_note",
     }
     assert all(set(s) == {"tag", "url"} for s in mine["sources"])
 
@@ -341,19 +359,23 @@ def test_heatmap_cache_key_includes_the_model_version() -> None:
 # --- 4. GET /forecast ---------------------------------------------------
 
 
-def test_forecast_shape_matches_contract(client: TestClient) -> None:
-    body = client.get("/forecast?horizon=1").json()
+@pytest.mark.parametrize("horizon", [1, 12])
+def test_forecast_shape_matches_contract(client: TestClient, horizon: int) -> None:
+    """Same shape whichever model serves the horizon."""
+    body = client.get(f"/forecast?horizon={horizon}").json()
     assert set(body) == {
         "forecast_date", "target_period", "horizon_months", "predicted_tonnes",
         "predicted_lower_ci", "predicted_upper_ci", "ci_level", "components",
-        "model", "accuracy_at_horizon", "series",
+        "series", "model", "model_used", "reason", "accuracy_at_horizon",
     }
+    assert set(body["series"][0]) == {"month", "month_label", "p10", "p50", "p90"}
     assert set(body["model"]) == {
         "version", "variant", "regressors", "trained_through",
-        "changepoint_prior_scale", "mcmc_samples",
+        "changepoint_prior_scale", "mcmc_samples", "interval_method",
     }
     assert set(body["accuracy_at_horizon"]) == {
-        "mape", "naive_mape", "skill_vs_naive_pp", "ci80_coverage", "rmse", "n_origins"
+        "mape", "naive_mape", "prophet_mape", "skill_vs_naive_pp",
+        "ci80_coverage", "rmse", "n_origins",
     }
 
 
@@ -361,7 +383,8 @@ def test_forecast_reports_the_declared_model_version(client: TestClient) -> None
     """The bundle carries no version string, so the API declares one."""
     from src.api.state import FORECAST_MODEL_VERSION
 
-    body = client.get("/forecast?horizon=1").json()
+    body = client.get("/forecast?horizon=12").json()
+    assert body["model_used"] == "prophet"
     assert body["model"]["version"] == FORECAST_MODEL_VERSION == "prophet_baseline_v1.0"
     assert body["model"]["variant"] == "vanilla"
     assert body["model"]["regressors"] == [], "the shipped bundle has no regressors"
@@ -369,10 +392,22 @@ def test_forecast_reports_the_declared_model_version(client: TestClient) -> None
 
 def test_forecast_components_are_whatever_the_model_has(client: TestClient) -> None:
     """Not a fixed set: a vanilla bundle has no rainfall or capex term."""
-    components = client.get("/forecast?horizon=1").json()["components"]
+    components = client.get("/forecast?horizon=12").json()["components"]
     assert "trend" in components
     assert "rain_lag1" not in components and "capex" not in components
     assert all(isinstance(v, float) for v in components.values())
+
+
+def test_short_horizon_forecast_is_seasonal_naive(client: TestClient) -> None:
+    """Seasonal-naive wins the backtest at horizons 1-6, so it serves them."""
+    body = client.get("/forecast?horizon=1").json()
+    assert body["model_used"] == "seasonal_naive"
+    assert body["reason"] == "seasonal_naive_beats_prophet_at_short_horizon"
+    assert body["model"]["variant"] == "seasonal_naive"
+    assert body["model"]["interval_method"] == "empirical_backtest_ratio_quantiles"
+    assert body["components"] == {
+        "same_month_last_year_tonnes": pytest.approx(body["predicted_tonnes"])
+    }
 
 
 @pytest.mark.parametrize("horizon", [1, 3, 6, 12])
@@ -386,10 +421,60 @@ def test_forecast_accuracy_comes_from_the_shipped_backtest(
 
     metrics = pd.read_json(SHIPPED_FORECAST_METRICS)
     expected = metrics[metrics.horizon_months == horizon].iloc[0]
-    accuracy = client.get(f"/forecast?horizon={horizon}").json()["accuracy_at_horizon"]
-    assert accuracy["mape"] == pytest.approx(float(expected.mape))
-    assert accuracy["skill_vs_naive_pp"] == pytest.approx(float(expected.skill_vs_naive_pp))
+    body = client.get(f"/forecast?horizon={horizon}").json()
+    accuracy = body["accuracy_at_horizon"]
+    # Prophet's figures are the shipped artifact's, whichever model serves.
+    assert accuracy["prophet_mape"] == pytest.approx(float(expected.mape))
+    assert accuracy["naive_mape"] == pytest.approx(float(expected.naive_mape))
     assert accuracy["n_origins"] == int(expected.n_origins)
+    # `mape` describes the model actually served.
+    if body["model_used"] == "prophet":
+        assert accuracy["mape"] == pytest.approx(float(expected.mape))
+        assert accuracy["skill_vs_naive_pp"] == pytest.approx(float(expected.skill_vs_naive_pp))
+    else:
+        assert accuracy["mape"] == pytest.approx(float(expected.naive_mape))
+        assert accuracy["skill_vs_naive_pp"] == 0.0
+
+
+@pytest.mark.parametrize("horizon", [1, 3, 6, 12])
+def test_forecast_series_covers_every_month_of_the_horizon(
+    client: TestClient, horizon: int
+) -> None:
+    """The chart needs consecutive monthly points; it cannot interpolate them.
+
+    A single terminal point made the frontend refuse horizons 3, 6 and 12
+    rather than invent the months in between.
+    """
+    import pandas as pd
+
+    body = client.get(f"/forecast?horizon={horizon}").json()
+    series = body["series"]
+    assert len(series) == horizon
+
+    months = [pd.Period(point["month"], freq="M") for point in series]
+    assert months == [months[0] + step for step in range(horizon)], "months must be consecutive"
+    assert str(months[-1]) == body["target_period"], "the series must end at the target period"
+
+
+@pytest.mark.parametrize("horizon", [1, 3, 6, 12])
+def test_forecast_series_terminal_point_equals_the_top_level(
+    client: TestClient, horizon: int
+) -> None:
+    """Two representations of one number must not disagree."""
+    body = client.get(f"/forecast?horizon={horizon}").json()
+    last = body["series"][-1]
+    assert last["p50"] == pytest.approx(body["predicted_tonnes"])
+    assert last["p10"] == pytest.approx(body["predicted_lower_ci"])
+    assert last["p90"] == pytest.approx(body["predicted_upper_ci"])
+
+
+@pytest.mark.parametrize("horizon", [1, 3, 6, 12])
+def test_forecast_series_intervals_bracket_their_point(
+    client: TestClient, horizon: int
+) -> None:
+    for point in client.get(f"/forecast?horizon={horizon}").json()["series"]:
+        assert point["p10"] <= point["p50"] <= point["p90"], point["month"]
+        assert point["month_label"], "the chart axis needs a rendered label"
 
 
 def test_forecast_target_period_advances_with_horizon(client: TestClient) -> None:
@@ -451,9 +536,12 @@ def test_forecast_500s_when_the_model_is_missing(client: TestClient) -> None:
         error="FileNotFoundError: gone",
     )
     try:
-        response = client.get("/forecast?horizon=1")
+        response = client.get("/forecast?horizon=12")
         assert response.status_code == 500
         assert response.json()["error_code"] == "model_not_loaded"
+        # Seasonal-naive does not need the Prophet bundle, so short horizons
+        # keep serving: one missing artifact must not blank the forecast.
+        assert client.get("/forecast?horizon=1").status_code == 200
     finally:
         state.artifacts["forecast_model"] = saved
         clear_forecast_cache()
@@ -464,15 +552,21 @@ def test_forecast_500s_when_the_model_is_missing(client: TestClient) -> None:
 
 def test_forecast_history_shape_matches_contract(client: TestClient) -> None:
     body = client.get("/forecast/history").json()
-    assert set(body) == {"horizons", "origins", "model", "benchmark"}
+    assert set(body) == {"horizons", "origins", "model", "benchmark", "routing"}
     assert set(body["horizons"][0]) == {
         "horizon_months", "n_origins", "mape", "rmse",
-        "naive_mape", "skill_vs_naive_pp", "ci80_coverage",
+        "naive_mape", "skill_vs_naive_pp", "ci80_coverage", "comparison",
+    }
+    assert set(body["horizons"][0]["comparison"]) == {
+        "prophet_mape", "seasonal_naive_mape", "prophet_rmse", "seasonal_naive_rmse",
+        "prophet_ci80_coverage", "seasonal_naive_ci80_coverage",
+        "better_model", "model_used", "routing_matches_backtest",
     }
     assert set(body["origins"][0]) == {
         "horizon_months", "origin_month", "target_month",
-        "actual_tonnes", "predicted_tonnes", "covered",
+        "actual_tonnes", "predicted_tonnes", "seasonal_naive_tonnes", "covered",
     }
+    assert body["routing"]["seasonal_naive_max_horizon"] == 6
     assert body["benchmark"]["name"] == "seasonal_naive"
 
 
@@ -494,8 +588,20 @@ def test_forecast_history_records_the_negative_short_horizon_skill(
 def test_forecast_history_agrees_with_the_forecast_endpoint(client: TestClient) -> None:
     history = {h["horizon_months"]: h for h in client.get("/forecast/history").json()["horizons"]}
     for horizon in (1, 3, 6, 12):
-        accuracy = client.get(f"/forecast?horizon={horizon}").json()["accuracy_at_horizon"]
-        assert accuracy["mape"] == pytest.approx(history[horizon]["mape"])
+        body = client.get(f"/forecast?horizon={horizon}").json()
+        comparison = history[horizon]["comparison"]
+        assert body["model_used"] == comparison["model_used"]
+        served_mape = comparison[f"{body['model_used']}_mape"]
+        assert body["accuracy_at_horizon"]["mape"] == pytest.approx(served_mape)
+
+
+def test_forecast_history_shows_routing_is_empirically_justified(client: TestClient) -> None:
+    """Every horizon is served by the model with the lower backtest MAPE."""
+    horizons = {h["horizon_months"]: h for h in client.get("/forecast/history").json()["horizons"]}
+    for horizon in (1, 3, 6):
+        assert horizons[horizon]["comparison"]["better_model"] == "seasonal_naive"
+    assert horizons[12]["comparison"]["better_model"] == "prophet"
+    assert all(h["comparison"]["routing_matches_backtest"] for h in horizons.values())
 
 
 def test_forecast_history_is_idempotent(client: TestClient) -> None:
@@ -632,6 +738,7 @@ EXPECTED_ROUTES = {
     ("GET", "/mines/{mine_name}"),
     ("POST", "/predict/bbox"),
     ("POST", "/predict/point"),
+    ("POST", "/predict/points_in_bbox"),
     ("GET", "/predictions/{prediction_id}"),
     ("GET", "/priors"),
     ("GET", "/priors/{block_name}"),
@@ -679,7 +786,7 @@ def test_dashboard_summary_shape_matches_contract(client: TestClient) -> None:
     assert isinstance(provenance["synthetic"], bool)
     assert set(body["latest_actual"]) == {"month", "mh_plus_mp_tonnes", "all_india_tonnes"}
     assert set(body["next_forecast"]) == {
-        "month", "predicted_tonnes", "lower_ci", "upper_ci", "ci_level"
+        "month", "predicted_tonnes", "lower_ci", "upper_ci", "ci_level", "model_used"
     }
     assert set(body["shortfall"]) == {"month", "probability", "risk_level"}
 

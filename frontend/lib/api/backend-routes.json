@@ -112,6 +112,14 @@
       "required_query": []
     },
     {
+      "method": "POST",
+      "path": "/predict/points_in_bbox",
+      "query": [
+        "mask"
+      ],
+      "required_query": []
+    },
+    {
       "method": "GET",
       "path": "/predictions/{prediction_id}",
       "query": [],

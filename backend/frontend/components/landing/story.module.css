@@ -1,0 +1,1373 @@
+.story {
+  background: var(--ground);
+  color: var(--paper);
+  --mark-ink: var(--paper);
+  --mark-core: var(--glow);
+  overflow: clip;
+  font-family: var(--font-sans);
+  isolation: isolate;
+}
+.story *,
+.story *::before,
+.story *::after {
+  box-sizing: border-box;
+}
+.story ::selection {
+  background: var(--glow);
+  color: var(--ink);
+}
+.story a {
+  text-decoration: none;
+}
+.story a:focus-visible {
+  outline: 3px solid var(--glow);
+  outline-offset: 7px;
+}
+.story p {
+  font-size: clamp(14px, 1.12vw, 18px);
+  line-height: 1.75;
+}
+.chapter {
+  position: relative;
+  padding: 40px clamp(24px, 4.2vw, 84px) 72px;
+  background: var(--ground);
+}
+/* Chapter grounds step ground / shade-1 / shade-2; only the map and decision
+ * chapters turn to paper. */
+.waste,
+.forecast {
+  background: var(--shade-1);
+}
+.ghost,
+.loop {
+  background: var(--shade-2);
+}
+.chapter > * {
+  position: relative;
+  z-index: 1;
+}
+.paper {
+  background: var(--paper);
+  color: var(--ink);
+  --mark-ink: var(--char);
+  --mark-core: var(--ore);
+}
+.chapterLabel {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  padding-bottom: 18px;
+  margin-bottom: 56px;
+  border-bottom: 1px solid currentColor;
+  font: 10px/1.6 var(--font-mono);
+  letter-spacing: 0.12em;
+}
+.chapterLabel > :first-child {
+  opacity: 0.65;
+}
+.chapterLabel > :last-child {
+  font-size: 24px;
+}
+.chapter > .chapterIndex {
+  position: absolute;
+  top: 100px;
+  right: 5%;
+  z-index: 0;
+  font:
+    400 clamp(140px, 18vw, 310px)/1 "Archivo Black",
+    sans-serif;
+  opacity: 0.035;
+  pointer-events: none;
+  letter-spacing: -0.09em;
+}
+.waste::before,
+.ghost::before,
+.loop::before {
+  position: absolute;
+  font: 400 clamp(200px, 40vw, 700px)/1 var(--font-sans);
+  opacity: 0.025;
+  right: 4%;
+  top: 23%;
+  pointer-events: none;
+}
+.waste::before {
+  content: "廃";
+}
+.ghost::before {
+  content: "探";
+}
+.loop::before {
+  content: "巡";
+}
+.display {
+  font:
+    400 clamp(3rem, 7.6vw, 9.5rem)/0.98 "Archivo Black",
+    sans-serif;
+  letter-spacing: -0.055em;
+  text-transform: uppercase;
+  margin: 0;
+}
+.chrome {
+  background: var(--chrome);
+  color: transparent;
+  background-clip: text;
+  -webkit-background-clip: text;
+  filter: drop-shadow(0 2px 0 var(--ground));
+}
+.outline {
+  -webkit-text-stroke: 1px currentColor;
+  color: transparent;
+  paint-order: stroke fill;
+}
+.paper .outline {
+  -webkit-text-stroke-color: var(--ink);
+}
+.chapter:not(.paper) .outline {
+  -webkit-text-stroke-color: var(--paper);
+}
+.lead {
+  font-size: clamp(22px, 2.1vw, 34px) !important;
+  line-height: 1.3 !important;
+  letter-spacing: -0.03em;
+}
+.footnote {
+  display: block;
+  font: 11px/1.8 var(--font-mono) !important;
+  opacity: 0.7;
+}
+.mono {
+  font: 10px/1.6 var(--font-mono);
+  letter-spacing: 0.12em;
+}
+.skip {
+  position: fixed;
+  top: 0;
+  left: 20px;
+  background: var(--glow);
+  color: var(--ink);
+  padding: 0;
+  width: 1px;
+  height: 1px;
+  clip-path: inset(50%);
+  overflow: hidden;
+  z-index: 99999;
+}
+.skip:focus {
+  top: 10px;
+  width: auto;
+  height: auto;
+  clip-path: none;
+  padding: 16px;
+}
+.sticker {
+  display: inline-block;
+  padding: 20px 25px;
+  font: 12px/1.4 var(--font-mono);
+  letter-spacing: 0.05em;
+  transform: rotate(-5deg);
+}
+.waste {
+  min-height: 1050px;
+}
+.waste .display {
+  max-width: 900px;
+}
+.wasteArt {
+  position: absolute;
+  left: 2%;
+  bottom: 12%;
+  width: 53%;
+  max-width: 850px;
+}
+.wasteArt > svg {
+  width: 100%;
+  transform: rotate(17deg);
+  position: relative;
+}
+.halftone {
+  position: absolute;
+  inset: 20% 9% 0;
+  background: radial-gradient(color-mix(in srgb, var(--paper) 22%, transparent) 1px, transparent 1.5px);
+  background-size: 7px 7px;
+  border-radius: 50%;
+  transform: rotate(-15deg);
+}
+.blueSticker {
+  position: absolute;
+  right: 0;
+  top: 48%;
+  background: var(--ore);
+  color: var(--paper);
+  transform: rotate(5deg);
+  padding: 22px;
+}
+.blueSticker strong {
+  display: block;
+  font:
+    400 32px/1 "Archivo Black",
+    sans-serif;
+  letter-spacing: -0.03em;
+  margin-top: 10px;
+}
+.wasteCopy {
+  width: 32%;
+  margin: 25px 3% 140px auto;
+}
+.wasteCopy p + p {
+  margin-top: 22px;
+}
+.wasteCopy .footnote {
+  margin-top: 28px;
+}
+.wasteStats {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 30px;
+  border-top: 1px solid var(--shade-3);
+  padding-top: 24px;
+  font: 10px var(--font-mono);
+  letter-spacing: 0.08em;
+}
+.wasteStats strong {
+  font:
+    400 54px "Archivo Black",
+    sans-serif;
+  display: inline-block;
+  margin-right: 14px;
+  vertical-align: middle;
+  letter-spacing: -0.06em;
+}
+.underlined {
+  border-bottom: 2px solid var(--glow);
+  padding-bottom: 5px;
+}
+.twoColumn {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  gap: 7%;
+  align-items: center;
+}
+.ghost .display {
+  font-size: clamp(45px, 7vw, 126px);
+}
+.thesisCopy {
+  max-width: 450px;
+}
+.limeSticker {
+  background: var(--ore);
+  color: var(--paper);
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 35px;
+}
+.thesisCopy .lead {
+  margin-bottom: 24px;
+}
+.scoreStrip {
+  display: grid;
+  grid-template-columns: 1fr 0.24fr 1fr 0.8fr;
+  gap: 24px;
+  align-items: center;
+  border-block: 1px solid var(--shade-3);
+  padding: 40px 0;
+  margin-top: 65px;
+}
+.scoreStrip > div > span {
+  font: 10px var(--font-mono);
+  letter-spacing: 0.09em;
+}
+.scoreStrip strong {
+  display: block;
+  font:
+    400 clamp(64px, 9vw, 160px)/1.2 "Archivo Black",
+    sans-serif;
+  letter-spacing: -0.07em;
+  font-variant-numeric: tabular-nums;
+}
+.scoreArrow {
+  font-size: 60px;
+  color: var(--glow);
+}
+.screened {
+  position: relative;
+}
+.scoreHatch {
+  position: absolute;
+  inset: 30% -4% 5%;
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent 0 14px,
+    var(--glow) 14px 16px
+  );
+  pointer-events: none;
+}
+.scoreStrip aside {
+  border-left: 1px solid var(--shade-3);
+  padding-left: 32px;
+  font: 11px var(--font-mono);
+}
+.scoreStrip aside p {
+  font: 11px/1.9 var(--font-mono);
+  margin-top: 16px;
+}
+.coralText {
+  color: var(--glow);
+}
+.limeText {
+  color: var(--glow);
+}
+.chapterEnd {
+  margin-top: 35px;
+  display: flex;
+  justify-content: space-between;
+  gap: 30px;
+  align-items: center;
+}
+.chapterEnd h3 {
+  font-size: clamp(22px, 2.5vw, 40px);
+  letter-spacing: -0.05em;
+}
+.chapterEnd p {
+  font: 11px/1.7 var(--font-mono);
+}
+.engine {
+  border-top: 1px solid var(--shade-3);
+}
+.sectionIntro {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 30px;
+  margin-bottom: 40px;
+}
+.sectionIntro > p {
+  padding-bottom: 8px;
+  max-width: 330px;
+}
+.engine .display,
+.mapChapter .display,
+.forecast .display {
+  font-size: clamp(48px, 6vw, 100px);
+}
+.pipeline {
+  display: grid;
+  grid-template-columns: 1.15fr 0.7fr 0.8fr 1.25fr;
+  align-items: center;
+  gap: 24px;
+}
+.pipelineColumn {
+  display: grid;
+  gap: 10px;
+}
+.pipelineNode,
+.modelNode {
+  padding: 15px 18px;
+  border: 1px solid var(--shade-3);
+  background: var(--shade-2);
+  min-height: 68px;
+  font: 12px var(--font-mono);
+}
+.pipelineNode {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+.pipelineNode > span {
+  color: var(--glow);
+  font-size: 11px;
+}
+.pipelineNode p,
+.modelNode p {
+  font: 10px/1.6 var(--font-mono);
+  color: var(--paper);
+  margin-top: 6px;
+}
+.pipelineLines {
+  width: 100%;
+  height: 310px;
+  margin-right: -24px;
+}
+.featureLattice {
+  text-align: center;
+  font: 10px var(--font-mono);
+  color: var(--glow);
+}
+.featureLattice > div {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  width: 125px;
+  margin: 30px auto;
+  transform: rotate(-12deg);
+}
+.featureLattice i {
+  aspect-ratio: 1;
+  border: 1px solid var(--shade-3);
+  background: var(--shade-3);
+}
+.featureLattice i:nth-child(3n) {
+  background: var(--shade-3);
+}
+.featureLattice p {
+  font: 10px/1.8 var(--font-mono);
+  color: var(--paper);
+}
+.engineEvidence {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 30px;
+  border-block: 1px solid var(--shade-3);
+  margin: 30px 0 18px;
+  padding: 20px 0;
+}
+.engineEvidence span {
+  font: 9px var(--font-mono);
+  letter-spacing: 0.12em;
+}
+.engineEvidence strong {
+  display: block;
+  margin-top: 6px;
+  font:
+    400 clamp(24px, 3vw, 48px) "Archivo Black",
+    sans-serif;
+  letter-spacing: -0.04em;
+}
+.engineEvidence b {
+  color: var(--glow);
+  font-weight: 400;
+}
+.engineEvidence p {
+  font: 11px/1.8 var(--font-mono);
+}
+.mapLayout {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 8%;
+  align-items: center;
+}
+.cellFigure {
+  width: 100%;
+  max-width: 560px;
+  justify-self: center;
+  position: relative;
+}
+.cellCanvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  background: radial-gradient(color-mix(in srgb, var(--char) 20%, transparent) 1px, transparent 1px);
+  background-size: 12px 12px;
+}
+.cellFigure figcaption {
+  font: 9px/1.7 var(--font-mono);
+  letter-spacing: 0.04em;
+  margin-top: 10px;
+}
+.cellLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  margin-top: 12px;
+  font: 9px var(--font-mono);
+}
+.cellLegend > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cellLegend i {
+  width: 12px;
+  height: 12px;
+  display: inline-block;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--char) 12%, transparent), var(--ore));
+}
+.cellLegend .hatchedKey {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--ink) 0 1px,
+    transparent 1px 4px
+  );
+}
+.cellLegend .nullKey {
+  background: transparent;
+  border: 1px dashed var(--char);
+}
+.mapInspector {
+  max-width: 450px;
+  border-top: 4px solid var(--char);
+  padding-top: 20px;
+}
+.mapInspector h3 {
+  font:
+    400 clamp(28px, 3.3vw, 50px)/1.08 "Archivo Black",
+    sans-serif;
+  letter-spacing: -0.05em;
+  margin-top: 22px;
+}
+.miniScores {
+  display: flex;
+  gap: 50px;
+  border-block: 1px solid color-mix(in srgb, var(--char) 20%, transparent);
+  padding: 16px 0;
+  margin: 25px 0;
+  font: 10px var(--font-mono);
+}
+.miniScores strong {
+  display: block;
+  font:
+    400 44px "Archivo Black",
+    sans-serif;
+  letter-spacing: -0.05em;
+}
+.mapInspector p {
+  font-size: 13px;
+}
+.mapInspector h4 {
+  font: 10px var(--font-mono);
+  letter-spacing: 0.1em;
+  margin: 25px 0 18px;
+}
+.shapBars {
+  display: grid;
+  gap: 12px;
+  font: 10px var(--font-mono);
+}
+.shapBars i {
+  display: block;
+  height: 9px;
+  background: var(--ore);
+  margin-top: 6px;
+}
+.mapInspector small {
+  font: 9px/1.6 var(--font-mono);
+  display: block;
+  margin-top: 15px;
+}
+.scopeStatement {
+  margin-top: 35px;
+  border-top: 1px solid color-mix(in srgb, var(--char) 20%, transparent);
+  padding-top: 18px;
+}
+.scopeStatement > span {
+  font: 9px var(--font-mono);
+  color: var(--char);
+}
+.scopeStatement h3 {
+  font:
+    400 clamp(20px, 2vw, 32px)/1.2 "Archivo Black",
+    sans-serif;
+  letter-spacing: -0.03em;
+  margin: 10px 0;
+}
+.scopeStatement em {
+  font-style: normal;
+  color: var(--ore);
+}
+.scopeStatement p {
+  font-size: 12px;
+}
+.forecastLayout {
+  display: grid;
+  grid-template-columns: 1fr 250px;
+  gap: 7%;
+  align-items: center;
+}
+.forecastChart {
+  width: 100%;
+}
+.forecastLegend {
+  display: flex;
+  gap: 24px;
+  font: 10px var(--font-mono);
+  margin: 15px 0 25px;
+  flex-wrap: wrap;
+}
+.riskAside {
+  text-align: center;
+}
+.riskRing {
+  position: relative;
+  width: 190px;
+  margin: 0 auto 15px;
+}
+.riskRing svg {
+  width: 100%;
+}
+.riskRing strong {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font:
+    400 54px "Archivo Black",
+    sans-serif;
+  letter-spacing: -0.06em;
+}
+.riskRing strong span {
+  font-size: 22px;
+}
+.riskAside p {
+  margin-top: 15px;
+  font-size: 12px;
+  color: var(--paper);
+}
+.forecastClosing {
+  font:
+    400 clamp(32px, 4.3vw, 75px)/1.04 "Archivo Black",
+    sans-serif;
+  letter-spacing: -0.035em;
+  margin-top: 50px;
+}
+.decision {
+  padding-block: 45px 110px;
+}
+.decision .display {
+  font-size: clamp(45px, 6vw, 100px);
+}
+.decision .lead {
+  margin-top: 40px;
+}
+.ruleSheet {
+  background: var(--paper);
+  border: 1px solid var(--char);
+  box-shadow: 12px 12px 0 color-mix(in srgb, var(--char) 20%, transparent);
+  transform: rotate(2deg);
+  padding: 32px;
+}
+.sheetHeading {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  font: 9px var(--font-mono);
+  border-bottom: 1px solid color-mix(in srgb, var(--char) 20%, transparent);
+  padding-bottom: 20px;
+}
+.ruleSheet h3 {
+  font:
+    400 clamp(24px, 2.8vw, 43px)/1.1 "Archivo Black",
+    sans-serif;
+  letter-spacing: -0.04em;
+  margin: 30px 0 20px;
+}
+.ruleSheet p {
+  font-size: 13px;
+}
+.tableScroll {
+  overflow-x: auto;
+  margin-top: 28px;
+}
+.ruleSheet table {
+  width: 100%;
+  border-collapse: collapse;
+  font: 10px var(--font-mono);
+  text-align: left;
+}
+.ruleSheet caption {
+  text-align: left;
+  margin-bottom: 10px;
+  color: var(--char);
+}
+.ruleSheet th,
+.ruleSheet td {
+  padding: 12px 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--char) 20%, transparent);
+  #8FC1E3-space: nowrap;
+}
+.ruleSheet th {
+  background: color-mix(in srgb, var(--char) 6%, var(--paper));
+  font-weight: 500;
+}
+.reviewStamp {
+  color: var(--ore);
+  border: 3px double var(--ore);
+  font:
+    400 clamp(26px, 3vw, 44px) "Archivo Black",
+    sans-serif;
+  text-align: center;
+  transform: rotate(-7deg);
+  margin: 38px 12px;
+  padding: 10px;
+}
+.reviewStamp > span {
+  display: block;
+  font: 10px var(--font-mono);
+  letter-spacing: 0.08em;
+}
+.ruleSheet footer {
+  font: 9px/1.7 var(--font-mono);
+  border-top: 1px solid color-mix(in srgb, var(--char) 20%, transparent);
+  padding-top: 14px;
+}
+.loop {
+  padding-bottom: 80px;
+}
+.loop .twoColumn {
+  grid-template-columns: 1fr 1.1fr;
+}
+.loop .display {
+  font-size: clamp(45px, 5.6vw, 92px);
+}
+.loop .lead {
+  margin-block: 30px 20px;
+}
+.loop .limeSticker {
+  margin-top: 30px;
+  font-size: 13px;
+}
+.loopDiagram {
+  aspect-ratio: 1;
+  position: relative;
+  width: 100%;
+}
+.loopOrbit {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+}
+.loopCrest {
+  position: absolute;
+  width: 34%;
+  top: 26%;
+  left: 33%;
+  color: var(--paper);
+}
+.loopDiagram > span {
+  position: absolute;
+  font: 9px var(--font-mono);
+  background: var(--shade-2);
+  padding: 10px;
+  border: 1px solid var(--shade-3);
+}
+.loopTop {
+  top: 7%;
+  left: 30%;
+}
+.loopRight {
+  top: 46%;
+  right: 0;
+}
+.loopBottom {
+  bottom: 6%;
+  left: 26%;
+}
+.loopLeft {
+  top: 46%;
+  left: 0;
+}
+.version {
+  position: absolute;
+  top: 64%;
+  width: 100%;
+  text-align: center;
+  font:
+    400 32px "Archivo Black",
+    sans-serif;
+  color: var(--glow);
+}
+.version span {
+  display: block;
+  font: 8px var(--font-mono);
+  color: var(--paper);
+  margin-top: 10px;
+}
+.loop > .footnote {
+  margin-top: 40px;
+}
+.house .display {
+  font-size: clamp(45px, 6.4vw, 106px);
+}
+.moduleWall {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 28px 20px;
+  padding: 35px 5px 45px;
+}
+.moduleSticker {
+  grid-column: span 3;
+  padding: 20px;
+  border: 1px solid var(--char);
+  background: var(--paper);
+  color: var(--ink);
+  transform: rotate(var(--sticker-angle));
+  box-shadow: 5px 6px 0 var(--char);
+  transition:
+    transform 0.25s,
+    box-shadow 0.25s;
+  min-height: 170px;
+}
+.moduleSticker:nth-child(-n + 2) {
+  grid-column: span 4;
+}
+.moduleSticker:nth-child(3) {
+  grid-column: span 4;
+  background: var(--shade-3);
+  color: var(--paper);
+}
+.moduleSticker:nth-child(2),
+.moduleSticker:nth-child(8) {
+  background: var(--glow);
+}
+.moduleSticker:nth-child(7),
+.moduleSticker:nth-child(10) {
+  background: var(--ground);
+  color: var(--paper);
+}
+.moduleSticker:nth-child(n + 8) {
+  grid-column: span 4;
+}
+.moduleSticker > span {
+  display: flex;
+  justify-content: space-between;
+  font: 11px var(--font-mono);
+  margin-bottom: 20px;
+}
+.moduleSticker b {
+  font-size: 21px;
+  font-weight: 400;
+}
+.moduleSticker h3 {
+  font:
+    400 clamp(18px, 1.7vw, 27px)/1.1 "Archivo Black",
+    sans-serif;
+  letter-spacing: -0.04em;
+}
+.moduleSticker p {
+  font-size: 11px;
+  margin-top: 12px;
+}
+.moduleSticker:hover,
+.moduleSticker:focus-visible {
+  transform: rotate(0) translateY(-7px);
+  box-shadow: 8px 12px 0 var(--char);
+  z-index: 3;
+}
+.epilogue {
+  padding-bottom: 30px;
+}
+.marquee {
+  margin-inline: calc(clamp(24px, 4.2vw, 84px) * -1);
+  padding: 18px 0;
+  border-block: 1px solid var(--shade-3);
+  overflow: hidden;
+}
+.marquee > div {
+  display: flex;
+  width: max-content;
+  animation: ticker 40s linear infinite;
+  font: 12px var(--font-mono);
+  color: var(--glow);
+  letter-spacing: 0.1em;
+  white-space: pre;
+}
+@keyframes ticker {
+  to {
+    transform: translateX(-50%);
+  }
+}
+.footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 30px;
+  padding-top: 45px;
+}
+.footer strong {
+  font:
+    400 25px "Archivo Black",
+    sans-serif;
+}
+.footer strong > span {
+  font: 20px var(--font-sans);
+  margin-left: 15px;
+}
+.footer p {
+  font: 9px/1.8 var(--font-mono);
+  color: var(--paper);
+}
+.footer > a {
+  font: 9px var(--font-mono);
+}
+@media (min-width: 1100px) and (min-height: 820px) {
+  .engine,
+  .mapChapter,
+  .forecast {
+    padding-top: 25px;
+    padding-bottom: 30px;
+  }
+  .engine .chapterLabel,
+  .mapChapter .chapterLabel,
+  .forecast .chapterLabel {
+    margin-bottom: 30px;
+  }
+  .mapChapter .display {
+    font-size: clamp(48px, 5vw, 84px);
+  }
+  .mapChapter .sectionIntro {
+    margin-bottom: 18px;
+  }
+  .mapChapter .cellFigure {
+    max-width: min(480px, 44vh);
+  }
+  .forecastChart {
+    height: 32vh;
+  }
+  .forecastClosing {
+    font-size: clamp(32px, 3.5vw, 60px);
+    margin-top: 30px;
+  }
+}
+
+@media (max-width: 1099px) {
+  .chapter {
+    padding-bottom: 65px;
+  }
+  .waste {
+    min-height: 900px;
+  }
+  .wasteCopy {
+    width: 39%;
+    margin-bottom: 90px;
+  }
+  .wasteStats {
+    flex-wrap: wrap;
+  }
+  .pipeline {
+    gap: 15px;
+    grid-template-columns: 1fr 0.4fr 0.7fr 1fr;
+  }
+  .pipelineNode,
+  .modelNode {
+    padding: 12px;
+  }
+  .pipelineNode {
+    gap: 10px;
+  }
+  .pipelineNode strong,
+  .modelNode strong {
+    font-size: 10px;
+  }
+  .forecastLayout {
+    grid-template-columns: 1fr 190px;
+    gap: 25px;
+  }
+  .twoColumn {
+    gap: 5%;
+  }
+  .ruleSheet {
+    padding: 22px;
+  }
+}
+@media (max-width: 700px) {
+  .chapter {
+    padding: 25px 22px 55px;
+  }
+  .chapterLabel {
+    font-size: 8px;
+    gap: 12px;
+    margin-bottom: 35px;
+  }
+  .chapterLabel > :last-child {
+    display: none;
+  }
+  .chapterLabel > :nth-child(2) {
+    text-align: right;
+  }
+  .display {
+    font-size: clamp(44px, 10vw, 70px);
+  }
+  .twoColumn,
+  .loop .twoColumn {
+    grid-template-columns: 1fr;
+    gap: 38px;
+  }
+  .waste {
+    min-height: 0;
+  }
+  .wasteArt {
+    position: relative;
+    width: 100%;
+    left: auto;
+    bottom: auto;
+    margin-top: 5px;
+  }
+  .blueSticker {
+    top: 40%;
+    right: 0;
+    padding: 15px;
+    font-size: 9px;
+  }
+  .blueSticker strong {
+    font-size: 25px;
+  }
+  .wasteCopy {
+    width: auto;
+    margin: 25px 0 35px;
+  }
+  .wasteStats {
+    gap: 15px;
+  }
+  .wasteStats > span {
+    width: 100%;
+  }
+  .wasteStats strong {
+    font-size: 35px;
+  }
+  .ghost .display {
+    font-size: clamp(40px, 10vw, 65px);
+  }
+  .limeSticker {
+    font-size: 14px;
+    margin-bottom: 25px;
+  }
+  .scoreStrip {
+    grid-template-columns: 1fr 1fr;
+    gap: 25px;
+    margin-top: 35px;
+    padding-block: 25px;
+  }
+  .scoreStrip > div > span {
+    font-size: 8px;
+    line-height: 1.7;
+    display: block;
+  }
+  .scoreStrip strong {
+    font-size: 19vw;
+  }
+  .scoreArrow {
+    display: none;
+  }
+  .scoreStrip aside {
+    grid-column: 1/-1;
+    border: 0;
+    padding: 0;
+  }
+  .scoreStrip aside p {
+    margin-top: 8px;
+  }
+  .chapterEnd {
+    display: block;
+  }
+  .chapterEnd p {
+    margin-top: 15px;
+  }
+  .sectionIntro {
+    display: block;
+  }
+  .sectionIntro > p {
+    margin-top: 25px;
+  }
+  .engine .display,
+  .mapChapter .display,
+  .forecast .display {
+    font-size: clamp(39px, 10vw, 66px);
+  }
+  .pipeline {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  .pipelineColumn {
+    grid-template-columns: 1fr 1fr;
+  }
+  .pipelineLines {
+    display: none;
+  }
+  .featureLattice {
+    border-block: 1px solid var(--shade-3);
+    padding: 20px 0;
+  }
+  .featureLattice > div {
+    width: 80px;
+    margin: 20px auto;
+  }
+  .engineEvidence {
+    display: block;
+  }
+  .engineEvidence p {
+    margin-top: 15px;
+  }
+  .mapLayout {
+    grid-template-columns: 1fr;
+    gap: 30px;
+  }
+  .mapInspector {
+    max-width: none;
+  }
+  .mapInspector h3 {
+    font-size: 32px;
+  }
+  .scopeStatement h3 {
+    font-size: 21px;
+  }
+  .forecastLayout {
+    grid-template-columns: 1fr;
+  }
+  .forecastLegend {
+    font-size: 8px;
+    gap: 15px;
+  }
+  .riskAside {
+    display: grid;
+    grid-template-columns: 130px 1fr;
+    text-align: left;
+    align-items: center;
+  }
+  .riskRing {
+    grid-row: 1/3;
+    width: 120px;
+    margin: 0;
+  }
+  .riskRing strong {
+    font-size: 35px;
+  }
+  .riskAside p {
+    margin: 0;
+    font-size: 11px;
+  }
+  .forecastClosing {
+    font-size: clamp(28px, 8vw, 45px);
+    margin-top: 35px;
+  }
+  .decision .display {
+    font-size: clamp(39px, 10vw, 64px);
+  }
+  .decision .lead {
+    margin-top: 25px;
+  }
+  .ruleSheet {
+    transform: rotate(0);
+    padding: 20px 16px;
+    box-shadow: 12px 12px 0 color-mix(in srgb, var(--char) 20%, transparent);
+  }
+  .sheetHeading {
+    font-size: 8px;
+    gap: 10px;
+  }
+  .ruleSheet th,
+  .ruleSheet td {
+    padding: 10px 6px;
+    font-size: 9px;
+  }
+  .reviewStamp {
+    margin-inline: 5px;
+  }
+  .loopDiagram {
+    max-width: 440px;
+    margin: auto;
+  }
+  .loopDiagram > span {
+    font-size: 7px;
+    padding: 7px;
+  }
+  .version {
+    font-size: 25px;
+  }
+  .version span {
+    font-size: 6px;
+  }
+  .loop .display {
+    font-size: clamp(42px, 10vw, 68px);
+  }
+  .house .display {
+    font-size: clamp(39px, 10vw, 67px);
+  }
+  .moduleWall {
+    grid-template-columns: 1fr 1fr;
+    gap: 22px 14px;
+    padding-top: 20px;
+  }
+  .moduleSticker,
+  .moduleSticker:nth-child(n) {
+    grid-column: span 1;
+    padding: 15px 12px;
+    min-height: 160px;
+  }
+  .moduleSticker h3 {
+    font-size: 17px;
+  }
+  .moduleSticker p {
+    font-size: 10px;
+  }
+  .moduleSticker > span {
+    margin-bottom: 15px;
+  }
+  .marquee {
+    margin-inline: -22px;
+  }
+  .footer {
+    align-items: start;
+    flex-direction: column;
+    gap: 20px;
+    padding-top: 30px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .story *,
+  .story *::before,
+  .story *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  .marquee > div {
+    white-space: normal;
+    width: auto;
+    padding-inline: 22px;
+  }
+  .marquee > div > span + span {
+    display: none;
+  }
+}
+@media print {
+  .chapter {
+    break-inside: avoid;
+  }
+  .skip {
+    display: none;
+  }
+  .marquee > div {
+    animation: none;
+  }
+}
+
+/* Type voices. Each chapter heading speaks in its own register so the story
+ * never repeats one display formula; the metallic finish belongs to the ch00
+ * wordmark alone. Sizes change only above 700px, where the pinned chapters'
+ * existing height limits still hold. */
+.indent {
+  display: inline-block;
+  margin-left: 12vw;
+}
+/* ch02 ghost voice: a giant serif italic, sentence case. */
+.ghost .display {
+  font-family: "Fraunces Variable", Georgia, serif;
+  font-style: italic;
+  font-weight: 340;
+  text-transform: none;
+  letter-spacing: -0.035em;
+  line-height: 0.92;
+}
+/* ch03 machine voice: JetBrains Mono 700, set tight. */
+.engine .display {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: -0.06em;
+  line-height: 0.88;
+}
+/* ch04 blueprint voice: outline-only capitals on paper. */
+.mapChapter .display {
+  color: transparent;
+  -webkit-text-stroke: 1.5px var(--ink);
+  paint-order: stroke fill;
+}
+/* ch05: lowercase sans, a light line over a heavy one. */
+.forecast .display {
+  font-family: var(--font-sans);
+  font-weight: 250;
+  text-transform: lowercase;
+  letter-spacing: -0.06em;
+  line-height: 0.9;
+}
+.forecast .display .heavy {
+  font-weight: 850;
+}
+/* ch06 legal-document voice: an upright serif in sentence case. */
+.decision .display {
+  font-family: "Fraunces Variable", Georgia, serif;
+  font-weight: 460;
+  text-transform: none;
+  letter-spacing: -0.03em;
+  line-height: 0.98;
+}
+/* ch07: three lines stepping right, filled solid, hollow, then glow. */
+.loop .display > span {
+  display: block;
+}
+.loop .display .stepTwo {
+  margin-left: 0.85em;
+}
+.loop .display .stepThree {
+  margin-left: 1.7em;
+  color: var(--glow);
+}
+/* ch08: the solid + hollow pair keeps its combination, set to the right. */
+.house .display {
+  text-align: right;
+}
+@media (min-width: 701px) {
+  .ghost .display {
+    font-size: clamp(52px, 8.3vw, 148px);
+  }
+  .engine .display {
+    font-size: clamp(52px, 7.5vw, 126px);
+  }
+  .forecast .display {
+    font-size: clamp(54px, 7.2vw, 120px);
+  }
+  .decision .display {
+    font-size: clamp(50px, 6.9vw, 115px);
+  }
+  .loop .display {
+    font-size: clamp(42px, 5vw, 84px);
+  }
+  .house .sectionIntro {
+    flex-direction: row-reverse;
+  }
+  .house .display {
+    font-size: clamp(36px, 5.1vw, 85px);
+  }
+  /* Ghost numerals move and rescale per chapter; several crop off the canvas. */
+  .waste > .chapterIndex {
+    top: 40px;
+    right: -5vw;
+    font-size: 30vw;
+  }
+  .ghost > .chapterIndex {
+    top: auto;
+    bottom: 2vw;
+    right: auto;
+    left: -4vw;
+    font-size: 24vw;
+  }
+  .engine > .chapterIndex {
+    top: 46%;
+    right: 4%;
+    font-size: 11vw;
+  }
+  .mapChapter > .chapterIndex {
+    top: 120px;
+    right: 36%;
+    font-size: 13vw;
+  }
+  .forecast > .chapterIndex {
+    top: auto;
+    bottom: -7vw;
+    right: -3vw;
+    font-size: 26vw;
+  }
+  .decision > .chapterIndex {
+    top: 58%;
+    right: auto;
+    left: 41%;
+    font-size: 17vw;
+  }
+  .loop > .chapterIndex {
+    top: 90px;
+    right: auto;
+    left: -6vw;
+    font-size: 34vw;
+  }
+  .house > .chapterIndex {
+    top: 96px;
+    right: auto;
+    left: 38%;
+    font-size: 9vw;
+  }
+  .epilogue > .chapterIndex {
+    top: 38%;
+    right: -9vw;
+    font-size: 42vw;
+  }
+}

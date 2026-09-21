@@ -1,0 +1,259 @@
+/* Map chrome belongs to the observation canvas, independently of page surfaces:
+   the canvas is always ground, its floating panels paper. The score ramp itself
+   lives in the layer spec and is data, not chrome. */
+.map-presentation {
+  color: var(--paper);
+  isolation: isolate;
+}
+.map-presentation .map-token-notice {
+  top: 14px;
+  left: 14px;
+  right: 58px;
+  padding: 10px 12px;
+  gap: 9px;
+  border: 1px solid color-mix(in srgb, var(--paper) 30%, transparent);
+  border-radius: 3px;
+  background: var(--ground);
+  color: var(--paper);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.map-presentation .map-context-secondary {
+  display: block;
+  margin-top: 3px;
+  color: var(--paper);
+  font-size: 10px;
+}
+.map-presentation .map-context-secondary strong {
+  color: var(--paper);
+  font-weight: 500;
+}
+.map-presentation .map-site-label {
+  padding: 7px 10px;
+  border: 1px solid var(--glow);
+  border-radius: 2px;
+  background: var(--ground);
+  color: var(--paper);
+  font:
+    600 11px/1.4 var(--font-sans),
+    sans-serif;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.map-presentation .map-legend {
+  position: absolute;
+  right: 14px;
+  bottom: 32px;
+  width: 278px;
+  max-width: calc(100% - 28px);
+  padding: 13px 14px 12px;
+  border: 1px solid color-mix(in srgb, var(--char) 20%, transparent);
+  border-radius: 3px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 11px;
+}
+.map-presentation .map-legend-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.map-presentation .map-legend-heading strong {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+}
+.map-presentation .map-legend-heading span {
+  flex-shrink: 0;
+  color: var(--char);
+  font:
+    9px var(--font-mono),
+    monospace;
+}
+.map-presentation .map-legend-scale {
+  display: flex;
+  height: 7px;
+  margin-top: 12px;
+  border: 0;
+}
+.map-presentation .map-legend-scale span {
+  flex: 1;
+}
+.map-presentation .map-legend-values {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 5px;
+  color: var(--char);
+  font:
+    10px var(--font-mono),
+    monospace;
+}
+.map-presentation .map-legend-symbols {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px 16px;
+  margin-top: 12px;
+  font-size: 10px;
+}
+.map-presentation .map-legend-symbols > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.map-presentation .map-legend-caveat {
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid color-mix(in srgb, var(--char) 20%, transparent);
+  color: var(--char);
+  font-size: 10px;
+  line-height: 1.55;
+}
+.map-presentation .map-fit-control {
+  position: absolute;
+  top: 112px;
+  right: 10px;
+  display: flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--char) 20%, transparent);
+  border-radius: 3px;
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+  transition:
+    background-color 160ms,
+    color 160ms;
+}
+.map-presentation .map-fit-control:hover:not(:disabled) {
+  background: var(--paper);
+  color: var(--ore);
+}
+.map-presentation .map-fit-control:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+.map-presentation .map-fit-control:focus-visible {
+  outline: 2px solid var(--glow);
+  outline-offset: 3px;
+}
+.map-presentation :is(.mapboxgl-ctrl-group, .maplibregl-ctrl-group) {
+  border: 1px solid color-mix(in srgb, var(--char) 20%, transparent);
+  border-radius: 3px;
+  background: var(--paper);
+  box-shadow: none;
+}
+.map-presentation :is(.mapboxgl-ctrl-group, .maplibregl-ctrl-group) button {
+  width: 30px;
+  height: 30px;
+}
+.map-presentation :is(.mapboxgl-ctrl-attrib, .maplibregl-ctrl-attrib) {
+  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  color: var(--ink);
+}
+.map-presentation :is(.mapboxgl-ctrl-scale, .maplibregl-ctrl-scale) {
+  padding: 2px 6px;
+  border-color: color-mix(in srgb, var(--paper) 30%, transparent);
+  background: var(--ground);
+  color: var(--paper);
+  font:
+    10px var(--font-mono),
+    monospace;
+}
+@media (max-width: 600px) {
+  .map-presentation .map-token-notice {
+    font-size: 9px;
+    padding: 8px 10px;
+  }
+  .map-presentation .map-context-secondary {
+    font-size: 9px;
+  }
+  .map-presentation .map-legend {
+    width: 255px;
+    padding: 11px 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .map-presentation .map-fit-control {
+    transition: none;
+  }
+}
+
+/* Cold-start and failure status over the map. The backend documents 5s warm /
+   45s cold for /prospectivity/heatmap; a silent blank map reads as a hang. */
+.map-surface-status {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: 16px;
+  z-index: var(--z-map-overlay);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 13px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--canvas-ink);
+  background: var(--ground);
+  border: 1px solid color-mix(in srgb, var(--paper) 30%, transparent);
+}
+.map-surface-status-error {
+  color: var(--paper);
+  border-color: var(--glow);
+}
+.map-surface-spinner {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 2px solid var(--canvas-muted);
+  border-top-color: var(--brand-orange);
+  animation: map-surface-spin 720ms linear infinite;
+}
+@keyframes map-surface-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .map-surface-spinner {
+    animation: none;
+  }
+}
+
+/* Mine and target markers. DOM markers, because no style here loads a glyph
+ * source and these have to carry readable labels. Colours are palette tokens:
+ * ore for a mine that exists, glow for a place the model proposes. */
+.map-marker { display: flex; align-items: center; gap: 4px; padding: 0; background: none; border: 0; cursor: pointer; line-height: 1; }
+.map-marker-icon { display: flex; filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.55)); }
+.map-marker--mine .map-marker-icon { color: var(--paper); }
+.map-marker--target .map-marker-icon { color: var(--glow); }
+.map-marker-tag {
+  font: 500 10px/1.5 var(--font-sans); white-space: nowrap; padding: 1px 5px; border-radius: 2px;
+  color: var(--paper); background: color-mix(in srgb, var(--ground) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--paper) 22%, transparent);
+}
+.map-marker--target .map-marker-tag { color: var(--glow); border-color: color-mix(in srgb, var(--glow) 45%, transparent); }
+.map-marker:hover .map-marker-tag { background: var(--ground); }
+.map-marker[data-selected="true"] .map-marker-icon { color: var(--paper); }
+.map-marker[data-selected="true"] .map-marker-tag {
+  background: var(--ore); color: var(--paper); border-color: var(--glow);
+}
+.map-marker:focus-visible { outline: 2px solid var(--glow); outline-offset: 3px; border-radius: 3px; }
+
+/* Legend glyphs share the marker colours so the map and the key agree. */
+.map-legend-glyph { display: inline-flex; }
+.map-legend-glyph--mine { color: var(--paper); }
+.map-legend-glyph--target { color: var(--glow); }
+
+/* Compact legend. At 278px with a three-line caveat it covered a quarter of
+   the map; the key itself needs far less. */
+.map-presentation .map-legend { width: 208px; padding: 9px 10px 8px; bottom: 26px; }
+.map-presentation .map-legend-scale { height: 6px; margin-top: 7px; }
+.map-presentation .map-legend-values { margin-top: 3px; font-size: 9px; }
+.map-presentation .map-legend-symbols { gap: 4px 10px; margin-top: 8px; font-size: 9px; }
+.map-presentation .map-legend-symbols > span { gap: 4px; }
+.map-presentation .map-legend-caveat { margin-top: 7px; padding-top: 6px; font-size: 9px; line-height: 1.4; }

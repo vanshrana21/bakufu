@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 import traceback
+import uuid
 from datetime import UTC, date, datetime
 from typing import Any
 
+import numpy as np
 import pandas as pd
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request
 
 from src.api.schemas import (
-    ForecastHistoryResponse,
-    ForecastResponse,
+    ShortfallRiskOut,
     TrainStatusOut,
     TrainTaskOut,
 )
@@ -24,14 +25,32 @@ router = APIRouter(tags=["forecast"])
 
 VALID_HORIZONS: tuple[int, ...] = (1, 3, 6, 12)
 
+#: Horizon-adaptive routing. Over the shipped backtest's rolling origins,
+#: seasonal-naive (same calendar month one year earlier) beats Prophet at every
+#: horizon up to six months - MAPE 9.67 / 10.05 / 10.71 against 10.93 / 11.74 /
+#: 12.54 at horizons 1 / 3 / 6 - and Prophet wins only at 12 (9.92 against
+#: 10.16). Serving Prophet at short horizons showed users the worse forecast.
+#:
+#: A trend-adjusted naive (base scaled by trailing 12-month or 3-month growth)
+#: was backtested on the same origins and rejected: at horizon 1 it scores
+#: 13.00 and 11.07 MAPE, worse than Prophet itself, so the served naive is the
+#: plain one the benchmark actually measured.
+SEASONAL_NAIVE_MAX_HORIZON = 6
+SEASONAL_NAIVE_VERSION = "seasonal_naive_v1"
+
+REASON_NAIVE = "seasonal_naive_beats_prophet_at_short_horizon"
+REASON_PROPHET = "prophet_beats_seasonal_naive_at_long_horizon"
+#: Fallback when the same-month-last-year actual is one of the series gaps.
+REASON_NAIVE_UNAVAILABLE = "seasonal_naive_base_month_missing"
+
+CI_LEVEL = 0.80
+_CI_QUANTILES = (0.10, 0.90)
+
 #: Prophet's MCMC posterior makes a predict() call ~950ms, over the 500ms
 #: target. The bundle is immutable for the life of the process and there are
 #: only four valid horizons, so the result is memoised rather than recomputed.
-#: No TTL: nothing it depends on can change while the process runs, and Prophet
-#: re-samples its interval on every predict(), so recomputing would only make
-#: the published bounds drift between page loads. Cleared when the lifespan
-#: handler reloads artifacts.
-_FORECAST_CACHE: dict[int, ForecastResponse] = {}
+#: Cleared when the lifespan handler reloads artifacts.
+_FORECAST_CACHE: dict[int, dict[str, Any]] = {}
 
 
 def clear_forecast_cache() -> None:
@@ -52,30 +71,112 @@ def _unavailable(exc: Exception, what: str) -> HTTPException:
     )
 
 
-@router.get("/forecast", response_model=ForecastResponse, summary="Forecast MH+MP production")
-def get_forecast(request: Request, horizon: int = Query(1, description=f"Months ahead. One of {VALID_HORIZONS}.")) -> ForecastResponse:
-    """Prophet forecast at one of the backtested horizons.
+def route_model(horizon: int) -> tuple[str, str]:
+    """Which model serves `horizon`, and the reason code the response reports."""
+    if horizon <= SEASONAL_NAIVE_MAX_HORIZON:
+        return "seasonal_naive", REASON_NAIVE
+    return "prophet", REASON_PROPHET
 
-    Reads the promoted bundle and the shipped backtest metrics from app.state.
-    `accuracy_at_horizon` is looked up in that artifact rather than recomputed:
-    a live re-backtest would take minutes and could drift from the numbers the
-    shipped model was actually validated with.
+
+def _mape(actual: np.ndarray, predicted: np.ndarray) -> float:
+    return float(np.mean(np.abs(actual - predicted) / actual) * 100.0)
+
+
+def _rmse(actual: np.ndarray, predicted: np.ndarray) -> float:
+    return float(np.sqrt(np.mean((actual - predicted) ** 2)))
+
+
+def seasonal_naive_backtest(rows: pd.DataFrame, horizon: int) -> dict[str, Any] | None:
+    """Seasonal-naive accuracy and interval on the shipped backtest origins.
+
+    Uses the same origins Prophet was scored on, so the two are compared like
+    for like. The interval is empirical: the 10th and 90th percentiles of
+    actual / naive at this horizon. Its coverage is measured leave-one-out,
+    because in-sample coverage of those quantiles is ~80% by construction and
+    would validate nothing.
     """
-    if horizon not in VALID_HORIZONS:
-        raise HTTPException(
-            status_code=422,
-            detail=f"horizon must be one of {', '.join(map(str, VALID_HORIZONS))}",
-        )
+    at = rows[rows.horizon_months == horizon]
+    if len(at) < 3:
+        return None
+    actual = at.actual.to_numpy(dtype="float64")
+    naive = at.naive.to_numpy(dtype="float64")
+    ratios = actual / naive
+    lower, upper = (float(q) for q in np.quantile(ratios, _CI_QUANTILES))
 
-    artifacts = request.app.state.artifacts
-    bundle = artifacts.require("forecast_model")
-    metrics = artifacts.require("forecast_metrics")
+    covered = []
+    for index in range(len(ratios)):
+        lo, hi = np.quantile(np.delete(ratios, index), _CI_QUANTILES)
+        covered.append(lo <= ratios[index] <= hi)
 
-    cached = _FORECAST_CACHE.get(horizon)
-    if cached is not None:
-        # forecast_date is the only field that can go stale within a process.
-        return cached.model_copy(update={"forecast_date": date.today().isoformat()})
+    return {
+        "mape": _mape(actual, naive),
+        "rmse": _rmse(actual, naive),
+        "ci80_coverage": float(np.mean(covered) * 100.0),
+        "n_origins": int(len(at)),
+        "ratio_lower": lower,
+        "ratio_upper": upper,
+    }
 
+
+def _month_label(period: pd.Period) -> str:
+    """"2026-06" -> "Jun 2026", the label the chart axis renders."""
+    return period.strftime("%b %Y")
+
+
+def _naive_interval_at(rows: pd.DataFrame, months_ahead: int) -> tuple[float, float]:
+    """Interval ratios for a month `months_ahead` out.
+
+    Only 1, 3, 6 and 12 are backtested, so an intermediate month borrows the
+    nearest backtested horizon at or below it - month 2 uses the 1-month
+    ratios, month 5 the 3-month ones. Borrowing downward is the conservative
+    direction: a shorter horizon has the tighter interval, so this never
+    widens an interval on evidence that does not exist.
+    """
+    candidates = [h for h in VALID_HORIZONS if h <= months_ahead] or [min(VALID_HORIZONS)]
+    backtest = seasonal_naive_backtest(rows, max(candidates))
+    if backtest is None:
+        return 1.0, 1.0
+    return backtest["ratio_lower"], backtest["ratio_upper"]
+
+
+def _prophet_accuracy(metrics: pd.DataFrame, horizon: int) -> dict[str, Any] | None:
+    """The shipped backtest row, read from the artifact rather than recomputed."""
+    at = metrics[metrics.horizon_months == horizon]
+    if not len(at):
+        return None
+    row = at.iloc[0]
+    return {
+        "mape": float(row.mape),
+        "naive_mape": float(row.naive_mape),
+        "skill_vs_naive_pp": float(row.skill_vs_naive_pp),
+        "ci80_coverage": float(row.ci80_coverage),
+        "rmse": float(row.rmse),
+        "n_origins": int(row.n_origins),
+    }
+
+
+def _accuracy_at_horizon(
+    model_used: str,
+    prophet: dict[str, Any] | None,
+    naive: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Accuracy of the model actually served, with the alternative alongside."""
+    if prophet is None or naive is None:
+        return None
+    if model_used == "prophet":
+        return {**prophet, "prophet_mape": prophet["mape"]}
+    return {
+        "mape": naive["mape"],
+        "naive_mape": prophet["naive_mape"],
+        "prophet_mape": prophet["mape"],
+        "skill_vs_naive_pp": 0.0,
+        "ci80_coverage": naive["ci80_coverage"],
+        "rmse": naive["rmse"],
+        "n_origins": naive["n_origins"],
+    }
+
+
+def _prophet_forecast(bundle: dict[str, Any], horizon: int) -> dict[str, Any]:
     model, frame = bundle["model"], bundle["frame"]
     try:
         future = model.make_future_dataframe(periods=horizon, freq="MS")
@@ -85,21 +186,19 @@ def get_forecast(request: Request, horizon: int = Query(1, description=f"Months 
         raise PredictionFailed(f"prophet prediction failed: {exc}") from exc
 
     row = forecast.iloc[-1]
-    # One row per month of the horizon, straight from the same predict() call:
-    # the months between issue and target are model output, never interpolated.
-    # The bundle's interval_width is 0.80, so yhat_lower/yhat_upper are the 10th
-    # and 90th percentiles of the predictive samples. p50 is Prophet's point
-    # estimate (yhat), the value `predicted_tonnes` has always carried.
+    # One point per month of the horizon. The fit already produces them; the
+    # terminal row alone cannot be expanded back into the months in between.
     series = [
         {
-            "month": pd.Period(month.ds, freq="M").strftime("%Y-%m"),
-            "month_label": pd.Period(month.ds, freq="M").strftime("%b %Y"),
-            "p10": float(month.yhat_lower),
-            "p50": float(month.yhat),
-            "p90": float(month.yhat_upper),
+            "month": pd.Period(entry.ds, freq="M").strftime("%Y-%m"),
+            "month_label": _month_label(pd.Period(entry.ds, freq="M")),
+            "p10": float(entry.yhat_lower),
+            "p50": float(entry.yhat),
+            "p90": float(entry.yhat_upper),
         }
-        for month in forecast.iloc[-horizon:].itertuples()
+        for entry in forecast.iloc[-horizon:].itertuples()
     ]
+
     # Whatever components this fitted model actually has - a vanilla bundle has
     # no rainfall or capex term, so the frontend iterates rather than indexing.
     components = {
@@ -110,28 +209,15 @@ def get_forecast(request: Request, horizon: int = Query(1, description=f"Months 
         if name in forecast.columns
     }
 
-    at_horizon = metrics[metrics.horizon_months == horizon]
-    accuracy = (
-        {
-            "mape": float(at_horizon.mape.iloc[0]),
-            "naive_mape": float(at_horizon.naive_mape.iloc[0]),
-            "skill_vs_naive_pp": float(at_horizon.skill_vs_naive_pp.iloc[0]),
-            "ci80_coverage": float(at_horizon.ci80_coverage.iloc[0]),
-            "rmse": float(at_horizon.rmse.iloc[0]),
-            "n_origins": int(at_horizon.n_origins.iloc[0]),
-        }
-        if len(at_horizon)
-        else None
-    )
-
-    payload = ForecastResponse(**{
+    return {
         "forecast_date": date.today().isoformat(),
         "target_period": pd.Period(row.ds, freq="M").strftime("%Y-%m"),
         "horizon_months": horizon,
         "predicted_tonnes": float(row.yhat),
         "predicted_lower_ci": float(row.yhat_lower),
         "predicted_upper_ci": float(row.yhat_upper),
-        "ci_level": 0.80,
+        "ci_level": CI_LEVEL,
+        "series": series,
         "components": components,
         "model": {
             "version": FORECAST_MODEL_VERSION,
@@ -140,33 +226,171 @@ def get_forecast(request: Request, horizon: int = Query(1, description=f"Months 
             "trained_through": pd.Period(frame.ds.max(), freq="M").strftime("%Y-%m"),
             "changepoint_prior_scale": CHANGEPOINT_PRIOR_SCALE,
             "mcmc_samples": 300,
+            "interval_method": "mcmc_posterior",
         },
-        "accuracy_at_horizon": accuracy,
-        "series": series,
-    })
+    }
+
+
+def _seasonal_naive_forecast(
+    series: pd.DataFrame,
+    horizon: int,
+    backtest: dict[str, Any] | None,
+    rows: pd.DataFrame | None = None,
+) -> dict[str, Any] | None:
+    """Same calendar month one year earlier. None when that month is a gap."""
+    if backtest is None:
+        return None
+    months = pd.PeriodIndex(series.report_month, freq="M")
+    tonnes = pd.Series(series.mh_plus_mp_qty_tonnes.to_numpy(dtype="float64"), index=months)
+    last = months.max()
+    target = last + horizon
+    base_month = target - 12
+    if base_month not in tonnes.index or pd.isna(tonnes.loc[base_month]):
+        return None
+    base = float(tonnes.loc[base_month])
+
+    # One point per month of the horizon, each from its own base month. A month
+    # whose base is a series gap stops the series: the chart must not carry a
+    # hole, and the terminal point is still served on its own.
+    points: list[dict[str, Any]] = []
+    for step in range(1, horizon + 1):
+        month = last + step
+        source = month - 12
+        if source not in tonnes.index or pd.isna(tonnes.loc[source]):
+            points = []
+            break
+        value = float(tonnes.loc[source])
+        lower, upper = (
+            _naive_interval_at(rows, step)
+            if rows is not None
+            else (backtest["ratio_lower"], backtest["ratio_upper"])
+        )
+        points.append(
+            {
+                "month": month.strftime("%Y-%m"),
+                "month_label": _month_label(month),
+                "p10": value * lower,
+                "p50": value,
+                "p90": value * upper,
+            }
+        )
+
+    return {
+        "forecast_date": date.today().isoformat(),
+        "target_period": target.strftime("%Y-%m"),
+        "horizon_months": horizon,
+        "predicted_tonnes": base,
+        "predicted_lower_ci": base * backtest["ratio_lower"],
+        "predicted_upper_ci": base * backtest["ratio_upper"],
+        "ci_level": CI_LEVEL,
+        "series": points,
+        "components": {"same_month_last_year_tonnes": base},
+        "model": {
+            "version": SEASONAL_NAIVE_VERSION,
+            "variant": "seasonal_naive",
+            "regressors": [],
+            "trained_through": last.strftime("%Y-%m"),
+            "changepoint_prior_scale": None,
+            "mcmc_samples": None,
+            "interval_method": "empirical_backtest_ratio_quantiles",
+        },
+    }
+
+
+@router.get("/forecast", summary="Forecast MH+MP production")
+def get_forecast(request: Request, horizon: int = Query(1, description=f"Months ahead. One of {VALID_HORIZONS}.")) -> dict[str, Any]:
+    """Forecast at one of the backtested horizons, from whichever model wins there.
+
+    Horizons up to `SEASONAL_NAIVE_MAX_HORIZON` are served by seasonal-naive,
+    longer ones by the promoted Prophet bundle; `model_used` and `reason` say
+    which. Accuracy comes from the shipped backtest, never a live re-backtest,
+    which would take minutes and could drift from what was validated.
+    """
+    if horizon not in VALID_HORIZONS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"horizon must be one of {', '.join(map(str, VALID_HORIZONS))}",
+        )
+
+    artifacts = request.app.state.artifacts
+    metrics = artifacts.require("forecast_metrics")
+    rows = artifacts.require("backtest_rows")
+    model_used, reason = route_model(horizon)
+    # Require what the route needs before the cache check, so a missing
+    # artifact surfaces even when a payload is memoised.
+    if model_used == "prophet":
+        artifacts.require("forecast_model")
+    else:
+        artifacts.require("production_series")
+
+    cached = _FORECAST_CACHE.get(horizon)
+    if cached is not None:
+        # forecast_date is the only field that can go stale within a process.
+        return {**cached, "forecast_date": date.today().isoformat()}
+
+    prophet_accuracy = _prophet_accuracy(metrics, horizon)
+    naive_backtest = seasonal_naive_backtest(rows, horizon)
+
+    payload: dict[str, Any] | None = None
+    if model_used == "seasonal_naive":
+        payload = _seasonal_naive_forecast(
+            artifacts.require("production_series"), horizon, naive_backtest, rows
+        )
+        if payload is None:
+            model_used, reason = "prophet", REASON_NAIVE_UNAVAILABLE
+    if payload is None:
+        payload = _prophet_forecast(artifacts.require("forecast_model"), horizon)
+
+    payload["model_used"] = model_used
+    payload["reason"] = reason
+    payload["accuracy_at_horizon"] = _accuracy_at_horizon(
+        model_used, prophet_accuracy, naive_backtest
+    )
     _FORECAST_CACHE[horizon] = payload
     return payload
 
 
-@router.get("/forecast/history", response_model=ForecastHistoryResponse, summary="Backtest results per horizon")
-def get_forecast_history(request: Request) -> ForecastHistoryResponse:
-    """Per-horizon metrics plus the per-origin rows behind them."""
+@router.get("/forecast/history", summary="Backtest results per horizon")
+def get_forecast_history(request: Request) -> dict[str, Any]:
+    """Per-horizon metrics for both models plus the per-origin rows behind them.
+
+    Both methods are scored on the same rolling origins, so the routing choice
+    in `/forecast` can be checked against the evidence rather than taken on
+    trust.
+    """
     artifacts = request.app.state.artifacts
     metrics = artifacts.require("forecast_metrics")
     rows = artifacts.require("backtest_rows")
 
-    horizons = [
-        {
-            "horizon_months": int(r.horizon_months),
-            "n_origins": int(r.n_origins),
-            "mape": float(r.mape),
-            "rmse": float(r.rmse),
-            "naive_mape": float(r.naive_mape),
-            "skill_vs_naive_pp": float(r.skill_vs_naive_pp),
-            "ci80_coverage": float(r.ci80_coverage),
-        }
-        for r in metrics.itertuples()
-    ]
+    horizons = []
+    for r in metrics.itertuples():
+        horizon = int(r.horizon_months)
+        naive = seasonal_naive_backtest(rows, horizon)
+        naive_mape = float(r.naive_mape)
+        better = "seasonal_naive" if naive_mape < float(r.mape) else "prophet"
+        routed, _reason = route_model(horizon)
+        horizons.append(
+            {
+                "horizon_months": horizon,
+                "n_origins": int(r.n_origins),
+                "mape": float(r.mape),
+                "rmse": float(r.rmse),
+                "naive_mape": naive_mape,
+                "skill_vs_naive_pp": float(r.skill_vs_naive_pp),
+                "ci80_coverage": float(r.ci80_coverage),
+                "comparison": {
+                    "prophet_mape": float(r.mape),
+                    "seasonal_naive_mape": naive_mape,
+                    "prophet_rmse": float(r.rmse),
+                    "seasonal_naive_rmse": naive["rmse"] if naive else None,
+                    "prophet_ci80_coverage": float(r.ci80_coverage),
+                    "seasonal_naive_ci80_coverage": naive["ci80_coverage"] if naive else None,
+                    "better_model": better,
+                    "model_used": routed,
+                    "routing_matches_backtest": routed == better,
+                },
+            }
+        )
     origins = [
         {
             "horizon_months": int(r.horizon_months),
@@ -174,20 +398,28 @@ def get_forecast_history(request: Request) -> ForecastHistoryResponse:
             "target_month": pd.Period(r.target_ds, freq="M").strftime("%Y-%m"),
             "actual_tonnes": float(r.actual),
             "predicted_tonnes": float(r.predicted),
+            "seasonal_naive_tonnes": float(r.naive),
             "covered": bool(r.covered),
         }
         for r in rows.itertuples()
     ]
 
-    return ForecastHistoryResponse(
-        horizons=horizons,
-        origins=origins,
-        model={"version": FORECAST_MODEL_VERSION, "variant": "vanilla"},
-        benchmark={
+    return {
+        "horizons": horizons,
+        "origins": origins,
+        "model": {"version": FORECAST_MODEL_VERSION, "variant": "vanilla"},
+        "benchmark": {
             "name": "seasonal_naive",
             "definition": "same calendar month one year earlier",
         },
-    )
+        "routing": {
+            "seasonal_naive_max_horizon": SEASONAL_NAIVE_MAX_HORIZON,
+            "rule": (
+                f"horizons <= {SEASONAL_NAIVE_MAX_HORIZON} months are served by "
+                "seasonal_naive, longer horizons by prophet"
+            ),
+        },
+    }
 
 
 @router.get("/production/history", summary="MH+MP monthly manganese production")
@@ -292,7 +524,7 @@ def _run_retrain(task_id: str) -> None:
 
 
 @router.post("/forecast/retrain", summary="Retrain the forecast model")
-def retrain_forecast() -> TrainTaskOut:
+def retrain_forecast() -> dict[str, Any]:
     """Disabled for the demo.
 
     Retraining takes ~40 minutes with MCMC sampling, cannot be meaningfully

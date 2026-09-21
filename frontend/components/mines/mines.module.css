@@ -1,0 +1,235 @@
+/* Mine Fleet and greenfield targets, drawn in the survey-sheet vocabulary:
+ * framed insets with registration corners, mono metadata, and the three inks
+ * (observed = mineral white, model estimate = steel, action = copper). */
+
+/* -- Locator ---------------------------------------------------------------- */
+.locator {
+  margin: 0;
+  padding: 14px 16px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--corners), var(--surface);
+}
+.locator svg { display: block; width: 100%; height: auto; }
+.locatorFrame { fill: color-mix(in srgb, var(--ground) 55%, transparent); stroke: var(--rule); stroke-width: 1; }
+.graticule { stroke: var(--rule-faint); stroke-width: 1; stroke-dasharray: 2 4; }
+.graticuleLabel { font: 500 9px var(--font-mono); fill: var(--metadata); letter-spacing: 0.04em; }
+.locatorCaption { margin-top: 8px; font: 500 10px/1.5 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--metadata); }
+
+.mineMark path { fill: var(--signal); stroke: var(--observed); stroke-width: 1.4; }
+.mineMark[data-band="mixed"] path { fill: color-mix(in srgb, var(--signal) 45%, transparent); }
+.mineMark[data-band="low"] path { fill: color-mix(in srgb, var(--signal) 12%, transparent); }
+.mineMark[data-band="unscored"] path { fill: none; stroke-dasharray: 2 2; }
+.mineLabel { font: 600 10px var(--font-sans); fill: var(--observed); paint-order: stroke; stroke: var(--ground); stroke-width: 3px; }
+
+.targetMark circle { fill: var(--ground); stroke: var(--signal); stroke-width: 1.8; }
+.targetMark text { font: 700 9px var(--font-mono); fill: var(--signal); }
+
+/* -- Fleet summary ---------------------------------------------------------- */
+.summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 18px;
+  margin-bottom: 22px;
+}
+.bands {
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--corners), var(--surface);
+}
+.bandRow {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 12px;
+  align-items: baseline;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--rule-faint);
+}
+.bandRow strong { font: 600 30px/1 var(--font-sans); font-variant-numeric: tabular-nums; color: var(--signal); }
+.bandRow[data-band="unscored"] strong { color: var(--metadata); }
+.bandName { font: 600 14px/1.3 var(--font-sans); color: var(--observed); }
+.bandName span { margin-left: 8px; font: 500 10px var(--font-mono); letter-spacing: 0.06em; color: var(--metadata); }
+.bandMembers { margin-top: 4px; font-size: 12px; line-height: 1.5; color: var(--muted-foreground); }
+.bandNote { margin-top: 12px; font-size: 12px; line-height: 1.55; color: var(--muted-foreground); }
+
+/* -- Roster ----------------------------------------------------------------- */
+.roster {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  gap: 14px;
+}
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--corners), var(--surface);
+}
+.cardHead { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.cardHead h3 { font: 600 16px/1.25 var(--font-sans); color: var(--observed); }
+.cardHead p { margin-top: 2px; font-size: 12px; color: var(--muted-foreground); }
+.typeChip {
+  flex: none;
+  padding: 3px 8px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm, 3px);
+  font: 600 10px/1.3 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--metadata);
+}
+
+.scoreBlock { display: grid; gap: 6px; }
+.scoreRow { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.scoreRow strong { font: 600 32px/1 var(--font-sans); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.bandTag {
+  padding: 2px 7px;
+  border-radius: 3px;
+  font: 600 10px/1.4 var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--signal);
+  background: var(--signal-soft);
+}
+.bandTag[data-band="low"] { color: var(--metadata); background: color-mix(in srgb, var(--metadata) 14%, transparent); }
+.scoreBar { height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--rule) 60%, transparent); overflow: hidden; }
+.scoreBar i { display: block; height: 100%; background: var(--signal); }
+.card[data-band="mixed"] .scoreBar i { background: color-mix(in srgb, var(--signal) 60%, transparent); }
+.card[data-band="low"] .scoreBar i { background: color-mix(in srgb, var(--signal) 30%, transparent); }
+.scoreMeta { font: 500 10.5px/1.5 var(--font-mono); letter-spacing: 0.02em; color: var(--metadata); }
+.unscored {
+  padding: 10px 12px;
+  border: 1px dashed var(--rule);
+  border-radius: var(--radius);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+
+.drivers { display: grid; gap: 4px; list-style: none; }
+.drivers li { display: flex; align-items: baseline; gap: 7px; font-size: 12.5px; color: var(--foreground); }
+.drivers li span { font-size: 9px; color: var(--signal); }
+.drivers li[data-direction="down"] span { color: var(--metadata); }
+.drivers li em { margin-left: auto; font: 600 11px var(--font-mono); font-style: normal; color: var(--metadata); }
+
+.facts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; padding-top: 10px; border-top: 1px solid var(--rule-faint); }
+.facts dt { font: 600 9.5px/1.4 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--metadata); }
+.facts dd { margin-top: 2px; font-size: 12.5px; line-height: 1.45; color: var(--foreground); }
+.facts dd a { color: var(--foreground); text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 3px; }
+.facts dd a:hover { text-decoration-color: var(--action); }
+.factWide { grid-column: 1 / -1; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.confidence {
+  padding: 1px 6px;
+  border-radius: 3px;
+  font: 600 10.5px/1.5 var(--font-mono);
+  color: var(--observed);
+  background: color-mix(in srgb, var(--observed) 12%, transparent);
+}
+.confidence[data-confidence="low"],
+.confidence[data-confidence="low_medium"] { color: var(--warning); background: color-mix(in srgb, var(--warning) 14%, transparent); }
+
+.note { font-size: 12px; line-height: 1.5; color: var(--muted-foreground); }
+.caveat {
+  padding: 9px 11px;
+  border-left: 2px solid var(--warning);
+  background: color-mix(in srgb, var(--warning) 8%, transparent);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--foreground);
+}
+.caveat span {
+  display: block;
+  margin-bottom: 2px;
+  font: 600 9.5px/1.4 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--warning);
+}
+.equipment { display: flex; flex-wrap: wrap; gap: 5px; list-style: none; }
+.equipment li {
+  padding: 2px 7px;
+  border: 1px solid var(--rule-faint);
+  border-radius: 3px;
+  font: 500 10.5px/1.4 var(--font-mono);
+  color: var(--muted-foreground);
+}
+
+.pageNote { margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--rule); font-size: 12px; line-height: 1.55; color: var(--muted-foreground); }
+.sectionHead { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 4px 0 12px; }
+.sectionHead h2 { font: 600 16px/1.35 var(--font-sans); color: var(--observed); }
+.sectionHead span { font: 500 10px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--metadata); }
+
+/* -- Greenfield targets (Explorer) ----------------------------------------- */
+.targets {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 18px;
+  margin-top: 22px;
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--corners), var(--surface);
+}
+.targetsHead { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+.targetsHead h2 { font: 600 16px/1.35 var(--font-sans); color: var(--observed); }
+.targetsHead p { margin-top: 4px; max-width: 72ch; font-size: 12.5px; line-height: 1.55; color: var(--muted-foreground); }
+.rankingTag {
+  padding: 4px 9px;
+  border: 1px solid var(--signal-line);
+  border-radius: 3px;
+  font: 600 10px/1.4 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--signal);
+}
+.targetTable { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.targetTable th {
+  padding: 0 8px 8px 0;
+  text-align: left;
+  font: 600 9.5px/1.4 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--metadata);
+  border-bottom: 1px solid var(--rule);
+}
+.targetTable td { padding: 8px 8px 8px 0; border-bottom: 1px solid var(--rule-faint); vertical-align: top; color: var(--foreground); }
+.targetTable td:first-child { width: 34px; }
+.rank {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1.5px solid var(--signal);
+  border-radius: 50%;
+  font: 700 10px var(--font-mono);
+  color: var(--signal);
+}
+.targetTable .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.targetTable .coord { display: block; margin-top: 2px; font: 500 10.5px var(--font-mono); color: var(--metadata); }
+.targetsFoot { grid-column: 1 / -1; font-size: 12px; line-height: 1.55; color: var(--muted-foreground); }
+.targetsState {
+  grid-column: 1 / -1;
+  padding: 14px 16px;
+  border: 1px dashed var(--rule);
+  border-radius: var(--radius);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--muted-foreground);
+}
+.targetsState[data-state="error"] { border-color: color-mix(in srgb, var(--critical) 55%, transparent); color: var(--foreground); }
+
+@media (max-width: 1100px) {
+  .summary, .targets { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 480px) {
+  .roster { grid-template-columns: minmax(0, 1fr); }
+  .facts { grid-template-columns: minmax(0, 1fr); }
+  .targetTable th:nth-child(4), .targetTable td:nth-child(4) { display: none; }
+}
+@media print {
+  .card, .bands, .locator, .targets { break-inside: avoid; }
+}

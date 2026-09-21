@@ -6,16 +6,19 @@
  * fixtures. The `origin` field is what the UI labels the surface with.
  */
 
-import type { ForecastResponse, RiskResponse } from "@/lib/contracts";
+import type { ForecastResponse, MineLocation, MineRoster, RiskResponse, TargetList } from "@/lib/contracts";
 import type { HistoricalPoint } from "@/components/operations/production-chart";
 import {
   actionFixture, forecastFixture, historyFixture, reviewRegisterFixture, riskFixture, vitalSignsFixture,
 } from "@/fixtures/operations";
+import { MINES_REFERENCE, MINES_REFERENCE_DATE } from "@/fixtures/mines";
 import { ContractMismatchError, LIVE_MODE, failedResult, fixtureResult, liveResult, type LoadResult } from "./client";
 import { fetchForecast, fetchProductionHistory, type ForecastHorizon } from "./forecast";
 import { fetchShortfallRisk } from "./shortfall";
 import { fetchRecommendations, type RegisterRow } from "./recommendations";
 import { fetchDashboardSummary, type DashboardResult, type VitalSign } from "./dashboard";
+import { fetchMineRoster, fetchMines, fixtureRoster, mineLocations } from "./mines";
+import { fetchTopTargets } from "./targets";
 
 export type { RegisterRow, VitalSign, DashboardResult };
 
@@ -136,5 +139,49 @@ export async function loadDashboard(): Promise<LoadResult<DashboardResult>> {
     return liveResult(await fetchDashboardSummary(pending));
   } catch (error) {
     return failedResult<DashboardResult>(error);
+  }
+}
+
+/** The Mine Fleet page: every mine, its cited coordinate, and the model's read
+ * of that point. Ten point queries per render, each allowed to fail on its own. */
+export async function loadMineRoster(): Promise<LoadResult<MineRoster>> {
+  if (!LIVE_MODE) return fixtureResult(fixtureRoster(MINES_REFERENCE, MINES_REFERENCE_DATE));
+  try {
+    return liveResult(await fetchMineRoster());
+  } catch (error) {
+    return failedResult<MineRoster>(error);
+  }
+}
+
+/** Where the mines are, for the Explorer's target panel. Loaded on the server
+ * and handed down as props, so the browser never requests /mines. */
+export async function loadMineLocations(): Promise<LoadResult<MineLocation[]>> {
+  if (!LIVE_MODE) return fixtureResult(mineLocations(MINES_REFERENCE));
+  try {
+    return liveResult(mineLocations((await fetchMines()).mines));
+  } catch (error) {
+    return failedResult<MineLocation[]>(error);
+  }
+}
+
+/** Ranked targets, computed on the server (22 backend calls: two warm grids, ten
+ * per-target refinements, ten point queries — far past what the browser proxy's
+ * per-visitor budget allows, and none of it needs the browser). A complete
+ * ranking is kept for ten minutes: the model and the imagery do not change
+ * between page views, and each view would otherwise write ten audit records. */
+const TARGETS_TTL_MS = 10 * 60 * 1000;
+let targetsCache: { at: number; data: TargetList } | null = null;
+
+export async function loadTopTargets(): Promise<LoadResult<TargetList>> {
+  if (targetsCache && Date.now() - targetsCache.at < TARGETS_TTL_MS) return liveResult(targetsCache.data);
+  try {
+    const mines = mineLocations((await fetchMines()).mines);
+    const data = await fetchTopTargets(mines);
+    // Only a complete ranking is worth keeping: one ordered by the fallback
+    // should be retried as soon as the point queries recover.
+    if (data.ranking === "classifier_margin") targetsCache = { at: Date.now(), data };
+    return liveResult(data);
+  } catch (error) {
+    return failedResult<TargetList>(error);
   }
 }

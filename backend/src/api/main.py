@@ -68,6 +68,16 @@ async def lifespan(app: FastAPI):
     failed = app.state.artifacts.degraded
     logger.info("startup: %d artifacts loaded%s", len(loaded),
                 f", {len(failed)} failed: {', '.join(failed)}" if failed else "")
+    # shap takes ~4 s to import and drags in IPython and matplotlib.pyplot. If
+    # the warming thread and a request thread import it at the same time, one
+    # sees a partially initialised IPython and pyplot raises AttributeError -
+    # seen as an intermittent heatmap test failure, and reachable by any
+    # request in the first seconds after startup. Importing it once here, on
+    # the main thread and before any other thread exists, closes that window.
+    # `explain` is imported rather than bare shap because it selects the Agg
+    # backend before pyplot loads.
+    import src.models.prospectivity.explain  # noqa: F401
+
     logger.info("startup: %s required on every route", API_KEY_HEADER)
     serving = active_model()
     logger.info("startup: scoring with %s (%s)", serving.version, serving.source)

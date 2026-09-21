@@ -48,10 +48,15 @@ curl -L -o moil_artifacts_bundle.tar.gz \
 tar -xzf moil_artifacts_bundle.tar.gz
 ```
 
-It is **~311 MB** and holds **16 files**. Most of that is the two rasters;
-everything else together is under 3 MB. **Every file is required** — the API
-needs all of them to serve a fully working set of endpoints. Do not trim the
-bundle.
+It holds **18 files**, about **735 MB**. Almost all of that is the four
+rasters; everything else together is under 3 MB. **Every file is required**:
+the API needs all of them to serve a fully working set of endpoints. Do not
+trim the bundle.
+
+> **The published `v0.2-artifacts` release predates this list.** It has 16
+> files, ~311 MB, and lacks the two operational rasters. Without them
+> `/predict/*` and `/prospectivity/heatmap` cannot open their imagery. Rebuild
+> and re-upload the bundle before pointing a fresh clone at it.
 
 | path | what it is |
 |---|---|
@@ -69,8 +74,10 @@ bundle.
 | `data/raw/moil/msmp_archive_full.csv` | source-of-truth list of 134 IBM bulletins |
 | `data/raw/india/geology/sausar_precambrian_formations_macrostrat_proxy.geojson` | geological mask |
 | `data/raw/india/geology/occurrence_buffer_5km.geojson` | occurrence-buffer mask |
-| `data/raw/satellite/s2_nagpur_smoke_test.tif` | Sentinel-2 mosaic (258 MB) |
-| `data/raw/dem/dem_nagpur_smoke_test.tif` | DEM tile (51 MB) |
+| `data/raw/satellite/s2_moil_operational_v1.tif` | **serving** Sentinel-2 mosaic: the training mosaic plus the Gumgaon strip (368 MB) |
+| `data/raw/dem/dem_moil_operational.tif` | **serving** DEM, same extent (55 MB) |
+| `data/raw/satellite/s2_nagpur_smoke_test.tif` | Phase 1 smoke-test mosaic: borehole features and feature tests only (258 MB) |
+| `data/raw/dem/dem_nagpur_smoke_test.tif` | Phase 1 smoke-test DEM (51 MB) |
 
 Grouped by what breaks without them:
 
@@ -94,12 +101,22 @@ fails, though `?mask=none` still works.
 **Source CSV (`data/raw/moil/`)** — `msmp_archive_full.csv`, the list of 134
 IBM bulletins the whole production series derives from.
 
-**Rasters (`data/raw/satellite/`, `data/raw/dem/`)** — 2 files, and the bulk
-of the bundle's size. Feature extraction needs both: the Sentinel-2 mosaic
-supplies the spectral bands and the DEM supplies terrain. Without them every
-`/predict/point`, `/predict/bbox` and `/prospectivity/heatmap` call fails, so
-the map view has nothing to render. They are included precisely because the
-map is expected to work from a fresh clone.
+**Rasters (`data/raw/satellite/`, `data/raw/dem/`)**: 4 files, and the bulk
+of the bundle's size. Feature extraction needs a Sentinel-2 mosaic for the
+spectral bands and a DEM for terrain.
+
+- **The two operational rasters** are what prospectivity scoring reads.
+  Without them every `/predict/point`, `/predict/points_in_bbox` and
+  `/prospectivity/heatmap` call fails, and the map view has nothing to render.
+- **The two smoke-test rasters** remain the Phase 1 feature source for
+  `/boreholes/{id}/features` and `tests/test_features.py`.
+
+The training mosaic `s2_sausar_v2.tif` (349 MB) is **not** in the bundle.
+`s2_moil_operational_v1.tif` contains every one of its pixels unchanged
+(`tests/test_serving_imagery.py` checks this), so serving does not need it.
+Rebuild the operational rasters with
+`python -m src.data.ingest.fetch_gumgaon_strip`, which requires
+`s2_sausar_v2.tif` locally plus network access to Earth Search.
 
 **Not** in the bundle, because they are large and regenerable:
 
@@ -156,6 +173,8 @@ An empty `degraded` array means every model and data artifact loaded. If a
 name appears in it, that component failed; the startup log names the file.
 
 Startup detail worth knowing: six artifacts load eagerly in about 1.5 seconds,
+then shap is imported on the main thread (~4 s; it pulls in IPython and
+matplotlib, and importing it concurrently from two threads crashed pyplot),
 then a **background thread warms caches** — four forecast horizons (~3 s), the
 shortfall SHAP explanation (~3 s), and three heatmap viewports (~20–24 s
 each). The API answers requests immediately; the first `/prospectivity/heatmap`
@@ -171,7 +190,9 @@ The recommendations endpoints depend on the shortfall explanation, so they
 need `DATABASE_URL` for the same reason `/shortfall/risk` does: three of the
 classifier's nine features are rainfall terms.
 
-Interactive API docs: `http://127.0.0.1:8000/docs` — 25 operations.
+Interactive API docs: `http://127.0.0.1:8000/docs` — 26 operations
+(`POST /predict/bbox` is listed as a deprecated alias of
+`POST /predict/points_in_bbox`).
 
 ## 5. Run the tests
 
@@ -179,7 +200,7 @@ Interactive API docs: `http://127.0.0.1:8000/docs` — 25 operations.
 pytest -q
 ```
 
-Expected: **238 passed, 1 skipped**.
+Expected: **283 passed, 1 skipped**.
 
 The single skip is `test_lstm_residual_reduces_error`. Phase 3.2e (an LSTM on
 Prophet's residuals) was deliberately deferred — it had to beat
@@ -191,6 +212,41 @@ The DB-backed tests do **not** skip when `DATABASE_URL` is set; they run
 against Supabase. If the database is unreachable they will fail rather than
 skip.
 
+## 6. Run the frontend
+
+```bash
+cd frontend
+npm install
+cp .env.example .env.local          # then uncomment NEXT_PUBLIC_API_BASE_URL
+npm run dev                          # http://localhost:3000
+```
+
+`.env.local` needs one line for live mode:
+
+```
+NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
+```
+
+Leave it unset and every surface renders demonstration fixtures, labelled as
+such. Set it and a failed request shows an error: nothing silently falls back
+to synthetic numbers. `NEXT_PUBLIC_MAPBOX_TOKEN` is optional — without it the
+Explorer uses MapLibre on an open basemap and only satellite imagery is
+missing.
+
+Port 3000 is already in the API's CORS allow-list, along with 5173 and 8080.
+
+Verified end to end on 2026-09-15: `/operations`, `/production`, `/explorer`
+and `/pipeline` all render live, driving `/production/history`, `/forecast`
+(horizons 1 and 3), `/shortfall/risk`, `/recommendations` and
+`/dashboard/summary`.
+
+Frontend checks:
+
+```bash
+npm run typecheck                    # tsc --noEmit
+npx vitest run                       # 15 unit tests
+```
+
 ## Known limitations
 
 See `docs/known_issues.md` for the full list with evidence. The short version:
@@ -198,9 +254,12 @@ See `docs/known_issues.md` for the full list with evidence. The short version:
 - three MOIL mines (Gumgaon, Kandri, Beldongri) fall outside the imagery
   footprint and cannot be scored
 - forecast CI80 coverage runs 60–71% against a nominal 80%
-- the forecast loses to seasonal-naive below a 12-month horizon
-- `POST /predict/bbox` returns a non-griddable point set; the map uses
-  `/prospectivity/heatmap` instead
+- Prophet loses to seasonal-naive below a 12-month horizon, so `/forecast`
+  serves seasonal-naive at horizons 1–6 and Prophet at 12
+- `POST /predict/points_in_bbox` (formerly `/predict/bbox`) returns a
+  non-griddable point set; the map uses `/prospectivity/heatmap` instead
+- outside the Sausar mosaic, blank national-tile patches are scored rather
+  than reported as no data (`docs/known_issues.md` #6)
 
 ## Where to start reading
 

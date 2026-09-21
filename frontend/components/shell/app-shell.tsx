@@ -31,13 +31,14 @@ import styles from "./app-shell.module.css";
 const COLLAPSE_KEY = "bakufu-sidebar-collapsed";
 
 /** Routes whose figures come from the FastAPI backend in live mode. */
-const LIVE_ROUTES = new Set(["/operations", "/production", "/actions", "/explorer"]);
+const LIVE_ROUTES = new Set(["/operations", "/mines", "/production", "/actions", "/explorer"]);
 
 const navigationGroups = [
   {
     label: "Operations",
     items: [
       { href: "/operations", label: "Command Center", icon: LayoutDashboard, sheet: "01" },
+      { href: "/mines", label: "Mine Fleet", icon: MapPin, sheet: "11" },
       {
         href: "/production",
         label: "Production & Risk",
@@ -70,6 +71,10 @@ const navigationGroups = [
     ],
   },
 ];
+
+/** Sheets in the atlas, counted rather than written down, so a new module
+ * cannot leave the header claiming the old total. */
+const SHEET_TOTAL = String(navigationGroups.reduce((total, group) => total + group.items.length, 0)).padStart(2, "0");
 
 function isActive(pathname: string, href: string) {
   return href === "/"
@@ -166,7 +171,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           )}
         </button>
         <div className={styles.context}>
-          {activeItem && <span className={styles.sheetRef}>Sheet {activeItem.sheet} / 10</span>}
+          {activeItem && <span className={styles.sheetRef}>Sheet {activeItem.sheet} / {SHEET_TOTAL}</span>}
           <span>{activeGroup?.label}</span>
           <span aria-hidden="true">/</span>
           <strong>{activeItem?.label}</strong>

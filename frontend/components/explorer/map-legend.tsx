@@ -10,8 +10,10 @@ export function MapLegend() {
         <span>Index / 0—0.99</span>
       </div>
       <div className="map-legend-scale" aria-hidden="true">
-        {screeningColors.map((color) => (
-          <span key={color} style={{ background: color }} />
+        {screeningColors.map((color, index) => (
+          // Stops repeat a colour on purpose (the ramp holds its hue), so the
+          // colour alone is not a unique key.
+          <span key={`${index}-${color}`} style={{ background: color }} />
         ))}
       </div>
       <div className="map-legend-values">

@@ -19,6 +19,7 @@ import type {
   WireDashboardSummary,
   WireForecast,
   WireHeatmap,
+  WireMines,
   WirePredictPoint,
   WireProductionHistory,
   WireRecommendations,
@@ -72,8 +73,10 @@ export const WireForecastSchema = z.object({
     variant: Text,
     regressors: z.array(z.string()),
     trained_through: Text,
-    changepoint_prior_scale: Finite,
-    mcmc_samples: Finite,
+    // null, not missing, when seasonal-naive serves the horizon: it has no MCMC.
+    changepoint_prior_scale: Finite.nullable(),
+    mcmc_samples: Finite.nullable(),
+    interval_method: z.string().optional(),
   }).passthrough(),
   accuracy_at_horizon: WireForecastAccuracySchema.nullable(),
   // Contract v1.7; absent on older backends, and the adapter says so loudly.
@@ -88,6 +91,8 @@ export const WireForecastSchema = z.object({
       }).passthrough(),
     )
     .optional(),
+  model_used: Text.optional(),
+  reason: Text.optional(),
 }).passthrough();
 
 const WireShapContributionSchema = z.object({
@@ -262,6 +267,32 @@ export const WirePredictPointSchema = z.object({
   mask_decision: z.string(),
   raw_score: Finite.nullable(),
   final_score: Finite.nullable(),
+  raw_probability: Finite.nullable().optional(),
+  model_margin: Finite.nullable().optional(),
+}).passthrough();
+
+export const WireMinesSchema = z.object({
+  mines: z.array(
+    z.object({
+      mine_name: Text,
+      state: Text,
+      district: Text,
+      mine_type: Text,
+      equipment: z.array(z.string()),
+      capacity_target_tonnes: Finite.nullable(),
+      notes: z.string().nullable(),
+      sources: z.array(z.object({ tag: Text, url: z.string().nullable() }).passthrough()),
+      type_note: z.string().nullable(),
+      lat: Finite,
+      lon: Finite,
+      confidence: Text,
+      source: Text,
+      source_url: z.string().nullable(),
+      coordinate_precision: z.string().nullable(),
+      coordinate_note: z.string().nullable(),
+    }).passthrough(),
+  ).min(1),
+  counts: z.record(z.number().int()),
 }).passthrough();
 
 /** A backend payload that does not match what this build was written against. */
@@ -297,4 +328,5 @@ export type _SchemasCoverWireTypes = [
   Covers<typeof WireDashboardSummarySchema, WireDashboardSummary>,
   Covers<typeof WireHeatmapSchema, WireHeatmap>,
   Covers<typeof WirePredictPointSchema, WirePredictPoint>,
+  Covers<typeof WireMinesSchema, WireMines>,
 ];
